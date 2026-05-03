@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Access-Control-Allow-Origin: http://localhost:3000
+Vary: Origin
+Access-Control-Allow-Credentials: true
+Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+Content-Disposition: attachment; filename="%E5%AF%BC%E5%87%BA%E8%81%94%E8%B0%83%E8%AE%BA%E6%96%87_MASTER_MASTER_1777349353752docx"
+Date: Tue, 28 Apr 2026 04:09:37 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+

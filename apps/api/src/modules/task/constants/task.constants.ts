@@ -1,0 +1,2 @@
+export const STALLED_THRESHOLD_MS = 30 * 60 * 1000;
+export const STALLED_CHECK_BATCH_SIZE = 100;

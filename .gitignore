@@ -1,0 +1,15 @@
+node_modules
+# Keep environment variables out of version control
+.env
+.DS_Store
+
+/generated/prisma
+
+/uploads/exports/
+/apps/api/uploads/exports/
+
+apps/api/dist
+**/node_modules
+
+/certs/wechat/
+/certs/alipay/

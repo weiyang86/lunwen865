@@ -1,0 +1,10 @@
+/**
+ * Writing 模块运行常量
+ */
+export const WRITING_HEARTBEAT_INTERVAL_MS = 15000;
+
+export const WRITING_PREVIOUS_TAIL_CHARS = 200;
+
+export const WRITING_MAX_CONSECUTIVE_FAILURES = 3;
+
+export const WRITING_SECTION_MAX_TOKENS_DEFAULT = 4096;

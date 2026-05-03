@@ -1,0 +1,1417 @@
+//////////////////////////////////////////////////////
+// Generator & Datasource
+//////////////////////////////////////////////////////
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////////////////////////////////
+// ENUM 定义
+//////////////////////////////////////////////////////
+
+/// 用户角色
+enum UserRole {
+  USER
+  VIP
+  TUTOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+  DELETED
+}
+
+enum PromptStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum PromptScene {
+  PAPER_OUTLINE
+  PAPER_SECTION
+  PAPER_ABSTRACT
+  POLISH_ACADEMIC
+  POLISH_FLUENT
+  POLISH_TRANSLATE
+  EXPORT_TITLE
+  AI_CHAT
+  OTHER
+}
+
+enum EducationLevel {
+  UNDERGRADUATE
+  MASTER
+  DOCTOR
+  OTHER
+}
+
+enum LoginType {
+  PHONE_CODE
+  PHONE_PASSWORD
+  EMAIL_PASSWORD
+  WECHAT
+}
+
+enum VerifyScene {
+  REGISTER
+  LOGIN
+  RESET_PASSWORD
+  BIND_PHONE
+  BIND_EMAIL
+}
+
+/// 学校模板类型
+enum SchoolTemplateType {
+  TOPIC
+  OPENING
+  THESIS
+}
+
+/// 论文任务状态（必须严格按业务定义）
+enum TaskStatus {
+  INIT
+  TOPIC_GENERATING
+  TOPIC_PENDING_REVIEW
+  TOPIC_APPROVED
+  OPENING_GENERATING
+  OPENING_PENDING_REVIEW
+  OPENING_APPROVED
+  OUTLINE_GENERATING
+  OUTLINE_PENDING_REVIEW
+  OUTLINE_APPROVED
+  WRITING
+  WRITING_PAUSED
+  MERGING
+  FORMATTING
+  REVIEW
+  REVISION
+  DONE
+  FAILED
+  CANCELLED
+}
+
+/// 任务当前阶段（用于 UI / 调度维度；状态机细节以 TaskStatus 为准）
+enum TaskStage {
+  TOPIC
+  OPENING
+  OUTLINE
+  WRITING
+  MERGING
+  FORMATTING
+  REVIEW
+  REVISION
+}
+
+enum TaskAdminAction {
+  ASSIGN
+  UNASSIGN
+  OVERRIDE_STATUS
+  ADD_NOTE
+  LINK_ORDER
+  UNLINK_ORDER
+}
+
+/// 章节状态（章节锁依赖此状态）
+enum ChapterStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+  REWRITING
+}
+
+/// 小节状态
+enum SectionStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+  REWRITING
+}
+
+/// 开题报告状态
+enum OpeningReportStatus {
+  PENDING
+  GENERATING
+  PARTIAL
+  COMPLETED
+  FAILED
+}
+
+/// 开题报告章节状态
+enum OpeningReportSectionStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+/// 大纲状态
+enum OutlineStatus {
+  DRAFT
+  LOCKED
+  ARCHIVED
+}
+
+enum OutlineNodeType {
+  CHAPTER
+  SECTION
+  SUBSECTION
+  PARAGRAPH_HINT
+}
+
+enum WritingSessionStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum WritingSectionStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum RefType {
+  JOURNAL
+  BOOK
+  THESIS
+  CONFERENCE
+  STANDARD
+  PATENT
+  WEB
+  NEWSPAPER
+  REPORT
+}
+
+enum RefSource {
+  AI_GENERATED
+  MANUAL
+  CROSSREF
+  CNKI
+}
+
+/// LLM 调用所属阶段
+enum GenerationStage {
+  TOPIC
+  OPENING
+  OUTLINE
+  CHAPTER
+  SECTION
+  SUMMARY
+}
+
+enum PolishStrength {
+  LIGHT
+  MEDIUM
+  STRONG
+}
+
+enum PolishMode {
+  CONSERVATIVE
+  BALANCED
+  AGGRESSIVE
+}
+
+enum PolishStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum ExportFormat {
+  DOCX
+  PDF
+}
+
+enum ExportScope {
+  OUTLINE_ONLY
+  FULL_PAPER
+  WITH_REVISIONS
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  EXPIRED
+}
+
+enum ExportTemplate {
+  GENERIC
+  UNDERGRADUATE
+  MASTER
+  CUSTOM
+}
+
+// ============ 配额 ============
+enum QuotaType {
+  PAPER_GENERATION
+  POLISH
+  EXPORT
+  AI_CHAT
+}
+
+enum QuotaChangeReason {
+  PURCHASE
+  CONSUME
+  REFUND
+  ADMIN_GRANT
+  ADMIN_DEDUCT
+  REGISTER_GIFT
+  EXPIRE
+}
+
+// ============ 商品 ============
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+}
+
+enum StoreStatus {
+  OPEN
+  PAUSED
+  CLOSED
+}
+
+// ============ 订单 ============
+enum OrderStatus {
+  PENDING
+  PENDING_PAYMENT
+  PAID
+  FULFILLING
+  COMPLETED
+  CANCELLED
+  REFUNDING
+  REFUNDED
+  CLOSED
+}
+
+enum PaymentChannel {
+  WECHAT
+  ALIPAY
+}
+
+enum PaymentMethod {
+  WECHAT_NATIVE
+  WECHAT_JSAPI
+  WECHAT_H5
+  ALIPAY_PAGE
+  ALIPAY_WAP
+}
+
+// ============ 支付日志（事件流）============
+enum PaymentLogType {
+  CREATE
+  PREPAY
+  NOTIFY
+  QUERY
+  CLOSE
+  REFUND_APPLY
+  REFUND_NOTIFY
+  ERROR
+}
+
+// ============ 退款 ============
+enum RefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUCCESS
+  FAILED
+}
+
+/// LLM 提供商
+enum LlmProvider {
+  OPENAI
+  DEEPSEEK
+  QWEN
+}
+
+//////////////////////////////////////////////////////
+// User（用户/写手）
+//////////////////////////////////////////////////////
+
+model User {
+  id String @id @default(cuid())
+
+  phone    String? @unique
+  email    String? @unique
+  password String?
+
+  wechatOpenId  String? @unique
+  wechatUnionId String? @unique
+
+  nickname String?
+  avatar   String?
+  realName String?
+
+  school         String?
+  major          String?
+  educationLevel EducationLevel?
+  grade          String?
+
+  role      UserRole   @default(USER)
+  status    UserStatus @default(ACTIVE)
+  banReason String?
+  bannedUntil DateTime?
+
+  totalWordsQuota Int @default(0)
+  usedWords       Int @default(0)
+
+  registerChannel String?
+
+  inviterId String?
+  inviter   User?  @relation("Invitation", fields: [inviterId], references: [id])
+  invitees  User[] @relation("Invitation")
+
+  lastLoginAt DateTime?
+  lastLoginIp String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks         Task[]
+  assignedTasks Task[] @relation("TaskAssignee")
+  refreshTokens RefreshToken[]
+  loginLogs     LoginLog[]
+  polishTasks   PolishTask[]
+  exportTasks   ExportTask[]
+  quotas        UserQuota[]
+  quotaLogs     QuotaLog[]
+  orders        Order[]
+  primaryTutorOrders Order[] @relation("OrderPrimaryTutor")
+  taskAdminLogs TaskAdminLog[] @relation("TaskAdminLogOperator")
+
+  @@index([phone])
+  @@index([email])
+  @@index([role, status])
+  @@index([createdAt])
+}
+
+//////////////////////////////////////////////////////
+// School（学校）
+//////////////////////////////////////////////////////
+
+model School {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique
+  description String?
+
+  tasks     Task[]
+  templates SchoolTemplate[]
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////////////////////////////////////////
+// SchoolTemplate（学校模板）
+//////////////////////////////////////////////////////
+
+model SchoolTemplate {
+  id              String             @id @default(cuid())
+  schoolId        String
+  templateType    SchoolTemplateType
+  /// 学校格式要求（示例）
+  /// {
+  ///   "fonts": { "body": "宋体", "english": "Times New Roman" },
+  ///   "lineSpacing": 1.5,
+  ///   "sections": [
+  ///     { "key": "abstract", "title": "摘要", "minWords": 300, "maxWords": 500 },
+  ///     { "key": "chapter1", "title": "第一章 绪论", "minWords": 1500 }
+  ///   ],
+  ///   "citation": { "style": "GB/T 7714-2015" }
+  /// }
+  formatConfig    Json
+  docxTemplateUrl String?
+  version         Int
+  isActive        Boolean            @default(false)
+  /// 仅用于保证同学校同类型同时只有一个 active（isActive=true 时写入 "schoolId:TEMPLATE_TYPE"，否则为 null）
+  activeKey       String?            @unique
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([schoolId, templateType, version])
+  @@index([schoolId])
+  @@index([templateType])
+  @@index([isActive])
+}
+
+//////////////////////////////////////////////////////
+// Task（论文任务，核心表）
+//////////////////////////////////////////////////////
+
+model Task {
+  id             String  @id @default(cuid())
+  userId         String
+  assigneeId     String?
+  schoolId       String
+  major          String
+  educationLevel String
+  title          String?
+
+  status       TaskStatus @default(INIT)
+  currentStage TaskStage? @default(TOPIC)
+
+  requirements   String? @db.Text
+  totalWordCount Int?
+
+  deadline    DateTime?
+  completedAt DateTime?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  topicCandidates TopicCandidate[]
+  openingReports  OpeningReport[]
+  outline         Outline?
+  writingSessions WritingSession[]
+  references      Reference[]
+  chapters        Chapter[]
+  paperMemory     PaperMemory?
+  generationLogs  GenerationLog[]
+  polishTasks     PolishTask[]
+  adminLogs       TaskAdminLog[]
+  order           Order?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([currentStage])
+  @@index([schoolId])
+  @@index([title])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model TaskAdminLog {
+  id String @id @default(cuid())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  action TaskAdminAction
+
+  operatorId String
+  operator   User   @relation("TaskAdminLogOperator", fields: [operatorId], references: [id], onDelete: Restrict)
+
+  fromStatus TaskStatus?
+  toStatus   TaskStatus?
+
+  assigneeId String?
+  orderId    String?
+
+  reason  String? @db.VarChar(500)
+  content String? @db.Text
+  meta    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([operatorId, createdAt])
+  @@index([action, createdAt])
+  @@index([assigneeId])
+  @@index([orderId])
+}
+
+model PolishTask {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskId String?
+  task   Task?  @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  title        String?
+  originalText String @db.Text
+  polishedText String? @db.Text
+
+  originalLength Int
+  polishedLength Int?
+
+  strength       PolishStrength
+  mode           PolishMode
+  preserveQuotes Boolean  @default(true)
+  preserveTerms  String[] @default([])
+
+  status       PolishStatus @default(PENDING)
+  progress     Int         @default(0)
+  errorMessage String?
+
+  aiScoreBefore Float?
+  aiScoreAfter  Float?
+
+  modelUsed      String?
+  tokensConsumed Int?
+
+  wordsCharged Int @default(0)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  segments PolishSegment[]
+
+  @@index([userId, status])
+  @@index([taskId])
+  @@index([createdAt])
+}
+
+model PolishSegment {
+  id String @id @default(cuid())
+
+  polishTaskId String
+  polishTask   PolishTask @relation(fields: [polishTaskId], references: [id], onDelete: Cascade)
+
+  segmentIndex Int
+
+  originalText String  @db.Text
+  polishedText String? @db.Text
+
+  status       PolishStatus @default(PENDING)
+  retryCount   Int         @default(0)
+  errorMessage String?
+  tokensUsed   Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([polishTaskId, segmentIndex])
+}
+
+model ExportTask {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  paperId      String?
+  polishTaskId String?
+  sourceType   String
+
+  format   ExportFormat   @default(DOCX)
+  scope    ExportScope    @default(FULL_PAPER)
+  template ExportTemplate @default(GENERIC)
+
+  title     String  @db.VarChar(255)
+  author    String? @db.VarChar(100)
+  school    String? @db.VarChar(100)
+  major     String? @db.VarChar(100)
+  studentId String? @db.VarChar(50)
+  advisor   String? @db.VarChar(100)
+  abstract  String? @db.Text
+  keywords  String? @db.VarChar(500)
+
+  contentSnapshot Json?
+
+  status   ExportStatus @default(PENDING)
+  progress Int          @default(0)
+  filePath String?
+  fileName String? @db.VarChar(255)
+  fileSize Int?
+  downloadUrl String?
+  downloadCount Int @default(0)
+
+  errorMessage String? @db.Text
+  expiresAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model UserQuota {
+  id        String    @id @default(cuid())
+
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+
+  quotaType QuotaType
+
+  balance   Int       @default(0)
+  totalIn   Int       @default(0)
+  totalOut  Int       @default(0)
+
+  updatedAt DateTime  @updatedAt
+
+  @@unique([userId, quotaType])
+  @@index([userId])
+}
+
+model QuotaLog {
+  id           String            @id @default(cuid())
+
+  userId       String
+  user         User              @relation(fields: [userId], references: [id])
+
+  quotaType    QuotaType
+  change       Int
+  balanceAfter Int
+  reason       QuotaChangeReason
+
+  orderId      String?
+  order        Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  bizId        String?
+  remark       String?           @db.VarChar(255)
+  createdAt    DateTime          @default(now())
+
+  @@index([userId, createdAt])
+  @@index([orderId])
+}
+
+model Product {
+  id                 String        @id @default(cuid())
+  code               String        @unique @db.VarChar(50)
+  name               String        @db.VarChar(100)
+  description        String?       @db.Text
+  coverUrl           String?       @db.Text
+  priceCents         Int
+  originalPriceCents Int?
+
+  paperQuota  Int @default(0)
+  polishQuota Int @default(0)
+  exportQuota Int @default(0)
+  aiChatQuota Int @default(0)
+
+  status    ProductStatus @default(ACTIVE)
+  sortOrder Int           @default(0)
+  totalStock Int          @default(0)
+  soldCount  Int          @default(0)
+
+  categoryId String?
+  category   Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([categoryId])
+  @@index([status, sortOrder])
+  @@index([deletedAt])
+}
+
+model Category {
+  id       String   @id @default(cuid())
+  parentId String?
+  parent   Category? @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children Category[] @relation("CategoryChildren")
+
+  name    String  @db.VarChar(50)
+  sort    Int     @default(0)
+  iconUrl String? @db.Text
+  deletedAt DateTime?
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([parentId, name])
+  @@index([parentId, sort])
+  @@index([deletedAt])
+}
+
+model Store {
+  id            String      @id @default(cuid())
+  name          String      @db.VarChar(100)
+  code          String      @unique @db.VarChar(50)
+  status        StoreStatus @default(OPEN)
+  phone         String?     @db.VarChar(50)
+  address       String      @db.Text
+  longitude     Float?
+  latitude      Float?
+  businessHours Json
+  description   String?     @db.Text
+  managerName   String?     @db.VarChar(50)
+  managerPhone  String?     @db.VarChar(50)
+  deletedAt     DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Order {
+  id          String  @id @default(cuid())
+  orderNo     String  @unique @db.VarChar(40)
+
+  userId      String
+  user        User    @relation(fields: [userId], references: [id])
+
+  primaryTutorId String?
+  primaryTutor   User?   @relation("OrderPrimaryTutor", fields: [primaryTutorId], references: [id], onDelete: SetNull)
+
+  taskId      String? @unique
+  task        Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  productSnapshot Json
+
+  amountCents     Int
+  paidAmountCents Int?
+  discountCents   Int @default(0)
+
+  status      OrderStatus @default(PENDING)
+
+  channel     PaymentChannel?
+  method      PaymentMethod?
+
+  outTradeNo      String? @unique @db.VarChar(64)
+  transactionId   String? @db.VarChar(64)
+
+  expiresAt   DateTime
+  paidAt      DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+  refundedAt  DateTime?
+
+  quotaGranted Boolean @default(false)
+
+  remark   String? @db.VarChar(255)
+  clientIp String? @db.VarChar(45)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  paymentLogs PaymentLog[]
+  refunds     Refund[]
+  items       OrderItem[]
+  quotaLogs   QuotaLog[]
+
+  @@index([userId, createdAt])
+  @@index([primaryTutorId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  productName String   @db.VarChar(100)
+  skuName     String?  @db.VarChar(100)
+  unitPrice   Int
+  quantity    Int
+  subtotal    Int
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model PaymentLog {
+  id        String         @id @default(cuid())
+
+  orderId   String
+  order     Order          @relation(fields: [orderId], references: [id])
+
+  type      PaymentLogType
+  channel   PaymentChannel?
+
+  request   Json?
+  response  Json?
+  message   String?        @db.Text
+  success   Boolean        @default(true)
+
+  createdAt DateTime       @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model Refund {
+  id           String       @id @default(cuid())
+  refundNo     String       @unique @db.VarChar(40)
+
+  orderId      String
+  order        Order        @relation(fields: [orderId], references: [id])
+
+  amountCents  Int
+  reason       String       @db.VarChar(255)
+  status       RefundStatus @default(PENDING)
+  rejectReason String?      @db.VarChar(255)
+  resolvedAt   DateTime?
+
+  outRefundNo  String?      @unique @db.VarChar(64)
+  refundId     String?      @db.VarChar(64)
+
+  operatorId   String
+
+  finishedAt   DateTime?
+  errorMessage String?      @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+}
+
+model RefreshToken {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token String @unique
+
+  userAgent String?
+  ip        String?
+
+  revoked   Boolean  @default(false)
+  revokedAt DateTime?
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model LoginLog {
+  id String @id @default(cuid())
+
+  userId String?
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  loginType  LoginType
+  identifier String
+  success    Boolean
+  failReason String?
+
+  ip        String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([identifier])
+  @@index([createdAt])
+}
+
+model VerifyCode {
+  id String @id @default(cuid())
+
+  target String
+  scene  VerifyScene
+  code   String
+
+  used         Boolean  @default(false)
+  usedAt       DateTime?
+  attemptCount Int      @default(0)
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([target, scene])
+  @@index([expiresAt])
+}
+
+//////////////////////////////////////////////////////
+// TopicCandidate（候选题目）
+//////////////////////////////////////////////////////
+
+model TopicCandidate {
+  id          String  @id @default(cuid())
+  taskId      String
+  title       String
+  description String? @db.Text
+  isSelected  Boolean @default(false)
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([isSelected])
+}
+
+//////////////////////////////////////////////////////
+// OpeningReport（开题报告）
+//////////////////////////////////////////////////////
+
+model OpeningReport {
+  id String @id @default(cuid())
+
+  taskId  String
+  /// 开题报告内容（示例）
+  /// {
+  ///   "researchBackground": "……",
+  ///   "researchSignificance": "……",
+  ///   "literatureReview": "……",
+  ///   "researchMethods": ["问卷调查", "案例分析"],
+  ///   "researchContent": "……",
+  ///   "schedule": [
+  ///     { "phase": "资料收集", "start": "2026-05-01", "end": "2026-05-10" }
+  ///   ],
+  ///   "references": [
+  ///     { "title": "…", "authors": ["…"], "year": 2020, "source": "…" }
+  ///   ]
+  /// }
+  content Json
+
+  status            OpeningReportStatus @default(PENDING)
+  fullContent        String?            @db.Text
+  totalWordCount     Int                @default(0)
+  generationStartedAt DateTime?
+  generationEndedAt   DateTime?
+  durationMs          Int?
+  errorMessage        String?           @db.Text
+  retryCount          Int               @default(0)
+
+  version        Int
+  isApproved     Boolean @default(false)
+  reviewComments String? @db.Text
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sections OpeningReportSection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([taskId, version])
+  @@index([taskId])
+  @@index([isApproved])
+}
+
+model OpeningReportSection {
+  id String @id @default(cuid())
+
+  reportId String
+
+  sectionKey   String
+  sectionTitle String
+  sectionIndex Int
+
+  status    OpeningReportSectionStatus @default(PENDING)
+  content   String?                    @db.Text
+  wordCount Int                        @default(0)
+
+  durationMs  Int?
+  generatedAt DateTime?
+  errorMessage String?                 @db.Text
+  retryCount  Int                      @default(0)
+
+  report OpeningReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([reportId, sectionKey])
+  @@index([reportId])
+  @@index([status])
+  @@index([reportId, sectionIndex])
+}
+
+//////////////////////////////////////////////////////
+// Outline（论文大纲）
+//////////////////////////////////////////////////////
+
+model Outline {
+  id String @id @default(cuid())
+
+  taskId String @unique
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  status   OutlineStatus @default(DRAFT)
+  locked   Boolean       @default(false)
+  lockedAt DateTime?
+
+  totalWordCount  Int @default(0)
+  targetWordCount Int
+  maxDepth        Int @default(3)
+
+  llmModel             String?
+  totalTokensUsed      Int @default(0)
+  generationDurationMs Int?
+
+  version Int @default(1)
+
+  nodes   OutlineNode[]
+  chapters Chapter[]
+  writingSessions WritingSession[] @relation("WritingOutlineSnapshot")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+}
+
+model OutlineNode {
+  id String @id @default(cuid())
+
+  outlineId String
+  outline   Outline @relation(fields: [outlineId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   OutlineNode?  @relation("NodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children OutlineNode[] @relation("NodeChildren")
+
+  nodeType   OutlineNodeType
+  depth      Int
+  orderIndex Int
+  path       String
+
+  title   String
+  summary String? @db.Text
+
+  expectedWords Int @default(0)
+
+  numbering String?
+  isLeaf    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  writingSections WritingSection[]
+
+  @@unique([outlineId, path])
+  @@index([outlineId, parentId, orderIndex])
+  @@index([outlineId, depth])
+}
+
+model WritingSession {
+  id String @id @default(cuid())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  outlineSnapshotId String?
+  outlineSnapshot   Outline? @relation("WritingOutlineSnapshot", fields: [outlineSnapshotId], references: [id], onDelete: SetNull)
+
+  status WritingSessionStatus @default(PENDING)
+
+  totalSections   Int
+  completedCount  Int @default(0)
+  failedCount     Int @default(0)
+  totalTokens     Int @default(0)
+  currentSectionId String?
+  errorMessage     String? @db.Text
+
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  cancelledAt DateTime?
+
+  sections WritingSection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([status])
+  @@index([taskId, status, createdAt])
+}
+
+model WritingSection {
+  id String @id @default(cuid())
+
+  sessionId String
+  session   WritingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  outlineNodeId String
+  outlineNode   OutlineNode @relation(fields: [outlineNodeId], references: [id], onDelete: Restrict)
+
+  orderIndex Int
+
+  title   String
+  summary String? @db.Text
+
+  expectedWords Int @default(0)
+  status        WritingSectionStatus @default(PENDING)
+
+  rawContent    String? @db.Text
+  editedContent String? @db.Text
+  wordCount     Int     @default(0)
+
+  refKeys    String[] @default([])
+  retryCount Int      @default(0)
+
+  errorMessage String? @db.Text
+
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  durationMs  Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, orderIndex])
+  @@index([sessionId, status, orderIndex])
+  @@index([outlineNodeId])
+}
+
+model Reference {
+  id String @id @default(cuid())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  index Int
+  type  RefType
+
+  title   String
+  authors String
+  year    Int?
+
+  journal String?
+  volume  String?
+  issue   String?
+  pages   String?
+
+  publisher String?
+  city      String?
+
+  university String?
+  degree     String?
+
+  url        String?
+  accessDate DateTime?
+
+  doi    String?
+  isbn   String?
+  source RefSource @default(AI_GENERATED)
+  verified Boolean @default(false)
+
+  citedInSections String[] @default([])
+  citedCount      Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([taskId, index])
+  @@index([taskId])
+}
+
+//////////////////////////////////////////////////////
+// Chapter（章节）
+//////////////////////////////////////////////////////
+
+model Chapter {
+  id        String  @id @default(cuid())
+  taskId    String
+  outlineId String?
+
+  index           Int
+  title           String
+  targetWordCount Int
+  actualWordCount Int?
+
+  status ChapterStatus @default(PENDING)
+
+  introduction String? @db.Text
+  summary      String? @db.Text
+
+  task     Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  outline  Outline?  @relation(fields: [outlineId], references: [id], onDelete: SetNull)
+  sections Section[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([taskId, index])
+  @@index([taskId])
+  @@index([outlineId])
+  @@index([status])
+}
+
+//////////////////////////////////////////////////////
+// Section（小节）
+//////////////////////////////////////////////////////
+
+model Section {
+  id        String @id @default(cuid())
+  chapterId String
+
+  index           Int
+  title           String
+  targetWordCount Int
+  actualWordCount Int?
+
+  /// 核心要点（示例）
+  /// ["定义概念", "给出对比", "结合案例"]
+  corePoints Json?
+
+  content String? @db.Text
+
+  status SectionStatus @default(PENDING)
+
+  similarityScore Decimal? @db.Decimal(5, 2)
+  regenerateCount Int      @default(0)
+  previousSummary String?  @db.Text
+
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chapterId, index])
+  @@index([chapterId])
+  @@index([status])
+}
+
+//////////////////////////////////////////////////////
+// PaperMemory（全局记忆，论文一篇一条）
+//////////////////////////////////////////////////////
+
+model PaperMemory {
+  id     String @id @default(cuid())
+  taskId String @unique
+
+  title    String
+  abstract String?  @db.Text
+  keywords String[]
+
+  /// 章节摘要集合（示例）
+  /// {
+  ///   "1": { "title": "绪论", "summary": "……", "keyPoints": ["…"] },
+  ///   "2": { "title": "相关理论", "summary": "……" }
+  /// }
+  chapterSummaries Json
+
+  /// 其他需要传递的上下文（示例）
+  /// {
+  ///   "writingStyle": "学术中文",
+  ///   "citationStyle": "GB/T 7714-2015",
+  ///   "constraints": { "avoid": ["口语化"], "mustInclude": ["关键术语定义"] }
+  /// }
+  globalContext Json
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+//////////////////////////////////////////////////////
+// GenerationLog（LLM 调用日志，重要）
+//////////////////////////////////////////////////////
+
+model GenerationLog {
+  id String @id @default(cuid())
+
+  taskId   String?
+  stage    GenerationStage
+  targetId String?
+
+  provider LlmProvider
+  model    String
+
+  prompt   String @db.Text
+  response String @db.Text
+
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  cost             Decimal @db.Decimal(10, 6)
+
+  durationMs   Int
+  success      Boolean
+  errorMessage String? @db.Text
+
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([createdAt])
+  @@index([stage])
+  @@index([targetId])
+}
+
+model PromptTemplate {
+  id String @id @default(cuid())
+
+  code String @unique @db.VarChar(80)
+  name String @db.VarChar(120)
+  scene PromptScene
+  description String? @db.Text
+  tags String[] @default([])
+
+  content String @db.Text
+  variables Json
+
+  model String? @db.VarChar(50)
+  temperature Float?
+  maxTokens Int?
+
+  draftContent String? @db.Text
+  draftVariables Json?
+  draftModel String? @db.VarChar(50)
+  draftModelParams Json?
+  draftModelConfig Json?
+  draftMetadata Json?
+  draftUpdatedAt DateTime?
+
+  status PromptStatus @default(DRAFT)
+  currentVersion Int @default(1)
+
+  createdBy String
+  updatedBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions PromptVersion[]
+
+  @@index([scene, status])
+  @@index([code])
+}
+
+model PromptVersion {
+  id String @id @default(cuid())
+
+  templateId String
+  template PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version Int
+
+  content String @db.Text
+  variables Json
+
+  model String? @db.VarChar(50)
+  temperature Float?
+  maxTokens Int?
+  modelConfig Json?
+  metadata Json?
+  changelog String? @db.VarChar(500)
+  operatorId String
+  createdAt DateTime @default(now())
+
+  @@unique([templateId, version])
+  @@index([templateId, createdAt])
+}

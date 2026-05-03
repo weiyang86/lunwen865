@@ -1,0 +1,11 @@
+export enum GenerationStage {
+  INIT = 'INIT',
+  TOPIC = 'TOPIC',
+  OPENING = 'OPENING',
+  OUTLINE = 'OUTLINE',
+  CHAPTER = 'CHAPTER',
+  SECTION = 'SECTION',
+  SUMMARY = 'SUMMARY',
+  POLISHING = 'POLISHING',
+  DONE = 'DONE',
+}
