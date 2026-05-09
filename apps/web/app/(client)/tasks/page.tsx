@@ -1,8 +1,14 @@
+import { TaskTimelinePanel } from '@/components/client/task-timeline-panel';
 import { ClientPageState, resolveClientPageState } from '@/components/client/client-page-state';
 
 export default async function TasksPage({
   searchParams,
 }: {
+  searchParams: Promise<{ taskId?: string }>;
+}) {
+  const params = await searchParams;
+
+  return <TaskTimelinePanel taskId={params.taskId} />;
   searchParams: Promise<{ state?: string | string[] }>;
 }) {
   const params = await searchParams;
