@@ -39,6 +39,11 @@ export class AgencyOrderService {
   ) {
     const agencyId = this.resolveAgencyId(currentUser);
 
+  async create(
+    _operatorId: string,
+    dto: CreateAgencyOrderDto,
+    clientIp?: string,
+  ) {
     const [user, product] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: dto.userId } }),
       this.prisma.product.findUnique({ where: { id: dto.productId } }),
@@ -81,6 +86,7 @@ export class AgencyOrderService {
         status: OrderStatus.PENDING,
         sourceType: OrderSourceType.AGENCY,
         agencyId,
+        agencyId: dto.agencyId,
         expiresAt,
         clientIp: clientIp ?? null,
         remark: dto.remark ?? null,
@@ -97,6 +103,7 @@ export class AgencyOrderService {
   ) {
     const agencyId = this.resolveAgencyId(currentUser);
 
+  async findAll(_operatorId: string, query: QueryAgencyOrderDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const skip = (page - 1) * pageSize;
@@ -104,6 +111,7 @@ export class AgencyOrderService {
     const where: Prisma.OrderWhereInput = {
       sourceType: OrderSourceType.AGENCY,
       agencyId,
+      agencyId: query.agencyId,
     };
 
     if (query.status) where.status = query.status;
