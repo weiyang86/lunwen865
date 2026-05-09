@@ -21,19 +21,19 @@ export class AgencyOrderController {
 
   @Post()
   create(
-    @CurrentUser('id') operatorId: string,
+    @CurrentUser() currentUser: Record<string, unknown>,
     @Body() dto: CreateAgencyOrderDto,
     @Req() req: Request,
   ) {
     const ip = req.ip ?? req.socket.remoteAddress ?? undefined;
-    return this.agencyOrderService.create(operatorId, dto, ip);
+    return this.agencyOrderService.create(currentUser, dto, ip);
   }
 
   @Get()
   findAll(
-    @CurrentUser('id') operatorId: string,
+    @CurrentUser() currentUser: Record<string, unknown>,
     @Query() query: QueryAgencyOrderDto,
   ) {
-    return this.agencyOrderService.findAll(operatorId, query);
+    return this.agencyOrderService.findAll(currentUser, query);
   }
 }

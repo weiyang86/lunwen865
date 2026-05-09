@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -23,11 +24,21 @@ export class AgencyOrderService {
     private readonly config: ConfigService,
   ) {}
 
+  private resolveAgencyId(currentUser: Record<string, unknown>): string {
+    const raw = currentUser['agencyId'];
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      return raw.trim();
+    }
+    throw new ForbiddenException('当前账号无机构归属，禁止访问机构订单');
+  }
+
   async create(
-    _operatorId: string,
+    currentUser: Record<string, unknown>,
     dto: CreateAgencyOrderDto,
     clientIp?: string,
   ) {
+    const agencyId = this.resolveAgencyId(currentUser);
+
     const [user, product] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: dto.userId } }),
       this.prisma.product.findUnique({ where: { id: dto.productId } }),
@@ -69,7 +80,7 @@ export class AgencyOrderService {
         amountCents: product.priceCents,
         status: OrderStatus.PENDING,
         sourceType: OrderSourceType.AGENCY,
-        agencyId: dto.agencyId,
+        agencyId,
         expiresAt,
         clientIp: clientIp ?? null,
         remark: dto.remark ?? null,
@@ -80,14 +91,19 @@ export class AgencyOrderService {
     });
   }
 
-  async findAll(_operatorId: string, query: QueryAgencyOrderDto) {
+  async findAll(
+    currentUser: Record<string, unknown>,
+    query: QueryAgencyOrderDto,
+  ) {
+    const agencyId = this.resolveAgencyId(currentUser);
+
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const skip = (page - 1) * pageSize;
 
     const where: Prisma.OrderWhereInput = {
       sourceType: OrderSourceType.AGENCY,
-      agencyId: query.agencyId,
+      agencyId,
     };
 
     if (query.status) where.status = query.status;
