@@ -287,6 +287,47 @@ export class TaskService {
     }
   }
 
+  private resolveAgencyId(currentUser: Record<string, unknown>): string {
+    const raw = currentUser['agencyId'];
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      return raw.trim();
+    }
+    throw new ForbiddenException('当前账号无机构归属，禁止访问机构任务时间线');
+  }
+
+  async getTimelineForAgency(
+    taskId: string,
+    currentUser: Record<string, unknown>,
+  ): Promise<TaskTimelineDto> {
+    const agencyId = this.resolveAgencyId(currentUser);
+
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        order: {
+          select: {
+            id: true,
+            agencyId: true,
+            sourceType: true,
+          },
+        },
+      },
+    });
+
+    if (!task) throw new TaskNotFoundException(taskId);
+
+    if (!task.order || task.order.sourceType !== 'AGENCY') {
+      throw new ForbiddenException('该任务未关联机构订单，禁止访问');
+    }
+
+    if (task.order.agencyId !== agencyId) {
+      throw new ForbiddenException('无权访问该机构任务时间线');
+    }
+
+    return this.getTimeline(taskId);
+  }
+
   async getTimeline(id: string, userId?: string): Promise<TaskTimelineDto> {
     if (userId) await this.assertTaskOwnership(id, userId);
 
