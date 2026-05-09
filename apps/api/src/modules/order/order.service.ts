@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   Order,
+  OrderSourceType,
   OrderStatus,
   PaymentChannel,
   PaymentLogType,
@@ -72,6 +73,8 @@ export class OrderService {
         productSnapshot,
         amountCents: product.priceCents,
         status: OrderStatus.PENDING,
+        sourceType: OrderSourceType.DIRECT,
+        agencyId: null,
         expiresAt,
         clientIp: clientIp ?? null,
         remark: dto.remark ?? null,
