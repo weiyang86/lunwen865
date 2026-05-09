@@ -124,7 +124,19 @@ export class OrderService {
   async findOne(userId: string, id: string) {
     const o = await this.prisma.order.findUnique({
       where: { id },
-      include: { product: true, refunds: true },
+      include: {
+        product: true,
+        refunds: true,
+        task: {
+          select: {
+            id: true,
+            status: true,
+            currentStage: true,
+            title: true,
+            updatedAt: true,
+          },
+        },
+      },
     });
     if (!o) throw new NotFoundException('订单不存在');
     if (o.userId !== userId) throw new ForbiddenException('无权访问该订单');
