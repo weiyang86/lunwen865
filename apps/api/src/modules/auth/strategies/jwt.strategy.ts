@@ -10,7 +10,12 @@ import type { UserRole } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { JwtPayload } from '../interfaces/jwt-payload.interface';
 
-type JwtUser = { id: string; role: UserRole; phone?: string };
+type JwtUser = {
+  id: string;
+  role: UserRole;
+  phone?: string;
+  agencyId?: string;
+};
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -34,6 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         phone: true,
         status: true,
         bannedUntil: true,
+        registerChannel: true,
       },
     });
 
@@ -50,6 +56,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new ForbiddenException('账号不可用');
     }
 
-    return { id: user.id, role: user.role, phone: user.phone ?? undefined };
+    const agencyId = user.registerChannel?.startsWith('agency:')
+      ? user.registerChannel.slice('agency:'.length)
+      : undefined;
+
+    return {
+      id: user.id,
+      role: user.role,
+      phone: user.phone ?? undefined,
+      agencyId,
+    };
   }
 }
