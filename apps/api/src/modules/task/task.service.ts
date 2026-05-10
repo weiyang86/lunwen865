@@ -33,6 +33,10 @@ import type {
 import type { CreateTaskDto } from './dto/create-task.dto';
 import type { QueryTaskDto } from './dto/query-task.dto';
 import type { UpdateTaskDto } from './dto/update-task.dto';
+import type {
+  TaskTimelineDto,
+  TaskTimelineItemDto,
+} from './dto/task-timeline.dto';
 
 function serializeTopicToRequirements(dto: CreateTaskDto): string {
   const hasExtra =
@@ -281,6 +285,161 @@ export class TaskService {
       this.logger.error('查询任务详情失败', error);
       throw new BadRequestException('查询任务详情失败');
     }
+  }
+
+  private resolveAgencyId(currentUser: Record<string, unknown>): string {
+    const raw = currentUser['agencyId'];
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      return raw.trim();
+    }
+    throw new ForbiddenException('当前账号无机构归属，禁止访问机构任务时间线');
+  }
+
+  async getTimelineForAgency(
+    taskId: string,
+    currentUser: Record<string, unknown>,
+  ): Promise<TaskTimelineDto> {
+    const agencyId = this.resolveAgencyId(currentUser);
+
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        order: {
+          select: {
+            id: true,
+            agencyId: true,
+            sourceType: true,
+          },
+        },
+      },
+    });
+
+    if (!task) throw new TaskNotFoundException(taskId);
+
+    if (!task.order || task.order.sourceType !== 'AGENCY') {
+      throw new ForbiddenException('该任务未关联机构订单，禁止访问');
+    }
+
+    if (task.order.agencyId !== agencyId) {
+      throw new ForbiddenException('无权访问该机构任务时间线');
+    }
+
+    return this.getTimeline(taskId);
+  }
+
+  async getTimeline(id: string, userId?: string): Promise<TaskTimelineDto> {
+    if (userId) await this.assertTaskOwnership(id, userId);
+
+    const task = await this.prisma.task.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        currentStage: true,
+        createdAt: true,
+        updatedAt: true,
+        order: {
+          select: { id: true, orderNo: true, status: true, createdAt: true },
+        },
+        adminLogs: {
+          select: {
+            id: true,
+            action: true,
+            operatorId: true,
+            fromStatus: true,
+            toStatus: true,
+            orderId: true,
+            reason: true,
+            content: true,
+            meta: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!task) throw new TaskNotFoundException(id);
+
+    const items: TaskTimelineItemDto[] = [
+      {
+        id: `${task.id}_created`,
+        type: 'TASK_CREATED',
+        title: '任务已创建',
+        description: '任务进入系统，等待后续推进。',
+        createdAt: task.createdAt,
+        status: task.status,
+        stage: task.currentStage,
+      },
+    ];
+
+    if (task.order) {
+      items.push({
+        id: `${task.id}_order_linked`,
+        type: 'ORDER_LINKED',
+        title: '订单已关联',
+        description: `关联订单 ${task.order.orderNo}（${task.order.status}）`,
+        createdAt: task.order.createdAt,
+        orderId: task.order.id,
+        status: task.status,
+        stage: task.currentStage,
+      });
+    }
+
+    for (const log of task.adminLogs) {
+      const base: TaskTimelineItemDto = {
+        id: log.id,
+        type: 'ADMIN_ACTION',
+        title: `管理操作：${log.action}`,
+        description: log.reason ?? log.content ?? '无附加说明',
+        createdAt: log.createdAt,
+        operatorId: log.operatorId,
+        status: log.toStatus ?? task.status,
+        stage: task.currentStage,
+        orderId: log.orderId,
+        meta: (log.meta as Record<string, unknown> | null) ?? null,
+      };
+      items.push(base);
+
+      if (log.fromStatus && log.toStatus && log.fromStatus !== log.toStatus) {
+        items.push({
+          id: `${log.id}_status_changed`,
+          type: 'STATUS_CHANGED',
+          title: '任务状态变更',
+          description: `${log.fromStatus} → ${log.toStatus}`,
+          createdAt: log.createdAt,
+          operatorId: log.operatorId,
+          status: log.toStatus,
+          stage: task.currentStage,
+          orderId: log.orderId,
+        });
+      }
+    }
+
+    if (
+      items.every((it) => it.createdAt.getTime() !== task.updatedAt.getTime())
+    ) {
+      items.push({
+        id: `${task.id}_updated`,
+        type: 'UPDATED',
+        title: '任务最近更新',
+        description: '任务信息发生更新。',
+        createdAt: task.updatedAt,
+        status: task.status,
+        stage: task.currentStage,
+      });
+    }
+
+    items.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    return {
+      taskId: task.id,
+      currentStatus: task.status,
+      currentStage: task.currentStage,
+      updatedAt: task.updatedAt,
+      items,
+    };
   }
 
   /**
