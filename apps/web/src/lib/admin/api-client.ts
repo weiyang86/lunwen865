@@ -62,16 +62,29 @@ adminApi.interceptors.response.use(
         ? String(respData.message)
         : null;
     const msg = serverMsg || error.message || '网络错误';
+    const url = error.config?.url;
+    const isAuthLoginRequest =
+      typeof url === 'string' && url.includes('/auth/login');
 
     if (status === 401) {
-      adminAuth.removeToken();
-      toast.error('登录已过期，请重新登录');
-      if (
+      const shouldTreatAsSessionExpired =
+        !isAuthLoginRequest &&
         typeof window !== 'undefined' &&
-        !window.location.pathname.startsWith('/admin/login')
-      ) {
+        !window.location.pathname.startsWith('/admin/login');
+
+      if (shouldTreatAsSessionExpired) {
+        adminAuth.removeToken();
+        toast.error(
+          serverMsg && serverMsg !== 'Unauthorized'
+            ? serverMsg
+            : '登录已过期，请重新登录',
+        );
         const redirect = encodeURIComponent(window.location.pathname);
         window.location.href = `/admin/login?redirect=${redirect}`;
+      } else {
+        toast.error(
+          serverMsg && serverMsg !== 'Unauthorized' ? serverMsg : '账号或密码错误',
+        );
       }
     } else if (status === 403) {
       toast.error(
