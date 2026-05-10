@@ -17,7 +17,10 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:e2e:toc": "jest --config ./test/jest-e2e.json --runInBand toc-flow.e2e-spec.ts",
+    "test:e2e:tob": "jest --config ./test/jest-e2e.json --runInBand tob-flow.e2e-spec.ts",
+    "test:e2e:dual": "bash ../../scripts/run-dual-channel-e2e.sh"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",
