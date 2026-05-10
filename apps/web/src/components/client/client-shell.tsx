@@ -1,9 +1,5 @@
-'use client';
-
 import Link from 'next/link';
-import { useEffect, useState, type ReactNode } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { clientAuth, type ClientUser } from '@/lib/client/auth';
+import type { ReactNode } from 'react';
 
 const navItems = [
   { href: '/', label: '首页' },
@@ -12,21 +8,14 @@ const navItems = [
   { href: '/tasks', label: '任务' },
   { href: '/downloads', label: '下载' },
   { href: '/account', label: '账户' },
+  { href: '/login', label: '登录' },
 ];
 
 export function ClientShell({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [user, setUser] = useState<ClientUser | null>(null);
-
-  useEffect(() => {
-    setUser(clientAuth.getUser());
-  }, [pathname]);
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <Link href="/" className="text-base font-semibold">
             论文服务平台
           </Link>
@@ -40,38 +29,11 @@ export function ClientShell({ children }: { children: ReactNode }) {
                 {item.label}
               </Link>
             ))}
-            {user ? (
-              <button
-                type="button"
-                onClick={() => {
-                  clientAuth.clearToken();
-                  setUser(null);
-                  router.replace('/login');
-                }}
-                className="rounded border border-slate-300 px-2 py-1 text-slate-700 hover:bg-slate-100"
-              >
-                退出登录
-              </button>
-            ) : (
-              <Link
-                href="/login"
-                className="rounded px-2 py-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              >
-                登录
-              </Link>
-            )}
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-8">
-        {user ? (
-          <p className="mb-4 text-xs text-slate-500">
-            当前用户：{user.nickname || user.email || user.phone || user.id}
-          </p>
-        ) : null}
-        {children}
-      </main>
+      <main className="mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
     </div>
   );
 }
