@@ -122,4 +122,11 @@ export class TaskController {
     await this.assertTaskOwnership(id, userId);
     return this.taskService.getProgress(id, userId);
   }
+
+  @Get(':id/timeline')
+  @ApiOperation({ summary: '任务时间线（含订单摘要与关键事件）' })
+  async timeline(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    await this.assertTaskOwnership(id, userId);
+    return this.taskService.getTimeline(id, userId);
+  }
 }
