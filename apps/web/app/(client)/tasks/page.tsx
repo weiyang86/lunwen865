@@ -1,4 +1,4 @@
-import { ClientTopicWorkbench } from '@/components/client/client-topic-workbench';
+import { TaskTimelinePanel } from '@/components/client/task-timeline-panel';
 
 export default async function TasksPage({
   searchParams,
@@ -7,5 +7,5 @@ export default async function TasksPage({
 }) {
   const params = await searchParams;
 
-  return <ClientTopicWorkbench taskId={params.taskId} />;
+  return <TaskTimelinePanel taskId={params.taskId} />;
 }
