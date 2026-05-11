@@ -1,24 +1,15 @@
-import { ClientPageState, resolveClientPageState } from '@/components/client/client-page-state';
+import { ClientLoginForm } from '@/components/client/client-login-form';
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ state?: string | string[] }>;
+  searchParams: Promise<{ redirect?: string; error?: string }>;
 }) {
   const params = await searchParams;
-  const state = resolveClientPageState(params.state);
-
   return (
-    <ClientPageState
-      title="登录页（骨架）"
-      state={state}
-      emptyMessage="暂无登录配置"
-      errorMessage="登录页加载失败"
-    >
-      <section className="space-y-3">
-        <h1 className="text-2xl font-semibold">登录页（骨架）</h1>
-        <p className="text-sm text-slate-600">用于后续接入学生端登录与注册流程。</p>
-      </section>
-    </ClientPageState>
+    <ClientLoginForm
+      redirect={params.redirect || '/'}
+      sessionError={params.error === 'session'}
+    />
   );
 }
