@@ -11,8 +11,9 @@ import {
 } from 'class-validator';
 
 export class QueryAgencyOrderDto {
+  @IsOptional()
   @IsString()
-  agencyId: string;
+  agencyId?: string;
 
   @IsOptional()
   @Type(() => Number)
