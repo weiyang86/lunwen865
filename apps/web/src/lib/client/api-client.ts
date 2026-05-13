@@ -21,7 +21,16 @@ clientApi.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 clientApi.interceptors.response.use(
   (r) => r,
   (error: AxiosError<unknown>) => {
-    if (error.response?.status === 401) clientAuth.clearToken();
+    if (error.response?.status === 401) {
+      clientAuth.clearToken();
+      if (
+        typeof window !== 'undefined' &&
+        !window.location.pathname.startsWith('/login')
+      ) {
+        const redirect = encodeURIComponent(window.location.pathname);
+        window.location.href = `/login?redirect=${redirect}&error=session`;
+      }
+    }
     return Promise.reject(error);
   },
 );
