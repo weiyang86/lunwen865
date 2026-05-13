@@ -2,9 +2,11 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Injectable,
   Logger,
 } from '@nestjs/common';
+import crypto from 'node:crypto';
 import {
   Prisma,
   Task as PrismaTask,
@@ -195,6 +197,49 @@ export class TaskService {
     private readonly quotaService: QuotaService,
   ) {}
 
+  private async resolveSchoolId(input?: string): Promise<string> {
+    const raw = input?.trim();
+    if (!raw) {
+      const existed = await this.prisma.school.findFirst({
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      if (existed) return existed.id;
+
+      const created = await this.prisma.school.create({
+        data: { name: '默认学校', code: 'default-school' },
+        select: { id: true },
+      });
+      return created.id;
+    }
+
+    const byId = await this.prisma.school.findUnique({
+      where: { id: raw },
+      select: { id: true },
+    });
+    if (byId) return byId.id;
+
+    const normalizedName = raw.replace(/\s+/g, ' ').trim();
+    const byName = await this.prisma.school.findFirst({
+      where: { name: normalizedName },
+      select: { id: true },
+    });
+    if (byName) return byName.id;
+
+    const nameHash = crypto
+      .createHash('sha1')
+      .update(normalizedName, 'utf8')
+      .digest('hex')
+      .slice(0, 10);
+    const code = `name-${nameHash}`;
+
+    const created = await this.prisma.school.create({
+      data: { name: normalizedName, code },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
   async assertTaskOwnership(taskId: string, userId: string): Promise<void> {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
@@ -214,8 +259,9 @@ export class TaskService {
   ): Promise<PrismaTask> {
     const now = new Date();
     const seed = now.toISOString().slice(0, 10);
+    const schoolId = await this.resolveSchoolId(dto.schoolId);
     return this.createTask(userId, {
-      schoolId: dto.schoolId?.trim() || 'default-school',
+      schoolId,
       major: dto.major?.trim() || '未指定专业',
       educationLevel: dto.educationLevel?.trim() || '本科',
       title: dto.title?.trim() || `论文任务 ${seed}`,
@@ -245,6 +291,7 @@ export class TaskService {
       });
     } catch (error: unknown) {
       this.logger.error('创建任务失败', error);
+      if (error instanceof HttpException) throw error;
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2003'
