@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/adapters/*.spec.ts src/components/order/*.spec.ts src/components/admin/orders/*.spec.ts"
+    "test": "node --import tsx --test src/adapters/*.spec.ts src/components/order/*.spec.ts src/components/admin/orders/*.spec.ts src/components/client/*.spec.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.10",
