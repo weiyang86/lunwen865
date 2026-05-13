@@ -5,18 +5,12 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ClientTaskListPage } from '@/components/client/client-task-list-page';
 import { ClientTopicWorkbench } from '@/components/client/client-topic-workbench';
-import { ClientOpeningReportWorkbench } from '@/components/client/client-opening-report-workbench';
-
-export function resolveTaskIdFromQuery(taskId: string | null | undefined): string {
-  if (!taskId) return '';
-  return decodeURIComponent(taskId).trim();
-}
 
 export function ClientTaskTopicWorkspacePage() {
   const searchParams = useSearchParams();
-  const taskId = searchParams?.get('taskId');
+  const taskId = searchParams?.get('taskId')?.trim() || '';
 
-  const decodedTaskId = useMemo(() => resolveTaskIdFromQuery(taskId), [taskId]);
+  const decodedTaskId = useMemo(() => decodeURIComponent(taskId), [taskId]);
 
   if (!decodedTaskId) {
     return <ClientTaskListPage />;
@@ -37,7 +31,6 @@ export function ClientTaskTopicWorkspacePage() {
       </div>
 
       <ClientTopicWorkbench taskId={decodedTaskId} />
-      <ClientOpeningReportWorkbench taskId={decodedTaskId} />
     </div>
   );
 }
