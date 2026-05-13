@@ -55,7 +55,7 @@ export function TaskTimelinePanel({ taskId }: { taskId?: string }) {
       }
 
       setState('loading');
-      setErrorMessage('任务时间线加载失败');
+      setErrorMessage('任务时间线加载失败。');
 
       try {
         const res = await fetch(`${API_BASE}/tasks/${taskId}/timeline`, {
