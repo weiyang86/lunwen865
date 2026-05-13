@@ -206,6 +206,23 @@ export class TaskService {
   /**
    * 创建任务（初始 status=DRAFT, stage=INIT）
    */
+
+  async bootstrapTask(
+    userId: string,
+    dto: BootstrapTaskDto,
+  ): Promise<PrismaTask> {
+    const now = new Date();
+    const seed = now.toISOString().slice(0, 10);
+    return this.createTask(userId, {
+      schoolId: dto.schoolId?.trim() || 'default-school',
+      major: dto.major?.trim() || '未指定专业',
+      educationLevel: dto.educationLevel?.trim() || '本科',
+      title: dto.title?.trim() || `论文任务 ${seed}`,
+      topic: dto.topic?.trim() || '请先生成可执行的论文题目候选',
+      language: 'zh-CN',
+    });
+  }
+
   async createTask(userId: string, dto: CreateTaskDto): Promise<PrismaTask> {
     try {
       await this.quotaService.ensure(userId, QuotaType.PAPER_GENERATION, 1);

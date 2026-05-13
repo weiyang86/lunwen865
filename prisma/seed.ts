@@ -5,11 +5,13 @@ async function main() {
   const prisma = new PrismaClient();
 
   const phone = '13800000000';
+  const email = 'admin@example.com';
   const password = await bcrypt.hash('Admin@123456', 10);
 
   const user = await prisma.user.upsert({
     where: { phone },
     update: {
+      email,
       password,
       role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
@@ -19,6 +21,7 @@ async function main() {
     },
     create: {
       phone,
+      email,
       password,
       role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
@@ -26,7 +29,7 @@ async function main() {
       totalWordsQuota: 99999999,
       registerChannel: 'seed',
     },
-    select: { id: true, phone: true, role: true },
+    select: { id: true, phone: true, email: true, role: true },
   });
 
   console.log('[seed] created/updated super admin:', user);
