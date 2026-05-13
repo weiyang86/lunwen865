@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clientHttp } from '@/lib/client/api-client';
+import { getApiErrorMessage } from '@/lib/client/api-error';
 import { clientAuth } from '@/lib/client/auth';
 
 type LoginResponse = {
@@ -60,13 +61,7 @@ export function ClientLoginForm({
       clientAuth.setUser(data.user);
       router.replace(redirect);
     } catch (err: unknown) {
-      const fallback = '登录失败，请检查邮箱或密码';
-      const msg =
-        typeof err === 'object' && err && 'response' in err
-          ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message ??
-            fallback)
-          : fallback;
-      setError(msg);
+      setError(getApiErrorMessage(err, '登录失败，请检查邮箱或密码。'));
     } finally {
       setSubmitting(false);
     }
