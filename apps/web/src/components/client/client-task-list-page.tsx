@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
+import { getApiErrorMessage } from '@/lib/client/api-error';
 
 function extractErrorMessage(requestError: unknown): string | null {
   if (!requestError || typeof requestError !== 'object') return null;
