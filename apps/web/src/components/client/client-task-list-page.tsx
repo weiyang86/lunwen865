@@ -4,6 +4,30 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
 
+function extractErrorMessage(requestError: unknown): string | null {
+  if (!requestError || typeof requestError !== 'object') return null;
+
+  if ('message' in requestError && typeof requestError.message === 'string') {
+    return requestError.message;
+  }
+
+  if (
+    'response' in requestError &&
+    requestError.response &&
+    typeof requestError.response === 'object' &&
+    'data' in requestError.response
+  ) {
+    const data = (requestError.response as { data?: unknown }).data;
+    if (data && typeof data === 'object' && 'message' in data) {
+      const raw = (data as { message?: unknown }).message;
+      if (typeof raw === 'string') return raw;
+      if (Array.isArray(raw)) return raw.filter((x) => typeof x === 'string').join('；');
+    }
+  }
+
+  return null;
+}
+
 type TaskItem = {
   id: string;
   title: string | null;
@@ -55,13 +79,15 @@ export function ClientTaskListPage() {
     try {
       setLoading(true);
       setError(null);
-      const result = await clientHttp.get<TaskListResponse>('/tasks/me', {
+      const result = await clientHttp.get<TaskListResponse>('/tasks', {
         page,
         pageSize: 10,
       });
       setData(result);
-    } catch {
-      setError('加载任务列表失败，请稍后重试。');
+    } catch (requestError: unknown) {
+      const message =
+        extractErrorMessage(requestError) || '加载任务列表失败，请稍后重试。';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -123,10 +149,8 @@ export function ClientTaskListPage() {
       setPage(1);
       await loadTasks();
     } catch (requestError: unknown) {
-      const fallback = '任务创建失败，请稍后重试。';
-      const message = typeof requestError === 'object' && requestError && 'response' in requestError
-        ? ((requestError as { response?: { data?: { message?: string } } }).response?.data?.message || fallback)
-        : fallback;
+      const message =
+        extractErrorMessage(requestError) || '任务创建失败，请稍后重试。';
       setSubmitError(message);
     } finally {
       setSubmitting(false);
