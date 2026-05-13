@@ -5,6 +5,30 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
 import { getApiErrorMessage } from '@/lib/client/api-error';
 
+function extractErrorMessage(requestError: unknown): string | null {
+  if (!requestError || typeof requestError !== 'object') return null;
+
+  if ('message' in requestError && typeof requestError.message === 'string') {
+    return requestError.message;
+  }
+
+  if (
+    'response' in requestError &&
+    requestError.response &&
+    typeof requestError.response === 'object' &&
+    'data' in requestError.response
+  ) {
+    const data = (requestError.response as { data?: unknown }).data;
+    if (data && typeof data === 'object' && 'message' in data) {
+      const raw = (data as { message?: unknown }).message;
+      if (typeof raw === 'string') return raw;
+      if (Array.isArray(raw)) return raw.filter((x) => typeof x === 'string').join('；');
+    }
+  }
+
+  return null;
+}
+
 type TaskItem = {
   id: string;
   title: string | null;
@@ -23,7 +47,7 @@ type TaskListResponse = {
   totalPages?: number;
 };
 
-export type CreateTaskPayload = {
+type CreateTaskPayload = {
   title: string;
   major: string;
   educationLevel: string;
@@ -36,27 +60,6 @@ const MAX_SCHOOL_LENGTH = 100;
 const MAX_MAJOR_LENGTH = 200;
 const MAX_EDUCATION_LEVEL_LENGTH = 200;
 const MAX_TOPIC_LENGTH = 500;
-
-export function buildTaskBootstrapPayload(input: {
-  title: string;
-  major: string;
-  educationLevel: string;
-  topic: string;
-  schoolId?: string;
-}): CreateTaskPayload {
-  const payload: CreateTaskPayload = {
-    title: input.title.trim(),
-    major: input.major.trim(),
-    educationLevel: input.educationLevel.trim(),
-    topic: input.topic.trim(),
-  };
-
-  if (input.schoolId?.trim()) {
-    payload.schoolId = input.schoolId.trim();
-  }
-
-  return payload;
-}
 
 export function ClientTaskListPage() {
   const [page, setPage] = useState(1);
@@ -77,13 +80,15 @@ export function ClientTaskListPage() {
     try {
       setLoading(true);
       setError(null);
-      const result = await clientHttp.get<TaskListResponse>('/tasks/me', {
+      const result = await clientHttp.get<TaskListResponse>('/tasks', {
         page,
         pageSize: 10,
       });
       setData(result);
-    } catch {
-      setError('加载任务列表失败，请稍后重试。');
+    } catch (requestError: unknown) {
+      const message =
+        extractErrorMessage(requestError) || '加载任务列表失败，请稍后重试。';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -124,13 +129,16 @@ export function ClientTaskListPage() {
       return;
     }
 
-    const payload = buildTaskBootstrapPayload({
-      title,
-      major,
-      educationLevel,
-      topic,
-      schoolId,
-    });
+    const payload: CreateTaskPayload = {
+      title: title.trim(),
+      major: major.trim(),
+      educationLevel: educationLevel.trim(),
+      topic: topic.trim(),
+    };
+
+    if (schoolId.trim()) {
+      payload.schoolId = schoolId.trim();
+    }
 
     try {
       setSubmitting(true);
@@ -142,7 +150,9 @@ export function ClientTaskListPage() {
       setPage(1);
       await loadTasks();
     } catch (requestError: unknown) {
-      setSubmitError(getApiErrorMessage(requestError, '任务创建失败，请稍后重试。'));
+      const message =
+        extractErrorMessage(requestError) || '任务创建失败，请稍后重试。';
+      setSubmitError(message);
     } finally {
       setSubmitting(false);
     }
