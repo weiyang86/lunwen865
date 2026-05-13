@@ -6,5 +6,10 @@ export default async function LoginPage({
   searchParams: Promise<{ redirect?: string; error?: string }>;
 }) {
   const params = await searchParams;
-  return <ClientLoginForm redirect={params.redirect || '/'} sessionError={params.error === 'session'} />;
+  return (
+    <ClientLoginForm
+      redirect={params.redirect || '/'}
+      sessionError={params.error === 'session'}
+    />
+  );
 }

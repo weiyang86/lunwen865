@@ -40,15 +40,6 @@ export class TaskController {
     return this.taskService.bootstrapTask(userId, dto);
   }
 
-  @Get('me')
-  @ApiOperation({ summary: '我的任务列表（客户端）' })
-  async myTasks(
-    @CurrentUser('id') userId: string,
-    @Query() query: QueryTaskDto,
-  ) {
-    return this.taskService.findList(userId, query);
-  }
-
   @Get()
   @ApiOperation({ summary: '分页列表（支持 status、educationLevel 过滤）' })
   async list(@CurrentUser('id') userId: string, @Query() query: QueryTaskDto) {

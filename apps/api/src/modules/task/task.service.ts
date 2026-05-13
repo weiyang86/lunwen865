@@ -33,7 +33,6 @@ import type {
 import type { CreateTaskDto } from './dto/create-task.dto';
 import type { QueryTaskDto } from './dto/query-task.dto';
 import type { UpdateTaskDto } from './dto/update-task.dto';
-import type { BootstrapTaskDto } from './dto/bootstrap-task.dto';
 import type {
   TaskTimelineDto,
   TaskTimelineItemDto,

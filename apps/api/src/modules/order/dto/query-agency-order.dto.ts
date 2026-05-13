@@ -5,11 +5,16 @@ import {
   IsEnum,
   IsInt,
   IsOptional,
+  IsString,
   Max,
   Min,
 } from 'class-validator';
 
 export class QueryAgencyOrderDto {
+  @IsOptional()
+  @IsString()
+  agencyId?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

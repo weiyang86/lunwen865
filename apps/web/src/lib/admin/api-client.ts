@@ -57,27 +57,45 @@ adminApi.interceptors.response.use(
   (error: AxiosError<unknown>) => {
     const status = error.response?.status;
     const respData = error.response?.data as any;
-    const msg =
-      (respData && typeof respData === 'object' && 'message' in respData
+    const serverMsg =
+      respData && typeof respData === 'object' && 'message' in respData
         ? String(respData.message)
-        : null) ||
-      error.message ||
-      '网络错误';
+        : null;
+    const msg = serverMsg || error.message || '网络错误';
+    const url = error.config?.url;
+    const isAuthLoginRequest =
+      typeof url === 'string' && url.includes('/auth/login');
 
     if (status === 401) {
-      adminAuth.removeToken();
-      toast.error('登录已过期，请重新登录');
-      if (
+      const shouldTreatAsSessionExpired =
+        !isAuthLoginRequest &&
         typeof window !== 'undefined' &&
-        !window.location.pathname.startsWith('/admin/login')
-      ) {
+        !window.location.pathname.startsWith('/admin/login');
+
+      if (shouldTreatAsSessionExpired) {
+        adminAuth.removeToken();
+        toast.error(
+          serverMsg && serverMsg !== 'Unauthorized'
+            ? serverMsg
+            : '登录已过期，请重新登录',
+        );
         const redirect = encodeURIComponent(window.location.pathname);
         window.location.href = `/admin/login?redirect=${redirect}`;
+      } else {
+        toast.error(
+          serverMsg && serverMsg !== 'Unauthorized' ? serverMsg : '账号或密码错误',
+        );
       }
     } else if (status === 403) {
-      toast.error('权限不足');
+      toast.error(
+        serverMsg && serverMsg !== 'Forbidden resource' ? serverMsg : '权限不足',
+      );
     } else if (status === 429) {
-      toast.error('请求过于频繁，请稍后再试');
+      toast.error(
+        serverMsg && serverMsg !== 'Too Many Requests'
+          ? serverMsg
+          : '请求过于频繁，请稍后再试',
+      );
     } else if (status && status >= 500) {
       toast.error(`服务器错误 (${status})`);
     } else {
