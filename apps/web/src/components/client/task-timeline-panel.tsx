@@ -23,6 +23,8 @@ type TaskTimelineResponse = {
   items: TaskTimelineItem[];
 };
 
+type TimelineFilter = 'all' | 'topic' | 'opening' | 'writing';
+
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001').replace(/\/$/, '') +
   '/api';
@@ -39,10 +41,18 @@ function formatDate(value: string): string {
   }).format(date);
 }
 
+function classifyTimelineItem(item: TaskTimelineItem): Exclude<TimelineFilter, 'all'> {
+  const marker = `${item.type} ${item.stage ?? ''} ${item.title} ${item.description}`.toUpperCase();
+  if (marker.includes('TOPIC') || marker.includes('题目')) return 'topic';
+  if (marker.includes('OPENING') || marker.includes('开题')) return 'opening';
+  return 'writing';
+}
+
 export function TaskTimelinePanel({ taskId }: { taskId?: string }) {
   const [state, setState] = useState<ClientPageViewState>(taskId ? 'loading' : 'empty');
-  const [errorMessage, setErrorMessage] = useState('任务时间线加载失败');
+  const [errorMessage, setErrorMessage] = useState('任务时间线加载失败。');
   const [timeline, setTimeline] = useState<TaskTimelineResponse | null>(null);
+  const [filter, setFilter] = useState<TimelineFilter>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +65,7 @@ export function TaskTimelinePanel({ taskId }: { taskId?: string }) {
       }
 
       setState('loading');
-      setErrorMessage('任务时间线加载失败');
+      setErrorMessage('任务时间线加载失败。');
 
       try {
         const res = await fetch(`${API_BASE}/tasks/${taskId}/timeline`, {
@@ -95,7 +105,11 @@ export function TaskTimelinePanel({ taskId }: { taskId?: string }) {
     };
   }, [taskId]);
 
-  const timelineItems = useMemo(() => timeline?.items ?? [], [timeline]);
+  const timelineItems = useMemo(() => {
+    const items = timeline?.items ?? [];
+    if (filter === 'all') return items;
+    return items.filter((item) => classifyTimelineItem(item) === filter);
+  }, [timeline, filter]);
 
   return (
     <ClientPageState
@@ -104,14 +118,21 @@ export function TaskTimelinePanel({ taskId }: { taskId?: string }) {
       emptyMessage={taskId ? '当前任务暂无可展示时间线。' : '请先提供 taskId（例如 /tasks?taskId=xxx）'}
       errorMessage={errorMessage}
     >
-      <section className="space-y-4">
+      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold">任务时间线</h1>
+          <h2 className="text-xl font-semibold">统一任务时间线（题目/开题/正文）</h2>
           <p className="text-sm text-slate-600">
             任务 ID：{timeline?.taskId ?? taskId}；当前状态：{timeline?.currentStatus ?? '未知'}；当前阶段：
             {timeline?.currentStage ?? '未知'}
           </p>
         </header>
+
+        <div className="flex flex-wrap gap-2 text-sm">
+          <button type="button" onClick={() => setFilter('all')} className={`rounded px-3 py-1 ${filter === 'all' ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}>全部</button>
+          <button type="button" onClick={() => setFilter('topic')} className={`rounded px-3 py-1 ${filter === 'topic' ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}>题目</button>
+          <button type="button" onClick={() => setFilter('opening')} className={`rounded px-3 py-1 ${filter === 'opening' ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}>开题</button>
+          <button type="button" onClick={() => setFilter('writing')} className={`rounded px-3 py-1 ${filter === 'writing' ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}>正文</button>
+        </div>
 
         <ol className="space-y-3">
           {timelineItems.map((item) => (
