@@ -67,7 +67,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       { email, password },
     );
     if (!adminAuth.isAdminRole(data.user.role)) {
-      throw { code: 403, message: '该账号无管理后台访问权限' };
+      throw new Error('该账号无管理后台访问权限');
     }
     adminAuth.setToken(data.token);
     adminAuth.setUser(data.user);
@@ -111,4 +111,3 @@ export function useAdminAuth() {
   if (!ctx) throw new Error('useAdminAuth must be used within AdminAuthProvider');
   return ctx;
 }
-
