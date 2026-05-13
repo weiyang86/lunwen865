@@ -1,5 +1,5 @@
-import { ClientTaskListPage } from '@/components/client/client-task-list-page';
+import { ClientTaskTopicWorkspacePage } from '@/components/client/client-task-topic-workspace-page';
 
 export default function TasksPage() {
-  return <ClientTaskListPage />;
+  return <ClientTaskTopicWorkspacePage />;
 }
