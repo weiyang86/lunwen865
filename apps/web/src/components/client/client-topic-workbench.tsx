@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
+import { getApiErrorMessage } from '@/lib/client/api-error';
 
 type TopicCandidate = {
   id: string;
@@ -43,11 +44,7 @@ export function ClientTopicWorkbench({ taskId }: { taskId?: string }) {
       const data = await clientHttp.get<TopicCandidate[]>(`/tasks/${taskId}/topics/latest`);
       setItems(data);
     } catch (err: unknown) {
-      const fallback = '加载题目候选失败，请稍后重试';
-      const msg = typeof err === 'object' && err && 'response' in err
-        ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message || fallback)
-        : fallback;
-      setError(msg);
+      setError(getApiErrorMessage(err, '加载题目候选失败，请稍后重试。'));
     } finally {
       setLoading(false);
     }
@@ -75,11 +72,7 @@ export function ClientTopicWorkbench({ taskId }: { taskId?: string }) {
       await clientHttp.post(`/tasks/${taskId}/topics/generate`, payload);
       await loadCandidates();
     } catch (err: unknown) {
-      const fallback = '生成失败，请检查任务状态或稍后重试';
-      const msg = typeof err === 'object' && err && 'response' in err
-        ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message || fallback)
-        : fallback;
-      setError(msg);
+      setError(getApiErrorMessage(err, '生成失败，请检查任务状态或稍后重试。'));
     } finally {
       setSubmitting(false);
     }
