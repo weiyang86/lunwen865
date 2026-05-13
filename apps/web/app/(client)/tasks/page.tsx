@@ -1,11 +1,5 @@
-import { TaskTimelinePanel } from '@/components/client/task-timeline-panel';
+import { ClientTaskListPage } from '@/components/client/client-task-list-page';
 
-export default async function TasksPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ taskId?: string }>;
-}) {
-  const params = await searchParams;
-
-  return <TaskTimelinePanel taskId={params.taskId} />;
+export default function TasksPage() {
+  return <ClientTaskListPage />;
 }
