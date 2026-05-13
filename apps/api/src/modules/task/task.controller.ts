@@ -11,6 +11,7 @@ import {
 import { ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CancelTaskDto } from './dto/cancel-task.dto';
+import { BootstrapTaskDto } from './dto/bootstrap-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { QueryTaskDto } from './dto/query-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -28,6 +29,15 @@ export class TaskController {
   @ApiOperation({ summary: '创建任务' })
   async create(@CurrentUser('id') userId: string, @Body() dto: CreateTaskDto) {
     return this.taskService.createTask(userId, dto);
+  }
+
+  @Post('bootstrap')
+  @ApiOperation({ summary: '客户端快速创建任务（最小必填）' })
+  async bootstrap(
+    @CurrentUser('id') userId: string,
+    @Body() dto: BootstrapTaskDto,
+  ) {
+    return this.taskService.bootstrapTask(userId, dto);
   }
 
   @Get()
