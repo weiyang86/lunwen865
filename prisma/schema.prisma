@@ -305,6 +305,11 @@ enum OrderStatus {
   CLOSED
 }
 
+enum OrderSourceType {
+  DIRECT
+  AGENCY
+}
+
 enum PaymentChannel {
   WECHAT
   ALIPAY
@@ -789,6 +794,8 @@ model Order {
   discountCents   Int @default(0)
 
   status      OrderStatus @default(PENDING)
+  sourceType  OrderSourceType @default(DIRECT)
+  agencyId    String? @db.VarChar(50)
 
   channel     PaymentChannel?
   method      PaymentMethod?
@@ -818,6 +825,8 @@ model Order {
   @@index([userId, createdAt])
   @@index([primaryTutorId])
   @@index([status])
+  @@index([sourceType])
+  @@index([agencyId])
   @@index([expiresAt])
 }
 
