@@ -1,6 +1,10 @@
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateAgencyOrderDto {
+  @IsOptional()
+  @IsString()
+  agencyId?: string;
+
   @IsString()
   userId: string;
 

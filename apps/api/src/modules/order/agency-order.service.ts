@@ -38,7 +38,9 @@ export class AgencyOrderService {
     clientIp?: string,
   ) {
     const agencyId = this.resolveAgencyId(currentUser);
-
+    if (dto.agencyId && dto.agencyId !== agencyId) {
+      throw new ForbiddenException('禁止跨机构创建订单');
+    }
     const [user, product] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: dto.userId } }),
       this.prisma.product.findUnique({ where: { id: dto.productId } }),
@@ -96,7 +98,9 @@ export class AgencyOrderService {
     query: QueryAgencyOrderDto,
   ) {
     const agencyId = this.resolveAgencyId(currentUser);
-
+    if (query.agencyId && query.agencyId !== agencyId) {
+      throw new ForbiddenException('禁止跨机构查询订单');
+    }
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const skip = (page - 1) * pageSize;
