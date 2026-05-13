@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  OrderSourceType,
   OrderStatus,
   PaymentChannel,
   PaymentMethod,
@@ -24,6 +25,8 @@ type OrderCreateArgs = {
     productSnapshot: unknown;
     amountCents: number;
     status: OrderStatus;
+    sourceType?: OrderSourceType;
+    agencyId?: string | null;
     expiresAt: Date;
     remark?: string | null;
     clientIp?: string | null;
