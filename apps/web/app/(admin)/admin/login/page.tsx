@@ -43,8 +43,7 @@ function LoginForm() {
       toast.success('登录成功');
       router.replace(redirect);
     } catch (e: unknown) {
-      const err = e as { code?: number; message?: string } | null;
-      if (err?.code === 403) toast.error(err.message || '权限不足');
+      if (e instanceof Error) toast.error(e.message);
     } finally {
       setSubmitting(false);
     }
