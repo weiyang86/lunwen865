@@ -21,8 +21,6 @@
 ### C 端
 - `POST /api/orders`
 - `GET /api/orders/me`
-- `GET /api/tasks/me`
-- `POST /api/tasks/bootstrap`
 - `GET /api/tasks/:id`
 
 ### B 端（机构）
