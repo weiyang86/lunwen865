@@ -24,15 +24,26 @@ type GeneratePayload = {
 type RegeneratePayload = {
   count: number;
   feedback?: string;
+  rejectedTitles?: string[];
   preferredStyle?: string;
 };
 
-export function ClientTopicWorkbench({ taskId }: { taskId?: string }) {
+type TopicCandidateGroup = { batch: number; items: TopicCandidate[] };
+
+export function ClientTopicWorkbench({
+  taskId,
+  onTopicConfirmed,
+}: {
+  taskId?: string;
+  onTopicConfirmed?: (candidate: TopicCandidate) => void;
+}) {
   const [count, setCount] = useState(5);
   const [additionalContext, setAdditionalContext] = useState('');
   const [preferredStyle, setPreferredStyle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [selectingId, setSelectingId] = useState<string | null>(null);
+  const [unselecting, setUnselecting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<TopicCandidate[]>([]);
@@ -93,6 +104,14 @@ export function ClientTopicWorkbench({ taskId }: { taskId?: string }) {
     const payload: RegeneratePayload = { count };
     if (additionalContext.trim()) payload.feedback = additionalContext.trim();
     if (preferredStyle.trim()) payload.preferredStyle = preferredStyle.trim();
+    if (items.length) {
+      const latestBatch = Math.max(...items.map((x) => x.generationBatch));
+      const rejectedTitles = items
+        .filter((x) => x.generationBatch === latestBatch)
+        .map((x) => x.title)
+        .filter(Boolean);
+      if (rejectedTitles.length) payload.rejectedTitles = rejectedTitles;
+    }
 
     try {
       setRegenerating(true);
@@ -107,12 +126,92 @@ export function ClientTopicWorkbench({ taskId }: { taskId?: string }) {
     }
   };
 
+  const selectedCandidate = useMemo(() => {
+    return items.find((x) => x.isSelected) ?? null;
+  }, [items]);
+
+  const grouped = useMemo((): TopicCandidateGroup[] => {
+    if (viewMode !== 'all') return [];
+    const map = new Map<number, TopicCandidate[]>();
+    for (const item of items) {
+      const batch = item.generationBatch ?? 0;
+      const arr = map.get(batch) ?? [];
+      arr.push(item);
+      map.set(batch, arr);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([batch, list]) => ({ batch, items: list }));
+  }, [items, viewMode]);
+
+  const handleSelect = async (candidate: TopicCandidate) => {
+    if (!taskId) return;
+    if (selectingId) return;
+    if (candidate.isSelected) return;
+
+    const ok = window.confirm(
+      `确认选定该题目吗？\n\n${candidate.title}\n\n确认后将进入开题报告生成阶段。`,
+    );
+    if (!ok) return;
+
+    try {
+      setSelectingId(candidate.id);
+      setError(null);
+      const updated = await clientHttp.post<TopicCandidate>(
+        `/tasks/${taskId}/topics/${candidate.id}/select`,
+      );
+      await loadCandidates(viewMode);
+      onTopicConfirmed?.(updated);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, '选定题目失败，请稍后重试。'));
+    } finally {
+      setSelectingId(null);
+    }
+  };
+
+  const handleUnselect = async () => {
+    if (!taskId) return;
+    if (unselecting) return;
+    const ok = window.confirm('确认取消选定题目吗？');
+    if (!ok) return;
+
+    try {
+      setUnselecting(true);
+      setError(null);
+      await clientHttp.post(`/tasks/${taskId}/topics/unselect`);
+      await loadCandidates(viewMode);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, '取消选定失败，请稍后重试。'));
+    } finally {
+      setUnselecting(false);
+    }
+  };
+
   return (
     <section className="space-y-4">
       <header>
         <h1 className="text-2xl font-semibold">论文题目生成</h1>
         <p className="text-sm text-slate-600">提交生成请求并查看最新候选，支持切换查看历史。</p>
       </header>
+
+      {selectedCandidate ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="font-medium">已选定题目</p>
+              <p className="mt-1">{selectedCandidate.title}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleUnselect()}
+              disabled={unselecting || submitting || regenerating || selectingId !== null}
+              className="rounded border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-800 disabled:opacity-60"
+            >
+              {unselecting ? '处理中...' : '取消选定'}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <form onSubmit={handleSubmit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2">
         <label className="text-sm">候选数量（1~10）
@@ -139,19 +238,77 @@ export function ClientTopicWorkbench({ taskId }: { taskId?: string }) {
       {loading ? <div className="rounded border border-slate-200 bg-white p-4 text-sm text-slate-600">正在加载候选题目...</div> : null}
       {!loading && emptyReason ? <div className="rounded border border-slate-200 bg-white p-4 text-sm text-slate-600">{emptyReason}</div> : null}
 
-      {!loading && items.length > 0 ? (
+      {!loading && items.length > 0 && viewMode === 'latest' ? (
         <ul className="space-y-3">
           {items.map((item) => (
             <li key={item.id} className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <h2 className="font-medium">{item.title}</h2>
-                <span className="text-xs text-slate-500">第 {item.generationBatch} 轮{item.isSelected ? ' · 已选定' : ''}</span>
+                <span className="text-xs text-slate-500">
+                  第 {item.generationBatch} 轮{item.isSelected ? ' · 已选定' : ''}
+                </span>
               </div>
-              {item.rationale ? <p className="mt-2 text-sm text-slate-600">理由：{item.rationale}</p> : null}
-              {item.keywords?.length ? <p className="mt-1 text-xs text-slate-500">关键词：{item.keywords.join(' / ')}</p> : null}
+              {item.rationale ? (
+                <p className="mt-2 text-sm text-slate-600">理由：{item.rationale}</p>
+              ) : null}
+              {item.keywords?.length ? (
+                <p className="mt-1 text-xs text-slate-500">关键词：{item.keywords.join(' / ')}</p>
+              ) : null}
+              {!item.isSelected ? (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleSelect(item)}
+                    disabled={selectingId !== null || submitting || regenerating}
+                    className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+                  >
+                    {selectingId === item.id ? '确认中...' : '选定此题目'}
+                  </button>
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {!loading && items.length > 0 && viewMode === 'all' ? (
+        <div className="space-y-4">
+          {grouped.map((group) => (
+            <section key={group.batch} className="space-y-3">
+              <div className="text-sm font-medium text-slate-700">第 {group.batch} 轮</div>
+              <ul className="space-y-3">
+                {group.items.map((item) => (
+                  <li key={item.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <h2 className="font-medium">{item.title}</h2>
+                      <span className="text-xs text-slate-500">
+                        {item.isSelected ? '已选定' : '未选定'}
+                      </span>
+                    </div>
+                    {item.rationale ? (
+                      <p className="mt-2 text-sm text-slate-600">理由：{item.rationale}</p>
+                    ) : null}
+                    {item.keywords?.length ? (
+                      <p className="mt-1 text-xs text-slate-500">关键词：{item.keywords.join(' / ')}</p>
+                    ) : null}
+                    {!item.isSelected ? (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => void handleSelect(item)}
+                          disabled={selectingId !== null || submitting || regenerating}
+                          className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+                        >
+                          {selectingId === item.id ? '确认中...' : '选定此题目'}
+                        </button>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       ) : null}
     </section>
   );
