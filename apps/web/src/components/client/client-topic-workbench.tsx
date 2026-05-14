@@ -38,6 +38,8 @@ export function ClientTopicWorkbench({
   onTopicConfirmed?: (candidate: TopicCandidate) => void;
 }) {
   const [count, setCount] = useState(5);
+  const [topicDirection, setTopicDirection] = useState('');
+  const [mentorNotes, setMentorNotes] = useState('');
   const [additionalContext, setAdditionalContext] = useState('');
   const [preferredStyle, setPreferredStyle] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -83,7 +85,14 @@ export function ClientTopicWorkbench({
     }
 
     const payload: GeneratePayload = { count };
-    if (additionalContext.trim()) payload.additionalContext = additionalContext.trim();
+    const mergedContext = [
+      topicDirection.trim() ? `题目方向/研究对象：${topicDirection.trim()}` : null,
+      mentorNotes.trim() ? `导师要求/约束：${mentorNotes.trim()}` : null,
+      additionalContext.trim() ? `补充说明：${additionalContext.trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    if (mergedContext) payload.additionalContext = mergedContext;
     if (preferredStyle.trim()) payload.preferredStyle = preferredStyle.trim();
 
     try {
@@ -102,7 +111,14 @@ export function ClientTopicWorkbench({
   const handleRegenerate = async () => {
     if (regenerating || !taskId) return;
     const payload: RegeneratePayload = { count };
-    if (additionalContext.trim()) payload.feedback = additionalContext.trim();
+    const mergedFeedback = [
+      topicDirection.trim() ? `题目方向/研究对象：${topicDirection.trim()}` : null,
+      mentorNotes.trim() ? `导师要求/约束：${mentorNotes.trim()}` : null,
+      additionalContext.trim() ? `重试反馈：${additionalContext.trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    if (mergedFeedback) payload.feedback = mergedFeedback;
     if (preferredStyle.trim()) payload.preferredStyle = preferredStyle.trim();
     if (items.length) {
       const latestBatch = Math.max(...items.map((x) => x.generationBatch));
@@ -220,8 +236,14 @@ export function ClientTopicWorkbench({
         <label className="text-sm">偏好风格
           <input value={preferredStyle} onChange={(e) => setPreferredStyle(e.target.value)} placeholder="如：实证研究、案例分析" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting || regenerating || !taskId} />
         </label>
-        <label className="text-sm md:col-span-2">补充要求 / 重试反馈
-          <textarea value={additionalContext} onChange={(e) => setAdditionalContext(e.target.value)} rows={3} placeholder="如：聚焦近三年中文文献、避免过宽选题" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting || regenerating || !taskId} />
+        <label className="text-sm md:col-span-2">题目方向 / 研究对象（选填）
+          <textarea value={topicDirection} onChange={(e) => setTopicDirection(e.target.value)} rows={2} placeholder="如：数字经济背景下中小企业融资效率；某行业/某地区；2022-2025 年" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting || regenerating || !taskId} />
+        </label>
+        <label className="text-sm md:col-span-2">导师要求 / 约束（选填）
+          <textarea value={mentorNotes} onChange={(e) => setMentorNotes(e.target.value)} rows={2} placeholder="如：必须实证 + 变量口径；至少 X 篇中文核心；禁止过宽泛" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting || regenerating || !taskId} />
+        </label>
+        <label className="text-sm md:col-span-2">补充说明 / 重试反馈（选填）
+          <textarea value={additionalContext} onChange={(e) => setAdditionalContext(e.target.value)} rows={3} placeholder="如：不想要某些关键词、需要包含某些理论/模型、希望更聚焦/更可落地" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting || regenerating || !taskId} />
         </label>
         {error ? <p className="md:col-span-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p> : null}
         <div className="md:col-span-2 flex flex-wrap gap-2">

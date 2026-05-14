@@ -297,6 +297,8 @@ export class TopicService {
     const academicLevel = toAcademicLevel(task.educationLevel);
 
     const prompt = buildTopicGenerationPrompt({
+      taskTitle: task.title ?? undefined,
+      major: task.major ?? undefined,
       topic: extracted.topic,
       keywords: extracted.keywords,
       academicLevel,

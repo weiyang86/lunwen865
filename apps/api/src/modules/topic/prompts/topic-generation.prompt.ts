@@ -6,6 +6,8 @@ export function buildTopicGenerationPrompt(params: {
   academicLevel: AcademicLevel;
   language: string;
   count: number;
+  taskTitle?: string;
+  major?: string;
   additionalContext?: string;
   feedback?: string;
   rejectedTitles?: string[];
@@ -40,12 +42,19 @@ export function buildTopicGenerationPrompt(params: {
     ? params.preferredStyle.trim()
     : '（无）';
 
+  const taskTitleText = params.taskTitle?.trim()
+    ? params.taskTitle.trim()
+    : '（无）';
+  const majorText = params.major?.trim() ? params.major.trim() : '（无）';
+
   if (isEnglish) {
     return [
       '## Task',
       `Generate ${params.count} academic paper title candidates based on the input topic, keywords, and academic level.`,
       '',
       '## Input',
+      `- Task Title: ${taskTitleText}`,
+      `- Major: ${majorText}`,
       `- Topic: ${params.topic}`,
       `- Keywords: ${keywordsText}`,
       `- Academic Level: ${params.academicLevel}`,
@@ -58,6 +67,7 @@ export function buildTopicGenerationPrompt(params: {
       '## Constraints',
       '- Output MUST be valid JSON only. Do NOT include markdown code fences.',
       '- Titles should match the academic level depth (UG: applied, Master: method/system, Doctor: novel/theoretical).',
+      '- Titles MUST align with the task title/major/topic and should NOT drift to unrelated fields.',
       '- Avoid overly broad or overly narrow titles.',
       '- Avoid duplicates and avoid being too similar to rejected titles.',
       '- Provide rationale and estimated difficulty for each title.',
@@ -83,6 +93,8 @@ export function buildTopicGenerationPrompt(params: {
     `基于用户主题、关键词与学术等级，生成 ${params.count} 个论文题目候选。`,
     '',
     '## 输入',
+    `- 任务标题（taskTitle）：${taskTitleText}`,
+    `- 专业（major）：${majorText}`,
     `- 主题（topic）：${params.topic}`,
     `- 关键词（keywords）：${keywordsText}`,
     `- 学术等级（academicLevel）：${levelMap[params.academicLevel]}（${params.academicLevel}）`,
@@ -96,6 +108,7 @@ export function buildTopicGenerationPrompt(params: {
     '## 约束',
     '1. 必须只输出 JSON，不要包含 markdown 代码块标记。',
     '2. 题目深度需匹配学术等级：本科偏应用，硕士偏方法/系统，博士偏理论/创新。',
+    '3. 题目必须围绕任务标题/专业/主题展开，禁止跑题到不相关方向。',
     '3. 题目应具体明确，避免过宽泛或过口号化。',
     '4. 候选题目之间不得重复；必须尽量避免与 rejectedTitles 相似。',
     '5. 每个题目必须包含 rationale（亮点/为什么值得做）。',
