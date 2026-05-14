@@ -40,4 +40,6 @@ export const clientHttp = {
     clientApi.get<T, { data: T }>(url, { params }).then((r) => r.data),
   post: <T = unknown>(url: string, body?: unknown) =>
     clientApi.post<T, { data: T }>(url, body).then((r) => r.data),
+  patch: <T = unknown>(url: string, body?: unknown) =>
+    clientApi.patch<T, { data: T }>(url, body).then((r) => r.data),
 };

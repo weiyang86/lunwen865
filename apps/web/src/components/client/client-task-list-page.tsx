@@ -5,30 +5,6 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
 import { getApiErrorMessage } from '@/lib/client/api-error';
 
-function extractErrorMessage(requestError: unknown): string | null {
-  if (!requestError || typeof requestError !== 'object') return null;
-
-  if ('message' in requestError && typeof requestError.message === 'string') {
-    return requestError.message;
-  }
-
-  if (
-    'response' in requestError &&
-    requestError.response &&
-    typeof requestError.response === 'object' &&
-    'data' in requestError.response
-  ) {
-    const data = (requestError.response as { data?: unknown }).data;
-    if (data && typeof data === 'object' && 'message' in data) {
-      const raw = (data as { message?: unknown }).message;
-      if (typeof raw === 'string') return raw;
-      if (Array.isArray(raw)) return raw.filter((x) => typeof x === 'string').join('；');
-    }
-  }
-
-  return null;
-}
-
 type TaskItem = {
   id: string;
   title: string | null;
@@ -61,6 +37,20 @@ const MAX_MAJOR_LENGTH = 200;
 const MAX_EDUCATION_LEVEL_LENGTH = 200;
 const MAX_TOPIC_LENGTH = 500;
 
+export function buildTaskBootstrapPayload(values: CreateTaskPayload) {
+  const payload: CreateTaskPayload = {
+    title: values.title.trim(),
+    major: values.major.trim(),
+    educationLevel: values.educationLevel.trim(),
+    topic: values.topic.trim(),
+  };
+
+  const trimmedSchool = values.schoolId?.trim();
+  if (trimmedSchool) payload.schoolId = trimmedSchool;
+
+  return payload;
+}
+
 export function ClientTaskListPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -86,9 +76,7 @@ export function ClientTaskListPage() {
       });
       setData(result);
     } catch (requestError: unknown) {
-      const message =
-        extractErrorMessage(requestError) || '加载任务列表失败，请稍后重试。';
-      setError(message);
+      setError(getApiErrorMessage(requestError, '加载任务列表失败，请稍后重试。'));
     } finally {
       setLoading(false);
     }
@@ -129,16 +117,13 @@ export function ClientTaskListPage() {
       return;
     }
 
-    const payload: CreateTaskPayload = {
-      title: title.trim(),
-      major: major.trim(),
-      educationLevel: educationLevel.trim(),
-      topic: topic.trim(),
-    };
-
-    if (schoolId.trim()) {
-      payload.schoolId = schoolId.trim();
-    }
+    const payload = buildTaskBootstrapPayload({
+      title,
+      major,
+      educationLevel,
+      topic,
+      schoolId,
+    });
 
     try {
       setSubmitting(true);
@@ -150,9 +135,7 @@ export function ClientTaskListPage() {
       setPage(1);
       await loadTasks();
     } catch (requestError: unknown) {
-      const message =
-        extractErrorMessage(requestError) || '任务创建失败，请稍后重试。';
-      setSubmitError(message);
+      setSubmitError(getApiErrorMessage(requestError, '任务创建失败，请稍后重试。'));
     } finally {
       setSubmitting(false);
     }
