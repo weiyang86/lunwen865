@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CategoriesModule } from './categories/categories.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { OrdersModule } from './orders/orders.module';
+import { AdminSettingsModule } from './settings/admin-settings.module';
 import { StoresModule } from './stores/stores.module';
 import { AdminTasksModule } from './tasks/admin-tasks.module';
 import { UsersModule } from './users/users.module';
@@ -14,6 +15,7 @@ import { UsersModule } from './users/users.module';
     AdminTasksModule,
     StoresModule,
     CategoriesModule,
+    AdminSettingsModule,
   ],
 })
 export class AdminModule {}

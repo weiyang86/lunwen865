@@ -263,6 +263,7 @@ enum ExportTemplate {
 
 // ============ 配额 ============
 enum QuotaType {
+  BRAIN_CELL
   PAPER_GENERATION
   POLISH
   EXPORT
@@ -277,6 +278,7 @@ enum QuotaChangeReason {
   ADMIN_DEDUCT
   REGISTER_GIFT
   EXPIRE
+  EXCHANGE
 }
 
 // ============ 商品 ============
@@ -696,6 +698,18 @@ model QuotaLog {
   @@index([orderId])
 }
 
+model SystemSetting {
+  id String @id @default(cuid())
+
+  key   String @unique @db.VarChar(100)
+  value Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
 model Product {
   id                 String        @id @default(cuid())
   code               String        @unique @db.VarChar(50)
@@ -704,6 +718,8 @@ model Product {
   coverUrl           String?       @db.Text
   priceCents         Int
   originalPriceCents Int?
+
+  brainCellAmount Int @default(0)
 
   paperQuota  Int @default(0)
   polishQuota Int @default(0)

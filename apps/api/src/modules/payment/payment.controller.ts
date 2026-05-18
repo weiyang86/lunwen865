@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  ForbiddenException,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { PaymentChannel, PaymentMethod } from '@prisma/client';
 import type { Request } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -17,10 +9,7 @@ import { PaymentService } from './payment.service';
 @Controller('payment')
 @UseGuards(JwtAuthGuard)
 export class PaymentController {
-  constructor(
-    private readonly paymentService: PaymentService,
-    private readonly config: ConfigService,
-  ) {}
+  constructor(private readonly paymentService: PaymentService) {}
 
   @Post('prepay')
   prepay(
@@ -37,9 +26,6 @@ export class PaymentController {
     @CurrentUser('id') uid: string,
     @Body('orderId') orderId: string,
   ) {
-    if (this.config.get<boolean>('payment.sandbox') !== true) {
-      throw new ForbiddenException('该接口仅在沙箱模式可用');
-    }
     return this.paymentService.simulatePaid(uid, orderId, {
       channel: PaymentChannel.WECHAT,
       method: PaymentMethod.WECHAT_NATIVE,

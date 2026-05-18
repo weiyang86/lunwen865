@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import fs from 'node:fs';
 import WxPay from 'wechatpay-node-v3';
+import { SettingsService } from '../../settings/settings.service';
 
 type WechatNativePrepayResult = { codeUrl: string };
 
@@ -59,41 +59,47 @@ type WxPayClient = {
 @Injectable()
 export class WechatPayProvider {
   private client: WxPayClient | null = null;
+  private clientKey: string | null = null;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly settings: SettingsService) {}
 
   getChannel(): 'WECHAT' {
     return 'WECHAT';
   }
 
-  isSandbox(): boolean {
-    return this.config.get<boolean>('payment.sandbox', true) === true;
+  private async isSandbox(): Promise<boolean> {
+    const cfg = await this.settings.getPaymentSettings();
+    return cfg.sandbox === true;
   }
 
-  private getClient(): WxPayClient {
-    if (this.client) return this.client;
+  private async getClient(): Promise<WxPayClient> {
+    const cfg = await this.settings.getPaymentSettings();
+    const w = cfg.wechat;
+    const key = [
+      w.appid,
+      w.mchid,
+      w.serialNo,
+      w.privateKeyPath,
+      w.apiV3Key ? 'HAS_KEY' : 'NO_KEY',
+    ].join('|');
 
-    const appid = this.config.get<string>('payment.wechat.appid', '');
-    const mchid = this.config.get<string>('payment.wechat.mchid', '');
-    const serialNo = this.config.get<string>('payment.wechat.serialNo', '');
-    const privateKeyPath = this.config.get<string>(
-      'payment.wechat.privateKeyPath',
-      '',
-    );
-    const apiV3Key = this.config.get<string>('payment.wechat.apiV3Key', '');
+    if (this.client && this.clientKey === key) return this.client;
 
-    const privateKey = privateKeyPath ? fs.readFileSync(privateKeyPath) : '';
+    const privateKey = w.privateKeyPath
+      ? fs.readFileSync(w.privateKeyPath)
+      : '';
 
     const WxPayCtor = WxPay as unknown as new (
       options: Record<string, unknown>,
     ) => WxPayClient;
     this.client = new WxPayCtor({
-      appid,
-      mchid,
-      serial_no: serialNo,
+      appid: w.appid,
+      mchid: w.mchid,
+      serial_no: w.serialNo,
       privateKey,
-      key: apiV3Key,
+      key: w.apiV3Key,
     });
+    this.clientKey = key;
     return this.client;
   }
 
@@ -104,13 +110,13 @@ export class WechatPayProvider {
     clientIp: string;
     notifyUrl: string;
   }): Promise<WechatNativePrepayResult> {
-    if (this.isSandbox()) {
+    if (await this.isSandbox()) {
       return {
         codeUrl: `weixin://wxpay/mock?out_trade_no=${params.outTradeNo}`,
       };
     }
 
-    const client = this.getClient();
+    const client = await this.getClient();
     const result = await client.transactions_native({
       description: params.description,
       out_trade_no: params.outTradeNo,
@@ -124,11 +130,11 @@ export class WechatPayProvider {
     return { codeUrl: String(codeUrl) };
   }
 
-  verifyAndParsePayNotify(
+  async verifyAndParsePayNotify(
     headers: Record<string, string>,
     rawBody: string,
-  ): WechatPayNotifyResult {
-    const client = this.getClient();
+  ): Promise<WechatPayNotifyResult> {
+    const client = await this.getClient();
     const ok = client.verifySign(headers, rawBody);
     if (!ok) throw new Error('微信回调验签失败');
 
@@ -155,14 +161,14 @@ export class WechatPayProvider {
     totalAmountCents: number;
     notifyUrl: string;
   }): Promise<WechatRefundResult> {
-    if (this.isSandbox()) {
+    if (await this.isSandbox()) {
       return {
         outRefundNo: params.outRefundNo,
         refundId: `WX_REFUND_${Date.now()}`,
       };
     }
 
-    const client = this.getClient();
+    const client = await this.getClient();
     const res = await client.refunds({
       out_trade_no: params.outTradeNo,
       transaction_id: params.transactionId,
@@ -183,7 +189,7 @@ export class WechatPayProvider {
   }
 
   async query(outTradeNo: string): Promise<WechatQueryResult> {
-    if (this.isSandbox()) {
+    if (await this.isSandbox()) {
       if (outTradeNo.startsWith('SIM_PAID_')) {
         return {
           status: 'PAID',
@@ -195,7 +201,7 @@ export class WechatPayProvider {
       return { status: 'PENDING' };
     }
 
-    const client = this.getClient();
+    const client = await this.getClient();
     if (!client.query) {
       throw new Error('微信 query 能力不可用');
     }

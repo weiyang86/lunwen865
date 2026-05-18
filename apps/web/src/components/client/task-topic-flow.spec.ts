@@ -12,6 +12,7 @@ test('Client task flow: buildTaskBootstrapPayload trims fields and omits empty s
     educationLevel: ' 本科 ',
     topic: ' 供应链金融研究 ',
     schoolId: '   ',
+    wordCountTarget: 8000,
   });
 
   assert.deepEqual(payload, {
@@ -19,6 +20,7 @@ test('Client task flow: buildTaskBootstrapPayload trims fields and omits empty s
     major: '工商管理',
     educationLevel: '本科',
     topic: '供应链金融研究',
+    wordCountTarget: 8000,
   });
 });
 

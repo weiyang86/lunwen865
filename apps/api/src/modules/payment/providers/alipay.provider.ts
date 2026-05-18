@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import fs from 'node:fs';
 import AlipaySdk from 'alipay-sdk';
+import { SettingsService } from '../../settings/settings.service';
 
 type AlipayPrepayResult = { paymentUrl: string };
 
@@ -34,8 +34,9 @@ type AlipayClient = {
 @Injectable()
 export class AlipayProvider {
   private client: AlipayClient | null = null;
+  private clientKey: string | null = null;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly settings: SettingsService) {}
 
   private centsToYuan(cents: number): string {
     const sign = cents < 0 ? '-' : '';
@@ -64,40 +65,36 @@ export class AlipayProvider {
     return 'ALIPAY';
   }
 
-  isSandbox(): boolean {
-    return this.config.get<boolean>('payment.sandbox', true) === true;
+  private async isSandbox(): Promise<boolean> {
+    const cfg = await this.settings.getPaymentSettings();
+    return cfg.sandbox === true;
   }
 
-  private getClient(): AlipayClient {
-    if (this.client) return this.client;
-
-    const appId = this.config.get<string>('payment.alipay.appId', '');
-    const privateKeyPath = this.config.get<string>(
-      'payment.alipay.privateKeyPath',
-      '',
+  private async getClient(): Promise<AlipayClient> {
+    const cfg = await this.settings.getPaymentSettings();
+    const a = cfg.alipay;
+    const key = [a.appId, a.gateway, a.privateKeyPath, a.publicKeyPath].join(
+      '|',
     );
-    const publicKeyPath = this.config.get<string>(
-      'payment.alipay.publicKeyPath',
-      '',
-    );
-    const gateway = this.config.get<string>('payment.alipay.gateway', '');
+    if (this.client && this.clientKey === key) return this.client;
 
-    const privateKey = privateKeyPath
-      ? fs.readFileSync(privateKeyPath, 'utf8')
+    const privateKey = a.privateKeyPath
+      ? fs.readFileSync(a.privateKeyPath, 'utf8')
       : '';
-    const alipayPublicKey = publicKeyPath
-      ? fs.readFileSync(publicKeyPath, 'utf8')
+    const alipayPublicKey = a.publicKeyPath
+      ? fs.readFileSync(a.publicKeyPath, 'utf8')
       : '';
 
     const AlipayCtor = AlipaySdk as unknown as new (
       options: Record<string, unknown>,
     ) => AlipayClient;
     this.client = new AlipayCtor({
-      appId,
+      appId: a.appId,
       privateKey,
       alipayPublicKey,
-      gateway,
+      gateway: a.gateway,
     });
+    this.clientKey = key;
     return this.client;
   }
 
@@ -108,13 +105,13 @@ export class AlipayProvider {
     notifyUrl: string;
     returnUrl?: string;
   }): Promise<AlipayPrepayResult> {
-    if (this.isSandbox()) {
+    if (await this.isSandbox()) {
       return {
         paymentUrl: `https://openapi.alipay.com/gateway.do/mockpay?out_trade_no=${params.outTradeNo}`,
       };
     }
 
-    const client = this.getClient();
+    const client = await this.getClient();
     const totalAmount = this.centsToYuan(params.totalAmountCents);
     const url = await client.exec(
       'alipay.trade.page.pay',
@@ -134,10 +131,10 @@ export class AlipayProvider {
     return { paymentUrl: typeof url === 'string' ? url : JSON.stringify(url) };
   }
 
-  verifyAndParsePayNotify(
+  async verifyAndParsePayNotify(
     payload: Record<string, string>,
-  ): AlipayPayNotifyResult {
-    const client = this.getClient();
+  ): Promise<AlipayPayNotifyResult> {
+    const client = await this.getClient();
     const ok = client.checkNotifySign(payload);
     if (!ok) throw new Error('支付宝回调验签失败');
 
@@ -158,14 +155,14 @@ export class AlipayProvider {
     refundAmountCents: number;
     reason: string;
   }): Promise<AlipayRefundResult> {
-    if (this.isSandbox()) {
+    if (await this.isSandbox()) {
       return {
         outRefundNo: params.outRefundNo,
         refundId: `ALI_REFUND_${Date.now()}`,
       };
     }
 
-    const client = this.getClient();
+    const client = await this.getClient();
     const refundAmount = this.centsToYuan(params.refundAmountCents);
     const res = await client.exec('alipay.trade.refund', {
       bizContent: {
@@ -188,7 +185,7 @@ export class AlipayProvider {
   }
 
   async query(outTradeNo: string): Promise<AlipayQueryResult> {
-    if (this.isSandbox()) {
+    if (await this.isSandbox()) {
       if (outTradeNo.startsWith('SIM_PAID_')) {
         return {
           status: 'PAID',
@@ -199,7 +196,7 @@ export class AlipayProvider {
       }
       return { status: 'PENDING' };
     }
-    const client = this.getClient();
+    const client = await this.getClient();
     const res = await client.exec('alipay.trade.query', {
       bizContent: {
         out_trade_no: outTradeNo,

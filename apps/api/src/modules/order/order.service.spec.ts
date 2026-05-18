@@ -11,10 +11,12 @@ import {
   PaymentChannel,
   PaymentMethod,
   ProductStatus,
+  QuotaType,
 } from '@prisma/client';
 import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QuotaService } from '../quota/quota.service';
+import type { SettingsService } from '../settings/settings.service';
 import { OrderService } from './order.service';
 
 type OrderCreateArgs = {
@@ -61,12 +63,37 @@ describe('OrderService', () => {
   let prisma: DeepMockProxy<PrismaMock>;
   let quotaService: DeepMockProxy<QuotaService>;
   let config: DeepMockProxy<ConfigService>;
+  let settings: Pick<SettingsService, 'getPaymentSettings'>;
   let service: OrderService;
 
   beforeEach(() => {
     prisma = mockDeep<PrismaMock>();
     quotaService = mockDeep<QuotaService>();
     config = mockDeep<ConfigService>();
+    settings = {
+      getPaymentSettings: jest.fn(() =>
+        Promise.resolve({
+          sandbox: true,
+          orderExpireMinutes: 30,
+          wechat: {
+            notifyUrl: '',
+            appid: '',
+            mchid: '',
+            serialNo: '',
+            privateKeyPath: '',
+            apiV3Key: '',
+          },
+          alipay: {
+            notifyUrl: '',
+            returnUrl: '',
+            appId: '',
+            gateway: '',
+            privateKeyPath: '',
+            publicKeyPath: '',
+          },
+        }),
+      ),
+    };
 
     prisma.$transaction.mockImplementation((fn: TxFn<unknown>) => fn(prisma));
 
@@ -74,6 +101,7 @@ describe('OrderService', () => {
       prisma as unknown as PrismaService,
       quotaService,
       config,
+      settings as unknown as SettingsService,
     );
   });
 
@@ -92,6 +120,7 @@ describe('OrderService', () => {
       description: null,
       priceCents: 100,
       originalPriceCents: null,
+      brainCellAmount: 0,
       paperQuota: 1,
       polishQuota: 3,
       exportQuota: 2,
@@ -116,6 +145,7 @@ describe('OrderService', () => {
       description: null,
       priceCents: 100,
       originalPriceCents: null,
+      brainCellAmount: 0,
       paperQuota: 1,
       polishQuota: 3,
       exportQuota: 2,
@@ -235,7 +265,7 @@ describe('OrderService', () => {
     expect(updateSpy).not.toHaveBeenCalled();
   });
 
-  it('markPaid 成功：发放 4 类配额（如果商品配置了）', async () => {
+  it('markPaid 成功：发放脑细胞（从商品快照推导）', async () => {
     const grantSpy = jest.spyOn(quotaService, 'grant');
     const updateSpy = jest.spyOn(prisma.order, 'update');
 
@@ -250,7 +280,7 @@ describe('OrderService', () => {
       .mockResolvedValueOnce({
         id: 'o1',
         userId: 'u1',
-        status: OrderStatus.PAID,
+        status: OrderStatus.COMPLETED,
         amountCents: 100,
         paidAmountCents: 100,
         productSnapshot: {
@@ -273,7 +303,13 @@ describe('OrderService', () => {
     });
 
     expect(res.alreadyPaid).toBe(false);
-    expect(grantSpy).toHaveBeenCalledTimes(4);
+    expect(grantSpy).toHaveBeenCalledTimes(1);
+    expect(grantSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: QuotaType.BRAIN_CELL,
+        amount: 10,
+      }),
+    );
     expect(updateSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -293,11 +329,11 @@ describe('OrderService', () => {
       .mockResolvedValueOnce({
         id: 'o1',
         userId: 'u1',
-        status: OrderStatus.PAID,
+        status: OrderStatus.COMPLETED,
         amountCents: 100,
         paidAmountCents: 101,
         productSnapshot: {},
-        quotaGranted: true,
+        quotaGranted: false,
       })
       .mockResolvedValueOnce({ id: 'o1', quotaGranted: true });
 

@@ -29,6 +29,7 @@ type CreateTaskPayload = {
   educationLevel: string;
   topic: string;
   schoolId?: string;
+  wordCountTarget?: number;
 };
 
 const MAX_TITLE_LENGTH = 200;
@@ -36,6 +37,8 @@ const MAX_SCHOOL_LENGTH = 100;
 const MAX_MAJOR_LENGTH = 200;
 const MAX_EDUCATION_LEVEL_LENGTH = 200;
 const MAX_TOPIC_LENGTH = 500;
+const MIN_WORD_COUNT_TARGET = 3000;
+const MAX_WORD_COUNT_TARGET = 100000;
 
 export function buildTaskBootstrapPayload(values: CreateTaskPayload) {
   const payload: CreateTaskPayload = {
@@ -47,6 +50,7 @@ export function buildTaskBootstrapPayload(values: CreateTaskPayload) {
 
   const trimmedSchool = values.schoolId?.trim();
   if (trimmedSchool) payload.schoolId = trimmedSchool;
+  if (typeof values.wordCountTarget === 'number') payload.wordCountTarget = values.wordCountTarget;
 
   return payload;
 }
@@ -65,6 +69,7 @@ export function ClientTaskListPage() {
   const [major, setMajor] = useState('');
   const [educationLevel, setEducationLevel] = useState('');
   const [topic, setTopic] = useState('');
+  const [wordCountTarget, setWordCountTarget] = useState('8000');
 
   const loadTasks = useCallback(async () => {
     try {
@@ -98,8 +103,13 @@ export function ClientTaskListPage() {
     if (educationLevel.trim().length > MAX_EDUCATION_LEVEL_LENGTH) return `学历层次不能超过 ${MAX_EDUCATION_LEVEL_LENGTH} 个字符。`;
     if (!topic.trim()) return '请填写论文方向或题目描述。';
     if (topic.trim().length > MAX_TOPIC_LENGTH) return `论文方向描述不能超过 ${MAX_TOPIC_LENGTH} 个字符。`;
+    const wcRaw = wordCountTarget.trim();
+    const wc = wcRaw ? Number(wcRaw) : NaN;
+    if (!Number.isFinite(wc) || wc < MIN_WORD_COUNT_TARGET || wc > MAX_WORD_COUNT_TARGET) {
+      return `请填写目标字数（${MIN_WORD_COUNT_TARGET}-${MAX_WORD_COUNT_TARGET}）。`;
+    }
     return null;
-  }, [title, schoolId, major, educationLevel, topic]);
+  }, [title, schoolId, major, educationLevel, topic, wordCountTarget]);
 
   const resetForm = () => {
     setTitle('');
@@ -107,6 +117,7 @@ export function ClientTaskListPage() {
     setMajor('');
     setEducationLevel('');
     setTopic('');
+    setWordCountTarget('8000');
   };
 
   const handleCreateTask = async (event: FormEvent<HTMLFormElement>) => {
@@ -123,6 +134,7 @@ export function ClientTaskListPage() {
       educationLevel,
       topic,
       schoolId,
+      wordCountTarget: Number(wordCountTarget.trim()),
     });
 
     try {
@@ -171,6 +183,9 @@ export function ClientTaskListPage() {
         </label>
         <label className="text-sm">学历层次（必填）
           <input value={educationLevel} onChange={(event) => setEducationLevel(event.target.value)} placeholder="例如：本科" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} maxLength={MAX_EDUCATION_LEVEL_LENGTH} />
+        </label>
+        <label className="text-sm">目标字数（必填）
+          <input value={wordCountTarget} onChange={(event) => setWordCountTarget(event.target.value)} placeholder="例如：8000" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} inputMode="numeric" />
         </label>
         <label className="text-sm md:col-span-2">论文方向描述（必填）
           <textarea value={topic} onChange={(event) => setTopic(event.target.value)} rows={3} placeholder="例如：聚焦供应链金融场景，关注 2022-2025 年的政策与案例" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} maxLength={MAX_TOPIC_LENGTH} />

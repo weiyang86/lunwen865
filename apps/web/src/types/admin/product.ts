@@ -14,6 +14,28 @@ export interface ProductListItem {
   updatedAt: string;
 }
 
+export interface ProductDetail {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  coverUrl: string | null;
+  priceCents: number;
+  originalPriceCents: number | null;
+  brainCellAmount: number;
+  paperQuota: number;
+  polishQuota: number;
+  exportQuota: number;
+  aiChatQuota: number;
+  sortOrder: number;
+  status: ProductStatus;
+  categoryId: string | null;
+  totalStock: number;
+  soldCount: number;
+  updatedAt: string;
+  createdAt: string;
+}
+
 export interface ProductListQuery {
   categoryId?: string;
   includeSubCategory?: boolean;
@@ -29,4 +51,3 @@ export interface ProductListResp {
   page: number;
   pageSize: number;
 }
-

@@ -21,9 +21,16 @@ type SafeUser = {
 
 type WordQuota = { total: number; used: number; remaining: number };
 type QuotaBalances = Record<
-  'PAPER_GENERATION' | 'POLISH' | 'EXPORT' | 'AI_CHAT',
+  'BRAIN_CELL' | 'PAPER_GENERATION' | 'POLISH' | 'EXPORT' | 'AI_CHAT',
   number
 >;
+type ExchangeRates = {
+  paperGeneration: number;
+  polish: number;
+  export: number;
+  aiChat: number;
+};
+type ExchangeTargetType = Exclude<keyof QuotaBalances, 'BRAIN_CELL'>;
 
 const EDUCATION_LEVEL_OPTIONS: Array<{
   value: NonNullable<SafeUser['educationLevel']>;
@@ -46,6 +53,7 @@ export default function AccountPage() {
   const [user, setUser] = useState<SafeUser | null>(null);
   const [wordQuota, setWordQuota] = useState<WordQuota | null>(null);
   const [balances, setBalances] = useState<QuotaBalances | null>(null);
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRates | null>(null);
 
   const [nickname, setNickname] = useState(cached?.nickname ?? '');
   const [realName, setRealName] = useState('');
@@ -60,26 +68,35 @@ export default function AccountPage() {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
   const [grantType, setGrantType] =
-    useState<keyof QuotaBalances>('PAPER_GENERATION');
+    useState<keyof QuotaBalances>('BRAIN_CELL');
   const [grantAmount, setGrantAmount] = useState(1);
   const [granting, setGranting] = useState(false);
   const [grantError, setGrantError] = useState<string | null>(null);
   const [grantSuccess, setGrantSuccess] = useState<string | null>(null);
+
+  const [exchangeType, setExchangeType] =
+    useState<ExchangeTargetType>('PAPER_GENERATION');
+  const [exchangeAmount, setExchangeAmount] = useState(1);
+  const [exchanging, setExchanging] = useState(false);
+  const [exchangeError, setExchangeError] = useState<string | null>(null);
+  const [exchangeSuccess, setExchangeSuccess] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const [me, q, b] = await Promise.all([
+      const [me, q, b, rates] = await Promise.all([
         clientHttp.get<SafeUser | null>('/users/me'),
         clientHttp.get<WordQuota>('/users/me/quota'),
         clientHttp.get<QuotaBalances>('/quota/me'),
+        clientHttp.get<ExchangeRates>('/quota/exchange-rates'),
       ]);
 
       setUser(me);
       setWordQuota(q);
       setBalances(b);
+      setExchangeRates(rates);
 
       if (me) {
         setNickname(me.nickname ?? '');
@@ -123,10 +140,28 @@ export default function AccountPage() {
     };
   }, [educationLevel, grade, major, nickname, realName, school]);
 
+  const currentExchangeRate = useMemo(() => {
+    if (!exchangeRates) return 0;
+    return exchangeType === 'PAPER_GENERATION'
+      ? exchangeRates.paperGeneration
+      : exchangeType === 'POLISH'
+        ? exchangeRates.polish
+        : exchangeType === 'EXPORT'
+          ? exchangeRates.export
+          : exchangeRates.aiChat;
+  }, [exchangeRates, exchangeType]);
+
+  const exchangeCost = useMemo(() => {
+    if (!Number.isFinite(exchangeAmount) || exchangeAmount <= 0) return 0;
+    if (!Number.isFinite(currentExchangeRate) || currentExchangeRate <= 0) return 0;
+    return Math.floor(exchangeAmount) * currentExchangeRate;
+  }, [currentExchangeRate, exchangeAmount]);
+
   const onSaveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) return;
     if (saving) return;
+
 
     try {
       setSaving(true);
@@ -148,6 +183,39 @@ export default function AccountPage() {
       setSaveError(getApiErrorMessage(e, '保存失败，请稍后重试。'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onExchange = async () => {
+    if (!user) return;
+    if (exchanging) return;
+    if (!Number.isFinite(exchangeAmount) || exchangeAmount <= 0) {
+      setExchangeError('数量必须大于 0。');
+      return;
+    }
+    if (!exchangeRates) {
+      setExchangeError('兑换比例加载失败，请刷新后重试。');
+      return;
+    }
+    if (!Number.isFinite(currentExchangeRate) || currentExchangeRate <= 0) {
+      setExchangeError('兑换比例配置异常，请联系管理员。');
+      return;
+    }
+
+    try {
+      setExchanging(true);
+      setExchangeError(null);
+      setExchangeSuccess(null);
+      await clientHttp.post('/quota/exchange', {
+        targetType: exchangeType,
+        amount: Math.floor(exchangeAmount),
+      });
+      setExchangeSuccess('兑换成功。');
+      await refresh();
+    } catch (e: unknown) {
+      setExchangeError(getApiErrorMessage(e, '兑换失败，请稍后重试。'));
+    } finally {
+      setExchanging(false);
     }
   };
 
@@ -361,6 +429,11 @@ export default function AccountPage() {
         <h2 className="md:col-span-2 text-lg font-medium">配额信息</h2>
 
         <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+          <div className="text-slate-500">脑细胞余额</div>
+          <div className="mt-1 text-lg font-semibold">{balances?.BRAIN_CELL ?? 0}</div>
+        </div>
+
+        <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
           <div className="text-slate-500">论文生成次数</div>
           <div className="mt-1 text-lg font-semibold">
             {balances?.PAPER_GENERATION ?? 0}
@@ -391,8 +464,71 @@ export default function AccountPage() {
           </div>
         </div>
 
+        <div className="md:col-span-2 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-slate-500">脑细胞兑换服务次数</div>
+              <div className="mt-1 text-slate-700">
+                兑换后将消耗 <span className="font-semibold">{exchangeCost}</span> 脑细胞
+              </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-sm">
+                <div className="text-slate-500">兑换类型</div>
+                <select
+                  value={exchangeType}
+                  onChange={(e) =>
+                    setExchangeType(e.target.value as ExchangeTargetType)
+                  }
+                  className="mt-1 w-40 rounded border border-slate-300 bg-white px-3 py-2"
+                  disabled={exchanging}
+                >
+                  <option value="PAPER_GENERATION">论文生成</option>
+                  <option value="POLISH">润色</option>
+                  <option value="EXPORT">导出</option>
+                  <option value="AI_CHAT">AI 对话</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <div className="text-slate-500">数量</div>
+                <input
+                  type="number"
+                  min={1}
+                  value={exchangeAmount}
+                  onChange={(e) => setExchangeAmount(Number(e.target.value))}
+                  className="mt-1 w-28 rounded border border-slate-300 bg-white px-3 py-2"
+                  disabled={exchanging}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void onExchange()}
+                disabled={exchanging}
+                className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+              >
+                {exchanging ? '兑换中...' : '兑换'}
+              </button>
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-slate-500">
+            兑换比例：论文生成 1 次 = {exchangeRates?.paperGeneration ?? 0} 脑细胞；润色 1 次
+            = {exchangeRates?.polish ?? 0} 脑细胞；导出 1 次 = {exchangeRates?.export ?? 0}{' '}
+            脑细胞；AI 对话 1 次 = {exchangeRates?.aiChat ?? 0} 脑细胞
+          </div>
+          {exchangeError ? (
+            <div className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+              {exchangeError}
+            </div>
+          ) : null}
+          {exchangeSuccess ? (
+            <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {exchangeSuccess}
+            </div>
+          ) : null}
+        </div>
+
         <div className="md:col-span-2 text-sm text-slate-600">
-          配额通常来自下单/支付后的自动发放；如需测试可联系管理员发放。
+          购买获得脑细胞，服务次数可在上方使用脑细胞兑换；如需测试可联系管理员发放。
           <Link href="/products" className="ml-2 underline underline-offset-4">
             前往购买
           </Link>
@@ -411,6 +547,7 @@ export default function AccountPage() {
                 className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
                 disabled={granting}
               >
+                <option value="BRAIN_CELL">脑细胞</option>
                 <option value="PAPER_GENERATION">论文生成</option>
                 <option value="POLISH">润色</option>
                 <option value="EXPORT">导出</option>

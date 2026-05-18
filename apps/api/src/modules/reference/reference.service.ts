@@ -174,6 +174,7 @@ export class ReferenceService {
     taskId: string,
     count = 15,
     recentYears = 5,
+    focus?: string,
   ): Promise<Reference[]> {
     const task = await this.prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundException(`任务不存在（taskId=${taskId}）`);
@@ -216,6 +217,7 @@ export class ReferenceService {
       contentSnippets: snippets,
       count: desiredIndices.length,
       recentYears,
+      focus,
       languageHint: { zhRatio: 0.8, enRatio: 0.2 },
       typeDistribution: [
         { type: RefType.JOURNAL, ratio: 0.6 },

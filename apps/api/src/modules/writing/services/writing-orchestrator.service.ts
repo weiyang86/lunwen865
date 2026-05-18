@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { TaskService } from '../../task/task.service';
+import { GenerationStage } from '../../task/constants/generation-stage.enum';
 import type { StartWritingDto } from '../dto/start-writing.dto';
 import type { RetrySectionDto } from '../dto/retry-section.dto';
 import { WRITING_MAX_CONSECUTIVE_FAILURES } from '../constants/writing.constants';
@@ -22,6 +24,7 @@ export class WritingOrchestratorService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly taskService: TaskService,
     private readonly sessionService: WritingSessionService,
     private readonly sectionService: WritingSectionService,
     private readonly contextService: WritingContextService,
@@ -312,6 +315,8 @@ export class WritingOrchestratorService {
   ): AsyncGenerator<WritingSseEvent, void, unknown> {
     const outline = await this.prisma.outline.findUnique({ where: { taskId } });
     if (!outline?.locked) throw new OutlineNotLockedException(taskId);
+
+    await this.taskService.advanceStage(taskId, GenerationStage.CHAPTER);
 
     const opts = WritingSessionService.toSessionOptions(dto);
     const cancelState: CancelState = { cancelled: false };

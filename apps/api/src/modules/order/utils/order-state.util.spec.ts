@@ -9,8 +9,12 @@ describe('order-state.util', () => {
       true,
     );
     expect(canTransition(OrderStatus.PAID, OrderStatus.FULFILLING)).toBe(true);
+    expect(canTransition(OrderStatus.PAID, OrderStatus.COMPLETED)).toBe(true);
     expect(canTransition(OrderStatus.PAID, OrderStatus.REFUNDING)).toBe(true);
     expect(canTransition(OrderStatus.FULFILLING, OrderStatus.COMPLETED)).toBe(
+      true,
+    );
+    expect(canTransition(OrderStatus.COMPLETED, OrderStatus.REFUNDING)).toBe(
       true,
     );
     expect(canTransition(OrderStatus.REFUNDING, OrderStatus.REFUNDED)).toBe(

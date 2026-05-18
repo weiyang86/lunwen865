@@ -10,6 +10,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { SmsService } from './sms/sms.service';
 import { UserModule } from '../user/user.module';
 import { QuotaModule } from '../quota/quota.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { QuotaModule } from '../quota/quota.module';
     }),
     forwardRef(() => UserModule),
     QuotaModule,
+    SettingsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, SmsService],

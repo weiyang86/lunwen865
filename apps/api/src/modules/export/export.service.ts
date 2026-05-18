@@ -26,7 +26,11 @@ export class ExportService {
   ) {}
 
   async create(userId: string, dto: CreateExportDto): Promise<ExportResultDto> {
-    await this.quotaService.ensure(userId, QuotaType.EXPORT, 1);
+    await this.quotaService.ensureOrExchangeFromBrainCell(
+      userId,
+      QuotaType.EXPORT,
+      1,
+    );
     if (!dto.paperId && !dto.polishTaskId) {
       throw new BadRequestException('请提供论文ID或润色任务ID');
     }

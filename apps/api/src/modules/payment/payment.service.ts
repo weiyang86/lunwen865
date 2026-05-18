@@ -18,6 +18,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
 import { QuotaService } from '../quota/quota.service';
+import { SettingsService } from '../settings/settings.service';
 import { PrepayDto } from './dto/prepay.dto';
 import { RefundDto } from './dto/refund.dto';
 import { AlipayProvider } from './providers/alipay.provider';
@@ -31,12 +32,14 @@ export class PaymentService {
     private readonly orderService: OrderService,
     private readonly quotaService: QuotaService,
     private readonly config: ConfigService,
+    private readonly settings: SettingsService,
     private readonly wechat: WechatPayProvider,
     private readonly alipay: AlipayProvider,
   ) {}
 
-  private isSandbox(): boolean {
-    return this.config.get<boolean>('payment.sandbox', true) === true;
+  private async isSandbox(): Promise<boolean> {
+    const cfg = await this.settings.getPaymentSettings();
+    return cfg.sandbox === true;
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
@@ -111,12 +114,13 @@ export class PaymentService {
       });
     }
 
+    const paymentSettings = await this.settings.getPaymentSettings();
     const notifyUrl =
       dto.channel === PaymentChannel.WECHAT
-        ? this.config.get<string>('payment.wechat.notifyUrl', '')
-        : this.config.get<string>('payment.alipay.notifyUrl', '');
+        ? paymentSettings.wechat.notifyUrl
+        : paymentSettings.alipay.notifyUrl;
 
-    if (!notifyUrl && !this.isSandbox()) {
+    if (!notifyUrl && !(await this.isSandbox())) {
       throw new BadRequestException('缺少支付回调地址配置');
     }
 
@@ -141,7 +145,7 @@ export class PaymentService {
         subject: order.product.name,
         totalAmountCents: order.amountCents,
         notifyUrl,
-        returnUrl: this.config.get<string>('payment.alipay.returnUrl', ''),
+        returnUrl: paymentSettings.alipay.returnUrl,
       });
     } else {
       throw new BadRequestException('不支持的支付通道');
@@ -173,7 +177,7 @@ export class PaymentService {
     orderId: string,
     options: { channel: PaymentChannel; method: PaymentMethod },
   ) {
-    if (!this.isSandbox()) {
+    if (!(await this.isSandbox())) {
       throw new ForbiddenException('该接口仅在沙箱模式可用');
     }
     const order = await this.prisma.order.findUnique({
@@ -224,9 +228,13 @@ export class PaymentService {
     rawBody: string;
     body: unknown;
   }) {
-    const parsed = this.isSandbox()
+    const sandbox = await this.isSandbox();
+    const parsed = sandbox
       ? this.parseWechatSandboxNotify(params.body)
-      : this.wechat.verifyAndParsePayNotify(params.headers, params.rawBody);
+      : await this.wechat.verifyAndParsePayNotify(
+          params.headers,
+          params.rawBody,
+        );
 
     const order = await this.prisma.order.findFirst({
       where: {
@@ -261,9 +269,10 @@ export class PaymentService {
   }
 
   async handleAlipayPayNotify(payload: Record<string, string>) {
-    const parsed = this.isSandbox()
+    const sandbox = await this.isSandbox();
+    const parsed = sandbox
       ? this.parseAlipaySandboxNotify(payload)
-      : this.alipay.verifyAndParsePayNotify(payload);
+      : await this.alipay.verifyAndParsePayNotify(payload);
 
     const order = await this.prisma.order.findFirst({
       where: {
@@ -305,7 +314,11 @@ export class PaymentService {
       include: { refunds: true },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.status !== OrderStatus.PAID) {
+    if (
+      order.status !== OrderStatus.PAID &&
+      order.status !== OrderStatus.FULFILLING &&
+      order.status !== OrderStatus.COMPLETED
+    ) {
       throw new BadRequestException(`订单状态 ${order.status}，无法退款`);
     }
 
@@ -360,7 +373,7 @@ export class PaymentService {
           refundAmountCents: amount,
           reason: params.reason,
         });
-      } else if (this.isSandbox()) {
+      } else if (await this.isSandbox()) {
         response = { refundId: `SIM_REFUND_${Date.now()}` };
       } else {
         throw new BadRequestException('订单缺少支付通道信息');
@@ -377,7 +390,7 @@ export class PaymentService {
         },
       });
 
-      if (this.isSandbox()) {
+      if (await this.isSandbox()) {
         await this.markRefundSuccess(
           created.id,
           this.extractRefundId(response) ?? undefined,
@@ -421,7 +434,8 @@ export class PaymentService {
     rawBody: string;
     body: unknown;
   }) {
-    const outRefundNo = this.isSandbox()
+    const sandbox = await this.isSandbox();
+    const outRefundNo = sandbox
       ? this.parseWechatSandboxRefundNotify(params.body)
       : this.parseWechatRefundNotify(params.headers, params.rawBody);
 
@@ -452,7 +466,8 @@ export class PaymentService {
   }
 
   async handleAlipayRefundNotify(payload: Record<string, string>) {
-    const outRefundNo = this.isSandbox()
+    const sandbox = await this.isSandbox();
+    const outRefundNo = sandbox
       ? this.parseAlipaySandboxRefundNotify(payload)
       : this.parseAlipayRefundNotify(payload);
 
@@ -625,53 +640,58 @@ export class PaymentService {
       await tx.order.update({
         where: { id: order.id },
         data: {
-          status: fullRefunded ? OrderStatus.REFUNDED : OrderStatus.PAID,
+          status: fullRefunded
+            ? OrderStatus.REFUNDED
+            : order.completedAt
+              ? OrderStatus.COMPLETED
+              : OrderStatus.PAID,
           refundedAt: fullRefunded ? new Date() : null,
         },
       });
 
       const ratio = refund.amountCents / orderTotal;
       const snapshot = order.productSnapshot as Record<string, unknown>;
-      const rollbackPlan: Array<{ type: QuotaType; snapshotKey: string }> = [
-        { type: QuotaType.PAPER_GENERATION, snapshotKey: 'paperQuota' },
-        { type: QuotaType.POLISH, snapshotKey: 'polishQuota' },
-        { type: QuotaType.EXPORT, snapshotKey: 'exportQuota' },
-        { type: QuotaType.AI_CHAT, snapshotKey: 'aiChatQuota' },
-      ];
+      const brainCellFromSnapshot = Number(snapshot['brainCellAmount'] ?? 0);
+      const fallbackBrainCells =
+        Number(snapshot['paperQuota'] ?? 0) +
+        Number(snapshot['polishQuota'] ?? 0) +
+        Number(snapshot['exportQuota'] ?? 0) +
+        Number(snapshot['aiChatQuota'] ?? 0);
+      const baseBrainCells =
+        brainCellFromSnapshot > 0 ? brainCellFromSnapshot : fallbackBrainCells;
+      const rollback = Math.floor(baseBrainCells * ratio);
+      if (rollback <= 0) return;
 
-      for (const item of rollbackPlan) {
-        const baseQuota = Number(snapshot[item.snapshotKey] ?? 0);
-        const rollback = Math.floor(baseQuota * ratio);
-        if (rollback <= 0) continue;
-
-        const q = await tx.userQuota.findUnique({
-          where: {
-            userId_quotaType: { userId: order.userId, quotaType: item.type },
-          },
-        });
-        const balance = q?.balance ?? 0;
-        const actualDeduct = Math.min(balance, rollback);
-        if (actualDeduct <= 0 || !q) continue;
-
-        await tx.userQuota.update({
-          where: { id: q.id },
-          data: {
-            balance: { decrement: actualDeduct },
-            totalOut: { increment: actualDeduct },
-          },
-        });
-        await tx.quotaLog.create({
-          data: {
+      const q = await tx.userQuota.findUnique({
+        where: {
+          userId_quotaType: {
             userId: order.userId,
-            quotaType: item.type,
-            change: -actualDeduct,
-            balanceAfter: balance - actualDeduct,
-            reason: QuotaChangeReason.REFUND,
-            orderId: order.id,
-            remark: `退款回滚（应扣 ${rollback}，实扣 ${actualDeduct}）`,
+            quotaType: QuotaType.BRAIN_CELL,
           },
-        });
-      }
+        },
+      });
+      const balance = q?.balance ?? 0;
+      const actualDeduct = Math.min(balance, rollback);
+      if (actualDeduct <= 0 || !q) return;
+
+      await tx.userQuota.update({
+        where: { id: q.id },
+        data: {
+          balance: { decrement: actualDeduct },
+          totalOut: { increment: actualDeduct },
+        },
+      });
+      await tx.quotaLog.create({
+        data: {
+          userId: order.userId,
+          quotaType: QuotaType.BRAIN_CELL,
+          change: -actualDeduct,
+          balanceAfter: balance - actualDeduct,
+          reason: QuotaChangeReason.REFUND,
+          orderId: order.id,
+          remark: `退款回滚（应扣 ${rollback}，实扣 ${actualDeduct}）`,
+        },
+      });
     });
   }
 

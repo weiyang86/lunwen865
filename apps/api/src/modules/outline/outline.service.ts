@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { TaskStage } from '@prisma/client';
+import { TaskStage, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TaskService } from '../task/task.service';
 import { GenerationStage } from '../task/constants/generation-stage.enum';
@@ -116,6 +116,15 @@ export class OutlineService {
     if (existing) {
       await this.prisma.outline.delete({ where: { id: existing.id } });
     }
+
+    await this.taskService.advanceStage(taskId, GenerationStage.OUTLINE);
+    await this.prisma.task.updateMany({
+      where: {
+        id: taskId,
+        status: { notIn: [TaskStatus.CANCELLED, TaskStatus.DONE] },
+      },
+      data: { status: TaskStatus.OUTLINE_GENERATING },
+    });
 
     const extracted = extractTopicKeywordsLanguage(task.requirements);
     const maxDepth = dto.maxDepth ?? OUTLINE_DEFAULT_MAX_DEPTH;

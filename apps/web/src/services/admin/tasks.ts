@@ -64,6 +64,24 @@ export type ListAdminTasksQuery = {
 };
 
 export type AdminTaskDetailResp = any;
+export type AdminTaskTimelineResp = {
+  taskId: string;
+  currentStatus: string;
+  currentStage: string;
+  updatedAt: string;
+  items: Array<{
+    id: string;
+    type: string;
+    title: string;
+    description?: string | null;
+    createdAt: string;
+    operatorId?: string | null;
+    status?: string | null;
+    stage?: string | null;
+    orderId?: string | null;
+    meta?: Record<string, unknown> | null;
+  }>;
+};
 
 export async function listAdminTasks(query: ListAdminTasksQuery): Promise<ListAdminTasksResp> {
   return adminHttp.get<ListAdminTasksResp>('/admin/tasks', query);
@@ -71,6 +89,10 @@ export async function listAdminTasks(query: ListAdminTasksQuery): Promise<ListAd
 
 export async function getAdminTaskById(id: string): Promise<AdminTaskDetailResp> {
   return adminHttp.get<AdminTaskDetailResp>(`/admin/tasks/${id}`);
+}
+
+export async function getAdminTaskTimeline(id: string): Promise<AdminTaskTimelineResp> {
+  return adminHttp.get<AdminTaskTimelineResp>(`/admin/tasks/${id}/timeline`);
 }
 
 export async function assignAdminTask(

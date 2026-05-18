@@ -8,6 +8,7 @@ import type { ConfigService } from '@nestjs/config';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrderService } from '../order/order.service';
 import type { QuotaService } from '../quota/quota.service';
+import type { SettingsService } from '../settings/settings.service';
 import { PaymentService } from './payment.service';
 import type { AlipayProvider } from './providers/alipay.provider';
 import type { WechatPayProvider } from './providers/wechat-pay.provider';
@@ -62,6 +63,7 @@ describe('PaymentService', () => {
   let prisma: PrismaService;
   let orderService: Pick<OrderService, 'markPaid'>;
   let quotaService: Pick<QuotaService, 'refund'>;
+  let settingsService: Pick<SettingsService, 'getPaymentSettings'>;
   let config: Pick<ConfigService, 'get'>;
   let wechat: Pick<
     WechatPayProvider,
@@ -95,7 +97,14 @@ describe('PaymentService', () => {
       refund: jest.fn(({ outRefundNo }: { outRefundNo: string }) =>
         Promise.resolve({ outRefundNo, refundId: 'WX_REF_1' }),
       ),
-      verifyAndParsePayNotify: jest.fn(),
+      verifyAndParsePayNotify: jest.fn(() =>
+        Promise.resolve({
+          outTradeNo: 'PAY1',
+          transactionId: 'TX1',
+          paidAmountCents: 100,
+          paidAt: new Date(),
+        }),
+      ),
     };
 
     alipay = {
@@ -107,7 +116,14 @@ describe('PaymentService', () => {
       refund: jest.fn(({ outRefundNo }: { outRefundNo: string }) =>
         Promise.resolve({ outRefundNo, refundId: 'ALI_REF_1' }),
       ),
-      verifyAndParsePayNotify: jest.fn(),
+      verifyAndParsePayNotify: jest.fn(() =>
+        Promise.resolve({
+          outTradeNo: 'PAY1',
+          tradeNo: 'ALI_TRADE_1',
+          paidAmountCents: 100,
+          paidAt: new Date(),
+        }),
+      ),
     };
 
     orderService = {
@@ -121,6 +137,31 @@ describe('PaymentService', () => {
 
     quotaService = {
       refund: jest.fn(() => Promise.resolve()),
+    };
+
+    settingsService = {
+      getPaymentSettings: jest.fn(() =>
+        Promise.resolve({
+          sandbox: true,
+          orderExpireMinutes: 30,
+          wechat: {
+            notifyUrl: '',
+            appid: '',
+            mchid: '',
+            serialNo: '',
+            privateKeyPath: '',
+            apiV3Key: '',
+          },
+          alipay: {
+            notifyUrl: '',
+            returnUrl: '',
+            appId: '',
+            gateway: '',
+            privateKeyPath: '',
+            publicKeyPath: '',
+          },
+        }),
+      ),
     };
 
     const quotaKey = (userId: string, quotaType: string) =>
@@ -348,6 +389,7 @@ describe('PaymentService', () => {
       orderService as OrderService,
       quotaService as QuotaService,
       config as ConfigService,
+      settingsService as unknown as SettingsService,
       wechat as unknown as WechatPayProvider,
       alipay as unknown as AlipayProvider,
     );
@@ -520,16 +562,16 @@ describe('PaymentService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('applyRefund（sandbox）：成功后订单变 REFUNDED 且调用 quota.refund', async () => {
+  it('applyRefund（sandbox）：成功后订单变 REFUNDED 且回滚脑细胞', async () => {
     orders.set('o1', {
       id: 'o1',
       orderNo: 'PAY1',
       userId: 'u1',
       productId: 'p1',
-      productSnapshot: { paperQuota: 1, polishQuota: 2, exportQuota: 3 },
+      productSnapshot: { brainCellAmount: 10 },
       amountCents: 100,
       paidAmountCents: 100,
-      status: 'PAID',
+      status: 'COMPLETED',
       channel: PaymentChannel.WECHAT,
       method: PaymentMethod.WECHAT_NATIVE,
       outTradeNo: 'PAY1',
@@ -537,33 +579,17 @@ describe('PaymentService', () => {
       expiresAt: new Date(Date.now() + 60_000),
       quotaGranted: true,
     });
-    userQuotas.set('u1:PAPER_GENERATION', {
+    userQuotas.set('u1:BRAIN_CELL', {
       id: 'q1',
       userId: 'u1',
-      quotaType: 'PAPER_GENERATION',
-      balance: 1,
-      totalOut: 0,
-    });
-    userQuotas.set('u1:POLISH', {
-      id: 'q2',
-      userId: 'u1',
-      quotaType: 'POLISH',
-      balance: 2,
-      totalOut: 0,
-    });
-    userQuotas.set('u1:EXPORT', {
-      id: 'q3',
-      userId: 'u1',
-      quotaType: 'EXPORT',
-      balance: 3,
+      quotaType: 'BRAIN_CELL',
+      balance: 10,
       totalOut: 0,
     });
 
     await service.applyRefund('admin1', { orderId: 'o1', reason: '测试退款' });
 
     expect(orders.get('o1')?.status).toBe('REFUNDED');
-    expect(userQuotas.get('u1:PAPER_GENERATION')?.balance).toBe(0);
-    expect(userQuotas.get('u1:POLISH')?.balance).toBe(0);
-    expect(userQuotas.get('u1:EXPORT')?.balance).toBe(0);
+    expect(userQuotas.get('u1:BRAIN_CELL')?.balance).toBe(0);
   });
 });

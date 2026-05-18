@@ -26,6 +26,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { User } from '@prisma/client';
 import { UserService } from '../user/user.service';
 import { QuotaService } from '../quota/quota.service';
+import { SettingsService } from '../settings/settings.service';
 import { SmsService } from './sms/sms.service';
 import type {
   AuthResult,
@@ -88,6 +89,7 @@ export class AuthService {
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
     private readonly quotaService: QuotaService,
+    private readonly settings: SettingsService,
   ) {}
 
   async sendCode(dto: SendCodeDto): Promise<void> {
@@ -219,44 +221,45 @@ export class AuthService {
   }
 
   private async grantRegisterGift(userId: string): Promise<void> {
-    const paper = this.configService.get<number>(
-      'payment.registerGift.paperGeneration',
-      1,
-    );
-    const polish = this.configService.get<number>(
-      'payment.registerGift.polish',
-      2,
-    );
-    const exp = this.configService.get<number>(
-      'payment.registerGift.export',
-      1,
-    );
+    const siteSettings = await this.settings.getSiteSettings();
+    const paper = siteSettings.registerGift.paperGeneration;
+    const polish = siteSettings.registerGift.polish;
+    const exp = siteSettings.registerGift.export;
+    const hasGift = Math.max(paper, 0) + Math.max(polish, 0) + Math.max(exp, 0);
+    if (!hasGift) return;
 
-    if (paper > 0) {
-      await this.quotaService.grant({
-        userId,
-        type: QuotaType.PAPER_GENERATION,
-        amount: paper,
-        reason: QuotaChangeReason.REGISTER_GIFT,
-        remark: '新用户注册赠送',
-      });
-    }
-    if (polish > 0) {
-      await this.quotaService.grant({
-        userId,
-        type: QuotaType.POLISH,
-        amount: polish,
-        reason: QuotaChangeReason.REGISTER_GIFT,
-      });
-    }
-    if (exp > 0) {
-      await this.quotaService.grant({
-        userId,
-        type: QuotaType.EXPORT,
-        amount: exp,
-        reason: QuotaChangeReason.REGISTER_GIFT,
-      });
-    }
+    await this.prisma.$transaction(async (tx) => {
+      if (paper > 0) {
+        await this.quotaService.grant({
+          userId,
+          type: QuotaType.PAPER_GENERATION,
+          amount: paper,
+          reason: QuotaChangeReason.REGISTER_GIFT,
+          remark: '新用户注册赠送',
+          tx,
+        });
+      }
+      if (polish > 0) {
+        await this.quotaService.grant({
+          userId,
+          type: QuotaType.POLISH,
+          amount: polish,
+          reason: QuotaChangeReason.REGISTER_GIFT,
+          remark: '新用户注册赠送',
+          tx,
+        });
+      }
+      if (exp > 0) {
+        await this.quotaService.grant({
+          userId,
+          type: QuotaType.EXPORT,
+          amount: exp,
+          reason: QuotaChangeReason.REGISTER_GIFT,
+          remark: '新用户注册赠送',
+          tx,
+        });
+      }
+    });
   }
 
   async loginByPhonePassword(

@@ -1,4 +1,12 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class BootstrapTaskDto {
   @IsOptional()
@@ -25,4 +33,11 @@ export class BootstrapTaskDto {
   @IsString()
   @MaxLength(500)
   topic?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(3000)
+  @Max(100000)
+  wordCountTarget?: number;
 }

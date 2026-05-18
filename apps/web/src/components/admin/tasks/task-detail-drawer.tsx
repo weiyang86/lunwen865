@@ -21,6 +21,7 @@ import {
   addAdminTaskNote,
   assignAdminTask,
   getAdminTaskById,
+  getAdminTaskTimeline,
   overrideAdminTaskStatus,
   unassignAdminTask,
   type BackendTaskStatus,
@@ -92,6 +93,15 @@ function actionLabel(a: string) {
   return a;
 }
 
+function timelineTypeLabel(t: string) {
+  if (t === 'TASK_CREATED') return '创建';
+  if (t === 'ORDER_LINKED') return '关联订单';
+  if (t === 'ADMIN_ACTION') return '管理操作';
+  if (t === 'STATUS_CHANGED') return '状态变更';
+  if (t === 'UPDATED') return '更新';
+  return t;
+}
+
 export function TaskDetailDrawer({
   open,
   taskId,
@@ -106,6 +116,9 @@ export function TaskDetailDrawer({
   const [loadError, setLoadError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const [saving, setSaving] = useState(false);
+  const [timeline, setTimeline] = useState<any | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
@@ -151,6 +164,8 @@ export function TaskDetailDrawer({
   useEffect(() => {
     if (!open || !taskId) return;
     setTab('basic');
+    setTimeline(null);
+    setTimelineError(null);
     void refetch();
   }, [open, taskId, refetch]);
 
@@ -160,6 +175,9 @@ export function TaskDetailDrawer({
       setLoadError(null);
       setLoading(false);
       setTab('basic');
+      setTimeline(null);
+      setTimelineError(null);
+      setTimelineLoading(false);
     }
   }, [open]);
 
@@ -175,6 +193,31 @@ export function TaskDetailDrawer({
   const title = task?.title ?? null;
   const createdAt = task?.createdAt ?? null;
   const updatedAt = task?.updatedAt ?? null;
+
+  const loadTimeline = useCallback(async () => {
+    if (!taskId) return;
+    setTimelineLoading(true);
+    setTimelineError(null);
+    try {
+      const d = await getAdminTaskTimeline(taskId);
+      setTimeline(d);
+    } catch (e: unknown) {
+      const msg =
+        (e && typeof e === 'object' && 'message' in e
+          ? String((e as any).message)
+          : null) || '加载时间线失败';
+      setTimelineError(msg);
+      setTimeline(null);
+    } finally {
+      setTimelineLoading(false);
+    }
+  }, [taskId]);
+
+  useEffect(() => {
+    if (!open || !taskId) return;
+    if (tab !== 'timeline') return;
+    void loadTimeline();
+  }, [open, taskId, tab, loadTimeline]);
 
   const tabs = useMemo(
     () =>
@@ -628,17 +671,75 @@ export function TaskDetailDrawer({
               <div className="space-y-4">
                 <div className="space-y-3 text-sm">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="text-slate-700">创建</div>
+                    <div className="text-slate-700">创建时间</div>
                     <div className="font-mono text-xs text-slate-500">
                       {createdAt ? formatDateTime(createdAt) : '—'}
                     </div>
                   </div>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="text-slate-700">更新</div>
+                    <div className="text-slate-700">最近更新时间</div>
                     <div className="font-mono text-xs text-slate-500">
                       {updatedAt ? formatDateTime(updatedAt) : '—'}
                     </div>
                   </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium text-slate-900">关键事件</div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void loadTimeline()}
+                      disabled={timelineLoading || !taskId}
+                    >
+                      {timelineLoading ? '刷新中...' : '刷新'}
+                    </Button>
+                  </div>
+                  {timelineError ? (
+                    <div className="mt-2 text-sm text-red-600">{timelineError}</div>
+                  ) : null}
+                  {!timelineLoading && (!timeline?.items || timeline.items.length === 0) ? (
+                    <div className="mt-2 text-sm text-slate-500">暂无事件</div>
+                  ) : null}
+                  {timeline?.items?.length ? (
+                    <div className="mt-3 space-y-2">
+                      {timeline.items.map((it: any) => (
+                        <div
+                          key={String(it.id)}
+                          className="rounded-md border border-slate-200 bg-slate-50 p-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-slate-500">
+                                  {timelineTypeLabel(String(it.type))}
+                                </span>
+                                <span className="text-sm font-medium text-slate-900">
+                                  {String(it.title ?? '')}
+                                </span>
+                              </div>
+                              {it.description ? (
+                                <div className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">
+                                  {String(it.description)}
+                                </div>
+                              ) : null}
+                              {it.status || it.stage ? (
+                                <div className="mt-1 text-xs text-slate-500">
+                                  {it.stage ? `阶段：${String(it.stage)}` : null}
+                                  {it.stage && it.status ? '｜' : null}
+                                  {it.status ? `状态：${String(it.status)}` : null}
+                                </div>
+                              ) : null}
+                            </div>
+                            <div className="shrink-0 font-mono text-xs text-slate-500">
+                              {it.createdAt ? formatDateTime(it.createdAt) : '—'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="border-t border-slate-100 pt-4">

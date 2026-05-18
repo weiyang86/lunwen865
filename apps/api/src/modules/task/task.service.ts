@@ -104,55 +104,105 @@ function resumeStatusFromStage(stage: TaskStage | null): PrismaTaskStatus {
   return PrismaTaskStatus.TOPIC_GENERATING;
 }
 
-function mapPrismaToGenerationStage(task: PrismaTask): GenerationStage {
-  if (task.status === PrismaTaskStatus.INIT) return GenerationStage.INIT;
-  if (task.status === PrismaTaskStatus.DONE) return GenerationStage.DONE;
+function approvedStatusFromGenerationStage(
+  stage: GenerationStage,
+): PrismaTaskStatus | null {
+  if (stage === GenerationStage.TOPIC) return PrismaTaskStatus.TOPIC_APPROVED;
+  if (stage === GenerationStage.OPENING)
+    return PrismaTaskStatus.OPENING_APPROVED;
+  if (stage === GenerationStage.OUTLINE)
+    return PrismaTaskStatus.OUTLINE_APPROVED;
+  if (stage === GenerationStage.CHAPTER) return PrismaTaskStatus.WRITING;
+  if (stage === GenerationStage.SECTION) return PrismaTaskStatus.MERGING;
+  if (stage === GenerationStage.POLISHING) return PrismaTaskStatus.FORMATTING;
+  if (stage === GenerationStage.DONE) return PrismaTaskStatus.DONE;
+  return null;
+}
+
+const GENERATION_STAGE_ORDER: Record<GenerationStage, number> = {
+  [GenerationStage.INIT]: 0,
+  [GenerationStage.TOPIC]: 1,
+  [GenerationStage.OPENING]: 2,
+  [GenerationStage.OUTLINE]: 3,
+  [GenerationStage.CHAPTER]: 4,
+  [GenerationStage.SECTION]: 5,
+  [GenerationStage.SUMMARY]: 6,
+  [GenerationStage.POLISHING]: 7,
+  [GenerationStage.DONE]: 8,
+};
+
+function maxGenerationStage(
+  a: GenerationStage,
+  b: GenerationStage,
+): GenerationStage {
+  return GENERATION_STAGE_ORDER[a] >= GENERATION_STAGE_ORDER[b] ? a : b;
+}
+
+function mapPrismaStatusToGenerationStage(
+  status: PrismaTaskStatus,
+): GenerationStage {
+  if (status === PrismaTaskStatus.INIT) return GenerationStage.INIT;
+  if (status === PrismaTaskStatus.DONE) return GenerationStage.DONE;
 
   if (
-    task.status === PrismaTaskStatus.TOPIC_GENERATING ||
-    task.status === PrismaTaskStatus.TOPIC_PENDING_REVIEW ||
-    task.status === PrismaTaskStatus.TOPIC_APPROVED
+    status === PrismaTaskStatus.TOPIC_GENERATING ||
+    status === PrismaTaskStatus.TOPIC_PENDING_REVIEW ||
+    status === PrismaTaskStatus.TOPIC_APPROVED
   ) {
     return GenerationStage.TOPIC;
   }
   if (
-    task.status === PrismaTaskStatus.OPENING_GENERATING ||
-    task.status === PrismaTaskStatus.OPENING_PENDING_REVIEW ||
-    task.status === PrismaTaskStatus.OPENING_APPROVED
+    status === PrismaTaskStatus.OPENING_GENERATING ||
+    status === PrismaTaskStatus.OPENING_PENDING_REVIEW ||
+    status === PrismaTaskStatus.OPENING_APPROVED
   ) {
     return GenerationStage.OPENING;
   }
   if (
-    task.status === PrismaTaskStatus.OUTLINE_GENERATING ||
-    task.status === PrismaTaskStatus.OUTLINE_PENDING_REVIEW ||
-    task.status === PrismaTaskStatus.OUTLINE_APPROVED
+    status === PrismaTaskStatus.OUTLINE_GENERATING ||
+    status === PrismaTaskStatus.OUTLINE_PENDING_REVIEW ||
+    status === PrismaTaskStatus.OUTLINE_APPROVED
   ) {
     return GenerationStage.OUTLINE;
   }
-  if (task.status === PrismaTaskStatus.MERGING) return GenerationStage.SECTION;
+  if (status === PrismaTaskStatus.MERGING) return GenerationStage.SECTION;
   if (
-    task.status === PrismaTaskStatus.FORMATTING ||
-    task.status === PrismaTaskStatus.REVIEW ||
-    task.status === PrismaTaskStatus.REVISION
+    status === PrismaTaskStatus.FORMATTING ||
+    status === PrismaTaskStatus.REVIEW ||
+    status === PrismaTaskStatus.REVISION
   ) {
     return GenerationStage.POLISHING;
   }
   if (
-    task.status === PrismaTaskStatus.WRITING ||
-    task.status === PrismaTaskStatus.WRITING_PAUSED
+    status === PrismaTaskStatus.WRITING ||
+    status === PrismaTaskStatus.WRITING_PAUSED
   ) {
     return GenerationStage.CHAPTER;
   }
 
-  if (task.currentStage === TaskStage.TOPIC) return GenerationStage.TOPIC;
-  if (task.currentStage === TaskStage.OPENING) return GenerationStage.OPENING;
-  if (task.currentStage === TaskStage.OUTLINE) return GenerationStage.OUTLINE;
-  if (task.currentStage === TaskStage.WRITING) return GenerationStage.CHAPTER;
-  if (task.currentStage === TaskStage.MERGING) return GenerationStage.SECTION;
-  if (task.currentStage === TaskStage.FORMATTING)
-    return GenerationStage.POLISHING;
-
   return GenerationStage.INIT;
+}
+
+function mapCurrentTaskStageToGenerationStage(
+  stage: TaskStage | null,
+): GenerationStage {
+  if (stage === TaskStage.TOPIC) return GenerationStage.TOPIC;
+  if (stage === TaskStage.OPENING) return GenerationStage.OPENING;
+  if (stage === TaskStage.OUTLINE) return GenerationStage.OUTLINE;
+  if (stage === TaskStage.WRITING) return GenerationStage.CHAPTER;
+  if (stage === TaskStage.MERGING) return GenerationStage.SECTION;
+  if (stage === TaskStage.FORMATTING) return GenerationStage.POLISHING;
+  if (stage === TaskStage.REVIEW) return GenerationStage.POLISHING;
+  if (stage === TaskStage.REVISION) return GenerationStage.POLISHING;
+  return GenerationStage.INIT;
+}
+
+function mapPrismaToGenerationStage(task: PrismaTask): GenerationStage {
+  const fromStatus = mapPrismaStatusToGenerationStage(task.status);
+  const fromCurrentStage = mapCurrentTaskStageToGenerationStage(
+    task.currentStage,
+  );
+  return maxGenerationStage(fromStatus, fromCurrentStage);
 }
 
 function mapGenerationStageToPrismaStage(stage: GenerationStage): TaskStage {
@@ -196,6 +246,47 @@ export class TaskService {
     private readonly prisma: PrismaService,
     private readonly quotaService: QuotaService,
   ) {}
+
+  private async syncStageFromWritingArtifacts(task: {
+    id: string;
+    status: PrismaTaskStatus;
+    currentStage: TaskStage | null;
+  }): Promise<PrismaTask | null> {
+    if (
+      task.status === PrismaTaskStatus.CANCELLED ||
+      task.status === PrismaTaskStatus.DONE ||
+      task.status === PrismaTaskStatus.FAILED
+    ) {
+      return null;
+    }
+
+    const alreadyWriting =
+      task.currentStage === TaskStage.WRITING ||
+      task.status === PrismaTaskStatus.WRITING ||
+      task.status === PrismaTaskStatus.WRITING_PAUSED;
+    if (alreadyWriting) return null;
+
+    const writingSessionModel = (
+      this.prisma as unknown as {
+        writingSession?: { findFirst?: (args: unknown) => Promise<unknown> };
+      }
+    ).writingSession;
+    if (
+      !writingSessionModel ||
+      typeof writingSessionModel.findFirst !== 'function'
+    ) {
+      return null;
+    }
+
+    const session = (await writingSessionModel.findFirst({
+      where: { taskId: task.id },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })) as { id: string } | null;
+    if (!session) return null;
+
+    return this.advanceStage(task.id, GenerationStage.CHAPTER);
+  }
 
   private async resolveSchoolId(input?: string): Promise<string> {
     const raw = input?.trim();
@@ -267,12 +358,17 @@ export class TaskService {
       title: dto.title?.trim() || `论文任务 ${seed}`,
       topic: dto.topic?.trim() || '请先生成可执行的论文题目候选',
       language: 'zh-CN',
+      wordCountTarget: dto.wordCountTarget,
     });
   }
 
   async createTask(userId: string, dto: CreateTaskDto): Promise<PrismaTask> {
     try {
-      await this.quotaService.ensure(userId, QuotaType.PAPER_GENERATION, 1);
+      await this.quotaService.ensureOrExchangeFromBrainCell(
+        userId,
+        QuotaType.PAPER_GENERATION,
+        1,
+      );
       const requirements = serializeTopicToRequirements(dto);
 
       return await this.prisma.task.create({
@@ -312,7 +408,8 @@ export class TaskService {
       if (userId) await this.assertTaskOwnership(id, userId);
       const task = await this.prisma.task.findUnique({ where: { id } });
       if (!task) throw new TaskNotFoundException(id);
-      return task;
+      const synced = await this.syncStageFromWritingArtifacts(task);
+      return synced ?? task;
     } catch (error: unknown) {
       if (error instanceof TaskNotFoundException) throw error;
       if (error instanceof ForbiddenException) throw error;
@@ -338,10 +435,18 @@ export class TaskService {
       });
       if (!task) throw new TaskNotFoundException(id);
 
+      const synced = await this.syncStageFromWritingArtifacts({
+        id: task.id,
+        status: task.status,
+        currentStage: task.currentStage,
+      });
+      const mergedTask = synced
+        ? { ...task, status: synced.status, currentStage: synced.currentStage }
+        : task;
       const progress = await this.buildProgress(task.id);
 
       return {
-        task,
+        task: mergedTask,
         progress,
       };
     } catch (error: unknown) {
@@ -584,13 +689,24 @@ export class TaskService {
 
         const domainStatus = mapPrismaStatusToDomainStatus(task.status);
         const canEditAll = domainStatus === TaskStatus.DRAFT;
+        const canEditWordCount =
+          canEditAll ||
+          task.currentStage === TaskStage.TOPIC ||
+          task.currentStage === TaskStage.OPENING ||
+          task.currentStage === TaskStage.OUTLINE;
 
         const data: Prisma.TaskUpdateManyMutationInput = {};
         if (dto.title !== undefined) data.title = dto.title;
         if (canEditAll) {
           if (dto.topic !== undefined) data.requirements = dto.topic;
-          if (dto.wordCountTarget !== undefined)
-            data.totalWordCount = dto.wordCountTarget;
+        }
+        if (dto.wordCountTarget !== undefined) {
+          if (!canEditWordCount) {
+            throw new BadRequestException(
+              '已进入正文生成流程，无法修改目标字数（wordCountTarget）',
+            );
+          }
+          data.totalWordCount = dto.wordCountTarget;
         }
 
         const result = await tx.task.updateMany({
@@ -741,9 +857,22 @@ export class TaskService {
         }
 
         const prismaStage = mapGenerationStageToPrismaStage(targetStage);
+        const stageFromStatus = mapPrismaStatusToGenerationStage(task.status);
+        const shouldSyncStatus =
+          targetStage !== GenerationStage.INIT &&
+          task.status !== PrismaTaskStatus.CANCELLED &&
+          task.status !== PrismaTaskStatus.DONE &&
+          task.status !== PrismaTaskStatus.FAILED &&
+          task.status !== PrismaTaskStatus.WRITING_PAUSED &&
+          stageFromStatus !== targetStage;
         const result = await tx.task.updateMany({
           where: { id, status: task.status },
-          data: { currentStage: prismaStage },
+          data: {
+            currentStage: prismaStage,
+            status: shouldSyncStatus
+              ? resumeStatusFromStage(prismaStage)
+              : undefined,
+          },
         });
 
         if (result.count === 0) {
@@ -887,6 +1016,19 @@ export class TaskService {
   ): Promise<void> {
     await this.advanceStage(id, completedStage, userId);
     await this.recalculateProgress(id, userId);
+
+    const desired = approvedStatusFromGenerationStage(completedStage);
+    if (!desired) return;
+
+    await this.prisma.task.updateMany({
+      where: {
+        id,
+        status: {
+          notIn: [PrismaTaskStatus.CANCELLED, PrismaTaskStatus.DONE],
+        },
+      },
+      data: { status: desired },
+    });
   }
 
   /**

@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { SettingsModule } from '../settings/settings.module';
 import { AdminQuotaController } from './admin-quota.controller';
 import { AdminQuotaService } from './admin-quota.service';
 import { QuotaController } from './quota.controller';
 import { QuotaService } from './quota.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, SettingsModule],
   controllers: [QuotaController, AdminQuotaController],
   providers: [QuotaService, AdminQuotaService],
   exports: [QuotaService],

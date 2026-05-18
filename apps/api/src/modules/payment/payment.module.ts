@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { OrderModule } from '../order/order.module';
 import { QuotaModule } from '../quota/quota.module';
+import { SettingsModule } from '../settings/settings.module';
 import { AdminPaymentController } from './admin-payment.controller';
 import { NotifyController } from './notify.controller';
 import { PaymentController } from './payment.controller';
@@ -11,7 +12,7 @@ import { WechatPayProvider } from './providers/wechat-pay.provider';
 import { ReconcileService } from './reconcile.service';
 
 @Module({
-  imports: [PrismaModule, OrderModule, QuotaModule],
+  imports: [PrismaModule, OrderModule, QuotaModule, SettingsModule],
   controllers: [PaymentController, NotifyController, AdminPaymentController],
   providers: [
     PaymentService,

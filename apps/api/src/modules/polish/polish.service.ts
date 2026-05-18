@@ -81,7 +81,6 @@ export class PolishService {
   ) {}
 
   async create(userId: string, dto: CreatePolishDto) {
-    await this.quotaService.ensure(userId, QuotaType.POLISH, 1);
     const raw = (dto.text ?? '').trim();
     if (raw.length < 50) throw new BadRequestException('文本至少 50 字');
     if (raw.length > 20000)
@@ -90,6 +89,12 @@ export class PolishService {
     const words = countChargedWords(raw);
     const ok = await this.userService.checkQuota(userId, words);
     if (!ok) throw new ForbiddenException('字数额度不足，请充值后再试');
+
+    await this.quotaService.ensureOrExchangeFromBrainCell(
+      userId,
+      QuotaType.POLISH,
+      1,
+    );
 
     const mode = dto.mode ?? PolishMode.BALANCED;
     const preserveQuotes = dto.preserveQuotes ?? true;

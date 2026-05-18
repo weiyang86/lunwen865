@@ -5,14 +5,19 @@ import {
   QuotaType,
   type Prisma as PrismaTypes,
 } from '@prisma/client';
+import crypto from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { QueryQuotaLogDto } from './dto/query-quota-log.dto';
 
 @Injectable()
 export class QuotaService {
   private readonly logger = new Logger(QuotaService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
 
   async getBalance(userId: string, type: QuotaType): Promise<number> {
     const q = await this.prisma.userQuota.findUnique({
@@ -29,6 +34,7 @@ export class QuotaService {
     });
 
     const result: Record<QuotaType, number> = {
+      [QuotaType.BRAIN_CELL]: 0,
       [QuotaType.PAPER_GENERATION]: 0,
       [QuotaType.POLISH]: 0,
       [QuotaType.EXPORT]: 0,
@@ -244,9 +250,183 @@ export class QuotaService {
     }
   }
 
+  async ensureOrExchangeFromBrainCell(
+    userId: string,
+    targetType: QuotaType,
+    amount: number,
+  ): Promise<void> {
+    if (amount <= 0) return;
+    if (targetType === QuotaType.BRAIN_CELL) {
+      await this.ensure(userId, QuotaType.BRAIN_CELL, amount);
+      return;
+    }
+
+    const current = await this.getBalance(userId, targetType);
+    if (current >= amount) return;
+
+    const deficit = amount - current;
+    const brainCellBalance = await this.getBalance(
+      userId,
+      QuotaType.BRAIN_CELL,
+    );
+    const rates = await this.getExchangeRates();
+    const rate =
+      targetType === QuotaType.PAPER_GENERATION
+        ? rates.paperGeneration
+        : targetType === QuotaType.POLISH
+          ? rates.polish
+          : targetType === QuotaType.EXPORT
+            ? rates.export
+            : targetType === QuotaType.AI_CHAT
+              ? rates.aiChat
+              : null;
+
+    const cost = rate ? deficit * rate : 0;
+    throw new BadRequestException(
+      `${this.typeLabel(targetType)}配额不足，当前 ${current}，需要 ${amount}。可使用脑细胞兑换：缺少 ${deficit} 次，需要 ${cost} 脑细胞，当前脑细胞 ${brainCellBalance}。`,
+    );
+  }
+
+  async exchangeFromBrainCell(params: {
+    userId: string;
+    targetType: QuotaType;
+    amount: number;
+    remark?: string;
+    tx?: PrismaTypes.TransactionClient;
+  }): Promise<void> {
+    if (params.amount <= 0) throw new BadRequestException('兑换数量必须大于 0');
+    if (params.targetType === QuotaType.BRAIN_CELL) {
+      throw new BadRequestException('不支持兑换为脑细胞');
+    }
+
+    const rates = await this.getExchangeRates();
+    const rate =
+      params.targetType === QuotaType.PAPER_GENERATION
+        ? rates.paperGeneration
+        : params.targetType === QuotaType.POLISH
+          ? rates.polish
+          : params.targetType === QuotaType.EXPORT
+            ? rates.export
+            : params.targetType === QuotaType.AI_CHAT
+              ? rates.aiChat
+              : null;
+
+    if (!rate || rate <= 0) {
+      throw new BadRequestException('兑换比例配置异常');
+    }
+
+    const brainCellCost = params.amount * rate;
+    const bizId = `EXCHANGE_${Date.now()}_${crypto.randomUUID()}`;
+
+    const exec = async (tx: PrismaTypes.TransactionClient) => {
+      const updated = await tx.userQuota.updateMany({
+        where: {
+          userId: params.userId,
+          quotaType: QuotaType.BRAIN_CELL,
+          balance: { gte: brainCellCost },
+        },
+        data: {
+          balance: { decrement: brainCellCost },
+          totalOut: { increment: brainCellCost },
+        },
+      });
+      if (updated.count === 0) {
+        const q = await tx.userQuota.findUnique({
+          where: {
+            userId_quotaType: {
+              userId: params.userId,
+              quotaType: QuotaType.BRAIN_CELL,
+            },
+          },
+          select: { balance: true },
+        });
+        throw new BadRequestException(
+          `脑细胞不足，当前余额 ${q?.balance ?? 0}，需要 ${brainCellCost}`,
+        );
+      }
+
+      const brainAfter = await tx.userQuota.findUnique({
+        where: {
+          userId_quotaType: {
+            userId: params.userId,
+            quotaType: QuotaType.BRAIN_CELL,
+          },
+        },
+        select: { balance: true },
+      });
+
+      const targetAfter = await tx.userQuota.upsert({
+        where: {
+          userId_quotaType: {
+            userId: params.userId,
+            quotaType: params.targetType,
+          },
+        },
+        create: {
+          userId: params.userId,
+          quotaType: params.targetType,
+          balance: params.amount,
+          totalIn: params.amount,
+        },
+        update: {
+          balance: { increment: params.amount },
+          totalIn: { increment: params.amount },
+        },
+        select: { balance: true },
+      });
+
+      await tx.quotaLog.createMany({
+        data: [
+          {
+            userId: params.userId,
+            quotaType: QuotaType.BRAIN_CELL,
+            change: -brainCellCost,
+            balanceAfter: brainAfter?.balance ?? 0,
+            reason: QuotaChangeReason.EXCHANGE,
+            bizId,
+            remark:
+              params.remark ??
+              `兑换 ${this.typeLabel(params.targetType)} x${params.amount}`,
+          },
+          {
+            userId: params.userId,
+            quotaType: params.targetType,
+            change: params.amount,
+            balanceAfter: targetAfter.balance,
+            reason: QuotaChangeReason.EXCHANGE,
+            bizId,
+            remark:
+              params.remark ??
+              `使用脑细胞兑换 ${this.typeLabel(params.targetType)} x${params.amount}`,
+          },
+        ],
+      });
+    };
+
+    if (params.tx) await exec(params.tx);
+    else await this.prisma.$transaction(exec);
+  }
+
+  async getExchangeRates(): Promise<{
+    paperGeneration: number;
+    polish: number;
+    export: number;
+    aiChat: number;
+  }> {
+    const site = await this.settings.getSiteSettings();
+    const r = site.exchangeRates;
+    return {
+      paperGeneration: Math.max(1, Math.trunc(r.paperGeneration)),
+      polish: Math.max(1, Math.trunc(r.polish)),
+      export: Math.max(1, Math.trunc(r.export)),
+      aiChat: Math.max(1, Math.trunc(r.aiChat)),
+    };
+  }
+
   private typeLabel(type: QuotaType): string {
     return (
       {
+        BRAIN_CELL: '脑细胞',
         PAPER_GENERATION: '论文生成',
         POLISH: '润色',
         EXPORT: '导出',

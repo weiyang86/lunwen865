@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { TaskStatus as PrismaTaskStatus } from '@prisma/client';
 import type { Prisma, Task, TopicCandidate } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
@@ -293,6 +294,20 @@ export class TopicService {
     await this.assertCooldown(taskId);
     const nextBatch = await this.getNextBatch(taskId);
 
+    await this.prisma.task.updateMany({
+      where: {
+        id: taskId,
+        status: {
+          notIn: [
+            PrismaTaskStatus.CANCELLED,
+            PrismaTaskStatus.DONE,
+            PrismaTaskStatus.FAILED,
+          ],
+        },
+      },
+      data: { status: PrismaTaskStatus.TOPIC_GENERATING },
+    });
+
     const extracted = extractTopicKeywordsLanguage(task);
     const academicLevel = toAcademicLevel(task.educationLevel);
 
@@ -377,6 +392,11 @@ export class TopicService {
     const created = await this.prisma.$transaction(
       createInputs.map((data) => this.prisma.topicCandidate.create({ data })),
     );
+
+    await this.prisma.task.updateMany({
+      where: { id: taskId, status: PrismaTaskStatus.TOPIC_GENERATING },
+      data: { status: PrismaTaskStatus.TOPIC_PENDING_REVIEW },
+    });
 
     this.logger.log(
       `题目候选生成完成 taskId=${taskId} batch=${nextBatch} count=${created.length}`,

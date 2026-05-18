@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Res,
+  StreamableFile,
+} from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { WRITING_HEARTBEAT_INTERVAL_MS } from './constants/writing.constants';
@@ -153,6 +162,40 @@ export class WritingController {
   ) {
     await this.taskService.assertTaskOwnership(taskId, userId);
     return this.writingService.exportFullDocument({ taskId, sessionId });
+  }
+
+  @Get('export')
+  @ApiOperation({ summary: '导出 Word（DOCX）' })
+  async exportDocx(
+    @CurrentUser('id') userId: string,
+    @Param('taskId') taskId: string,
+    @Query('sessionId') sessionId: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    await this.taskService.assertTaskOwnership(taskId, userId);
+    const { fileName, buffer } = await this.writingService.exportDocx({
+      taskId,
+      sessionId,
+    });
+    const asciiFileNameRaw = fileName
+      .replace(/[^\x20-\x7E]+/g, '')
+      .replace(/["\\]/g, '')
+      .trim();
+    const asciiFileName = asciiFileNameRaw
+      ? asciiFileNameRaw.toLowerCase().endsWith('.docx')
+        ? asciiFileNameRaw
+        : `${asciiFileNameRaw}.docx`
+      : 'writing.docx';
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    );
+    return new StreamableFile(buffer);
   }
 
   private async writeSse(

@@ -1,5 +1,7 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import type { OpeningReport } from '@prisma/client';
+import { TaskStatus } from '@prisma/client';
+import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TaskService } from '../task/task.service';
 import { GenerationStage } from '../task/constants/generation-stage.enum';
@@ -25,6 +27,27 @@ import { countWords } from './utils/word-counter.util';
 const OPENING_REPORT_VERSION = 1;
 
 export type OpeningReportRecord = OpeningReport;
+
+function sanitizeFileName(value: string): string {
+  return value
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
+
+function toParagraphs(text: string | null | undefined): Paragraph[] {
+  const content = (text ?? '').replace(/\r\n/g, '\n');
+  if (!content.trim())
+    return [new Paragraph({ children: [new TextRun('暂无内容')] })];
+
+  const lines = content.split('\n');
+  return lines.map((line) =>
+    line.trim().length
+      ? new Paragraph({ children: [new TextRun(line)] })
+      : new Paragraph({ children: [new TextRun('')] }),
+  );
+}
 
 @Injectable()
 export class OpeningReportService {
@@ -101,6 +124,14 @@ export class OpeningReportService {
     this.assertNoConcurrentGenerating(report);
 
     await this.ensureAllSectionsExist(report.id);
+
+    await this.prisma.task.updateMany({
+      where: {
+        id: taskId,
+        status: { notIn: [TaskStatus.CANCELLED, TaskStatus.DONE] },
+      },
+      data: { status: TaskStatus.OPENING_GENERATING },
+    });
 
     await this.prisma.openingReport.update({
       where: { id: report.id },
@@ -290,6 +321,14 @@ export class OpeningReportService {
     this.assertCanGenerate(task);
     this.assertNoConcurrentGenerating(report);
     await this.ensureAllSectionsExist(report.id);
+
+    await this.prisma.task.updateMany({
+      where: {
+        id: taskId,
+        status: { notIn: [TaskStatus.CANCELLED, TaskStatus.DONE] },
+      },
+      data: { status: TaskStatus.OPENING_GENERATING },
+    });
 
     yield {
       event: 'start',
@@ -567,6 +606,38 @@ export class OpeningReportService {
     });
 
     return { ...report, sections };
+  }
+
+  async exportDocx(
+    taskId: string,
+  ): Promise<{ fileName: string; buffer: Buffer }> {
+    const task = await this.taskService.findById(taskId);
+    const report = await this.findByTaskId(taskId);
+
+    const title = (task.title ?? '').trim() || '开题报告';
+    const doc = new Document({
+      creator: 'PaperGen',
+      title,
+      sections: [
+        {
+          children: [
+            new Paragraph({ text: title, heading: HeadingLevel.TITLE }),
+            ...report.sections.flatMap((s) => [
+              new Paragraph({
+                text: s.sectionTitle,
+                heading: HeadingLevel.HEADING_1,
+              }),
+              ...toParagraphs(s.content),
+              new Paragraph({ children: [new TextRun('')] }),
+            ]),
+          ],
+        },
+      ],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    const fileName = `${sanitizeFileName(title)}-开题报告.docx`;
+    return { fileName, buffer };
   }
 
   async findSection(

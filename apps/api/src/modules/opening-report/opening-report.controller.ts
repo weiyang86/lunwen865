@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Res,
+  StreamableFile,
 } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -90,6 +91,36 @@ export class OpeningReportController {
   ) {
     await this.taskService.assertTaskOwnership(taskId, userId);
     return this.openingReportService.findByTaskId(taskId);
+  }
+
+  @Get('export')
+  @ApiOperation({ summary: '导出开题报告 Word（DOCX）' })
+  async exportDocx(
+    @CurrentUser('id') userId: string,
+    @Param('taskId') taskId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    await this.taskService.assertTaskOwnership(taskId, userId);
+    const { fileName, buffer } =
+      await this.openingReportService.exportDocx(taskId);
+    const asciiFileNameRaw = fileName
+      .replace(/[^\x20-\x7E]+/g, '')
+      .replace(/["\\]/g, '')
+      .trim();
+    const asciiFileName = asciiFileNameRaw
+      ? asciiFileNameRaw.toLowerCase().endsWith('.docx')
+        ? asciiFileNameRaw
+        : `${asciiFileNameRaw}.docx`
+      : 'opening-report.docx';
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    );
+    return new StreamableFile(buffer);
   }
 
   @Get('sections/:sectionKey')

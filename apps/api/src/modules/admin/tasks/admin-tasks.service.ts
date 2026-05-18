@@ -6,6 +6,7 @@ import {
 import {
   TaskAdminAction,
   TaskStatus,
+  TaskStage,
   UserRole,
   type Prisma,
 } from '@prisma/client';
@@ -40,6 +41,136 @@ export class AdminTasksService {
     private readonly prisma: PrismaService,
     private readonly taskService: TaskService,
   ) {}
+
+  private mapStageToResumeStatus(stage: TaskStage): TaskStatus {
+    if (stage === TaskStage.OPENING) return TaskStatus.OPENING_GENERATING;
+    if (stage === TaskStage.OUTLINE) return TaskStatus.OUTLINE_GENERATING;
+    if (stage === TaskStage.WRITING) return TaskStatus.WRITING;
+    if (stage === TaskStage.MERGING) return TaskStatus.MERGING;
+    if (stage === TaskStage.FORMATTING) return TaskStatus.FORMATTING;
+    if (stage === TaskStage.REVIEW) return TaskStatus.REVIEW;
+    if (stage === TaskStage.REVISION) return TaskStatus.REVISION;
+    return TaskStatus.TOPIC_GENERATING;
+  }
+
+  private async fixInitStatusOnRead(
+    tasks: Array<{
+      id: string;
+      status: TaskStatus;
+      currentStage: TaskStage | null;
+    }>,
+  ): Promise<Map<string, TaskStatus>> {
+    const toFix = tasks.filter(
+      (t) =>
+        t.status === TaskStatus.INIT &&
+        t.currentStage &&
+        t.currentStage !== TaskStage.TOPIC,
+    );
+    if (toFix.length === 0) return new Map();
+
+    const fixed = new Map<string, TaskStatus>();
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    for (const t of toFix) {
+      const next = this.mapStageToResumeStatus(t.currentStage!);
+      fixed.set(t.id, next);
+      ops.push(
+        this.prisma.task.update({
+          where: { id: t.id },
+          data: { status: next },
+          select: { id: true },
+        }),
+      );
+    }
+
+    await this.prisma.$transaction(ops);
+    return fixed;
+  }
+
+  private async fixOutlineStatusWhenWritingExistsOnRead(
+    tasks: Array<{
+      id: string;
+      status: TaskStatus;
+      currentStage: TaskStage | null;
+    }>,
+  ): Promise<Map<string, { status: TaskStatus; currentStage: TaskStage }>> {
+    const candidates = tasks.filter((t) => {
+      if (
+        t.status === TaskStatus.CANCELLED ||
+        t.status === TaskStatus.DONE ||
+        t.status === TaskStatus.FAILED ||
+        t.status === TaskStatus.WRITING_PAUSED ||
+        t.status === TaskStatus.WRITING
+      ) {
+        return false;
+      }
+      if (t.currentStage === TaskStage.WRITING) return false;
+      return (
+        t.status === TaskStatus.OUTLINE_GENERATING ||
+        t.status === TaskStatus.OUTLINE_PENDING_REVIEW ||
+        t.status === TaskStatus.OUTLINE_APPROVED ||
+        t.currentStage === TaskStage.OUTLINE
+      );
+    });
+    if (candidates.length === 0) return new Map();
+
+    const writingSessionModel = (
+      this.prisma as unknown as {
+        writingSession?: { findMany?: (args: unknown) => Promise<unknown> };
+      }
+    ).writingSession;
+    if (
+      !writingSessionModel ||
+      typeof writingSessionModel.findMany !== 'function'
+    ) {
+      return new Map();
+    }
+
+    const taskIds = candidates.map((t) => t.id);
+    const sessionsRaw = await writingSessionModel.findMany({
+      where: { taskId: { in: taskIds } },
+      orderBy: [{ taskId: 'asc' }, { createdAt: 'desc' }],
+      select: { taskId: true, createdAt: true },
+    });
+    if (!Array.isArray(sessionsRaw) || sessionsRaw.length === 0)
+      return new Map();
+    const sessions = sessionsRaw as Array<{ taskId: string; createdAt: Date }>;
+
+    const latestSessionTaskIds = new Set<string>();
+    for (const s of sessions) {
+      if (!latestSessionTaskIds.has(s.taskId)) {
+        latestSessionTaskIds.add(s.taskId);
+      }
+    }
+    if (latestSessionTaskIds.size === 0) return new Map();
+
+    const idsToFix = Array.from(latestSessionTaskIds);
+    await this.prisma.task.updateMany({
+      where: {
+        id: { in: idsToFix },
+        status: {
+          notIn: [
+            TaskStatus.CANCELLED,
+            TaskStatus.DONE,
+            TaskStatus.FAILED,
+            TaskStatus.WRITING_PAUSED,
+          ],
+        },
+      },
+      data: { status: TaskStatus.WRITING, currentStage: TaskStage.WRITING },
+    });
+
+    const fixed = new Map<
+      string,
+      { status: TaskStatus; currentStage: TaskStage }
+    >();
+    for (const id of idsToFix) {
+      fixed.set(id, {
+        status: TaskStatus.WRITING,
+        currentStage: TaskStage.WRITING,
+      });
+    }
+    return fixed;
+  }
 
   private async assertTaskExists(id: string) {
     const task = await this.prisma.task.findUnique({
@@ -187,13 +318,25 @@ export class AdminTasksService {
         }),
       ]);
 
+      const fixedStatuses = await this.fixInitStatusOnRead(rows);
+      const writingFixed = await this.fixOutlineStatusWhenWritingExistsOnRead(
+        rows.map((r) => ({
+          id: r.id,
+          status: fixedStatuses.get(r.id) ?? r.status,
+          currentStage: r.currentStage,
+        })),
+      );
       return {
         items: rows.map((t) => ({
           id: t.id,
           title: t.title ?? null,
           educationLevel: t.educationLevel,
-          status: t.status,
-          currentStage: t.currentStage ?? 'TOPIC',
+          status:
+            writingFixed.get(t.id)?.status ??
+            fixedStatuses.get(t.id) ??
+            t.status,
+          currentStage:
+            writingFixed.get(t.id)?.currentStage ?? t.currentStage ?? 'TOPIC',
           deadline: t.deadline ? t.deadline.toISOString() : null,
           userId: t.userId,
           assignee: this.mapAssignee(t.assignee),
@@ -237,13 +380,23 @@ export class AdminTasksService {
       ? (pageItems[pageItems.length - 1]?.id ?? null)
       : null;
 
+    const fixedStatuses = await this.fixInitStatusOnRead(pageItems);
+    const writingFixed = await this.fixOutlineStatusWhenWritingExistsOnRead(
+      pageItems.map((r) => ({
+        id: r.id,
+        status: fixedStatuses.get(r.id) ?? r.status,
+        currentStage: r.currentStage,
+      })),
+    );
     return {
       items: pageItems.map((t) => ({
         id: t.id,
         title: t.title ?? null,
         educationLevel: t.educationLevel,
-        status: t.status,
-        currentStage: t.currentStage ?? 'TOPIC',
+        status:
+          writingFixed.get(t.id)?.status ?? fixedStatuses.get(t.id) ?? t.status,
+        currentStage:
+          writingFixed.get(t.id)?.currentStage ?? t.currentStage ?? 'TOPIC',
         deadline: t.deadline ? t.deadline.toISOString() : null,
         userId: t.userId,
         assignee: this.mapAssignee(t.assignee),
@@ -259,6 +412,98 @@ export class AdminTasksService {
   async detail(id: string) {
     try {
       const detail = await this.taskService.findDetail(id);
+      const t = detail.task;
+      if (
+        t.status === TaskStatus.INIT &&
+        t.currentStage &&
+        t.currentStage !== TaskStage.TOPIC
+      ) {
+        const next =
+          t.currentStage === TaskStage.OPENING
+            ? TaskStatus.OPENING_GENERATING
+            : t.currentStage === TaskStage.OUTLINE
+              ? TaskStatus.OUTLINE_GENERATING
+              : t.currentStage === TaskStage.WRITING
+                ? TaskStatus.WRITING
+                : t.currentStage === TaskStage.MERGING
+                  ? TaskStatus.MERGING
+                  : t.currentStage === TaskStage.FORMATTING
+                    ? TaskStatus.FORMATTING
+                    : t.currentStage === TaskStage.REVIEW
+                      ? TaskStatus.REVIEW
+                      : t.currentStage === TaskStage.REVISION
+                        ? TaskStatus.REVISION
+                        : TaskStatus.TOPIC_GENERATING;
+
+        await this.prisma.task.update({
+          where: { id },
+          data: { status: next },
+          select: { id: true },
+        });
+        detail.task = { ...detail.task, status: next };
+      }
+
+      const t2 = detail.task;
+      if (
+        t2.status !== TaskStatus.CANCELLED &&
+        t2.status !== TaskStatus.DONE &&
+        t2.status !== TaskStatus.FAILED &&
+        t2.status !== TaskStatus.WRITING_PAUSED &&
+        t2.status !== TaskStatus.WRITING &&
+        t2.currentStage !== TaskStage.WRITING &&
+        (t2.status === TaskStatus.OUTLINE_GENERATING ||
+          t2.status === TaskStatus.OUTLINE_PENDING_REVIEW ||
+          t2.status === TaskStatus.OUTLINE_APPROVED ||
+          t2.currentStage === TaskStage.OUTLINE)
+      ) {
+        const writingSessionModel = (
+          this.prisma as unknown as {
+            writingSession?: {
+              findFirst?: (args: unknown) => Promise<unknown>;
+            };
+          }
+        ).writingSession;
+        if (
+          !writingSessionModel ||
+          typeof writingSessionModel.findFirst !== 'function'
+        ) {
+          void 0;
+        } else {
+          const sessionRaw = await writingSessionModel.findFirst({
+            where: { taskId: id },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true },
+          });
+          const session =
+            sessionRaw && typeof sessionRaw === 'object'
+              ? (sessionRaw as { id: string })
+              : null;
+          if (session) {
+            await this.prisma.task.updateMany({
+              where: {
+                id,
+                status: {
+                  notIn: [
+                    TaskStatus.CANCELLED,
+                    TaskStatus.DONE,
+                    TaskStatus.FAILED,
+                    TaskStatus.WRITING_PAUSED,
+                  ],
+                },
+              },
+              data: {
+                status: TaskStatus.WRITING,
+                currentStage: TaskStage.WRITING,
+              },
+            });
+            detail.task = {
+              ...detail.task,
+              status: TaskStatus.WRITING,
+              currentStage: TaskStage.WRITING,
+            };
+          }
+        }
+      }
       const order = await this.prisma.order.findUnique({
         where: { taskId: id },
         select: {
@@ -347,6 +592,10 @@ export class AdminTasksService {
       if (e instanceof NotFoundException) throw e;
       throw e;
     }
+  }
+
+  async timeline(id: string) {
+    return this.taskService.getTimeline(id);
   }
 
   async assign(taskId: string, assigneeId: string, operatorId: string) {

@@ -26,6 +26,14 @@ export class UpdateProductDto {
   description?: string;
 
   @IsOptional()
+  @IsString()
+  coverUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -38,6 +46,13 @@ export class UpdateProductDto {
   @Min(1)
   @Max(10_000_000)
   originalPriceCents?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10_000_000)
+  brainCellAmount?: number;
 
   @IsOptional()
   @Type(() => Number)

@@ -6,6 +6,7 @@ export interface ReferenceGenerationContext {
   contentSnippets: string[];
   count: number;
   recentYears: number;
+  focus?: string;
   languageHint: { zhRatio: number; enRatio: number };
   typeDistribution: Array<{ type: RefType; ratio: number }>;
 }
@@ -31,6 +32,7 @@ ${ctx.contentSnippets.map((s, i) => `片段${i + 1}：${s}`).join('\n\n')}
 ## 生成要求
 - 数量：${ctx.count} 条
 - 时间范围：近 ${ctx.recentYears} 年为主，必要时可包含经典文献
+${ctx.focus?.trim() ? `- 侧重点/要求：${ctx.focus.trim()}` : ''}
 - 语言比例：中文约 ${Math.round(ctx.languageHint.zhRatio * 100)}%，英文约 ${Math.round(ctx.languageHint.enRatio * 100)}%
 - 类型分布（尽量满足）：${dist}
 - 输出必须是 JSON，且仅输出 JSON，不要包含解释文字

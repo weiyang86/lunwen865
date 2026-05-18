@@ -4,6 +4,7 @@ import type { ConfigService } from '@nestjs/config';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrderService } from '../order/order.service';
 import type { QuotaService } from '../quota/quota.service';
+import type { SettingsService } from '../settings/settings.service';
 import { PaymentService } from './payment.service';
 import type { AlipayProvider } from './providers/alipay.provider';
 import type { WechatPayProvider } from './providers/wechat-pay.provider';
@@ -45,6 +46,7 @@ describe('RefundService(PaymentService.createRefund)', () => {
   let service: PaymentService;
   let prisma: PrismaService;
   let wechatRefund: jest.Mock;
+  let settingsService: Pick<SettingsService, 'getPaymentSettings'>;
   const orders = new Map<string, OrderRow>();
   const refunds = new Map<string, RefundRow>();
   const quotas = new Map<string, UserQuotaRow>();
@@ -64,6 +66,30 @@ describe('RefundService(PaymentService.createRefund)', () => {
     wechatRefund = jest.fn(({ outRefundNo }: { outRefundNo: string }) =>
       Promise.resolve({ outRefundNo, refundId: 'WX_REF_1' }),
     );
+    settingsService = {
+      getPaymentSettings: jest.fn(() =>
+        Promise.resolve({
+          sandbox: true,
+          orderExpireMinutes: 30,
+          wechat: {
+            notifyUrl: '',
+            appid: '',
+            mchid: '',
+            serialNo: '',
+            privateKeyPath: '',
+            apiV3Key: '',
+          },
+          alipay: {
+            notifyUrl: '',
+            returnUrl: '',
+            appId: '',
+            gateway: '',
+            privateKeyPath: '',
+            publicKeyPath: '',
+          },
+        }),
+      ),
+    };
 
     type TxClient = {
       order: {
@@ -235,6 +261,7 @@ describe('RefundService(PaymentService.createRefund)', () => {
       {} as OrderService,
       {} as QuotaService,
       config as ConfigService,
+      settingsService as unknown as SettingsService,
       {
         refund: wechatRefund,
       } as unknown as WechatPayProvider,
@@ -299,13 +326,13 @@ describe('RefundService(PaymentService.createRefund)', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('部分退款成功：订单回 PAID，配额按比例回滚', async () => {
+  it('部分退款成功：订单回 PAID，脑细胞按比例回滚', async () => {
     seedPaidOrder(1000);
-    quotas.set(key('u1', 'PAPER_GENERATION'), {
+    quotas.set(key('u1', 'BRAIN_CELL'), {
       id: 'q1',
       userId: 'u1',
-      quotaType: 'PAPER_GENERATION',
-      balance: 5,
+      quotaType: 'BRAIN_CELL',
+      balance: 35,
       totalOut: 0,
     });
     await service.createRefund({
@@ -315,16 +342,16 @@ describe('RefundService(PaymentService.createRefund)', () => {
       reason: '部分退',
     });
     expect(orders.get('o1')?.status).toBe('PAID');
-    expect(quotas.get(key('u1', 'PAPER_GENERATION'))?.balance).toBe(3);
+    expect(quotas.get(key('u1', 'BRAIN_CELL'))?.balance).toBe(21);
   });
 
   it('全额退款成功：订单变 REFUNDED 且有 refundedAt', async () => {
     seedPaidOrder(1000);
-    quotas.set(key('u1', 'PAPER_GENERATION'), {
+    quotas.set(key('u1', 'BRAIN_CELL'), {
       id: 'q1',
       userId: 'u1',
-      quotaType: 'PAPER_GENERATION',
-      balance: 5,
+      quotaType: 'BRAIN_CELL',
+      balance: 35,
       totalOut: 0,
     });
     await service.createRefund({
@@ -354,10 +381,10 @@ describe('RefundService(PaymentService.createRefund)', () => {
 
   it('配额回滚不会导致负余额', async () => {
     seedPaidOrder(1000);
-    quotas.set(key('u1', 'PAPER_GENERATION'), {
+    quotas.set(key('u1', 'BRAIN_CELL'), {
       id: 'q1',
       userId: 'u1',
-      quotaType: 'PAPER_GENERATION',
+      quotaType: 'BRAIN_CELL',
       balance: 1,
       totalOut: 0,
     });
@@ -367,7 +394,7 @@ describe('RefundService(PaymentService.createRefund)', () => {
       amountCents: 800,
       reason: 'x',
     });
-    expect(quotas.get(key('u1', 'PAPER_GENERATION'))?.balance).toBe(0);
+    expect(quotas.get(key('u1', 'BRAIN_CELL'))?.balance).toBe(0);
   });
 
   it('不传 amountCents 默认退剩余可退金额', async () => {

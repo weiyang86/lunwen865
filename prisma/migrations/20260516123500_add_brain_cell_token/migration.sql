@@ -1,0 +1,6 @@
+-- AlterEnum
+ALTER TYPE "QuotaType" ADD VALUE IF NOT EXISTS 'BRAIN_CELL';
+
+-- AlterTable
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "brainCellAmount" INTEGER NOT NULL DEFAULT 0;
+

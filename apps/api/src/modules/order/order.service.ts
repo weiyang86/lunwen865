@@ -21,6 +21,7 @@ import {
 import dayjs from 'dayjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QuotaService } from '../quota/quota.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 import { generateOrderNo } from './utils/order-no.util';
@@ -34,6 +35,7 @@ export class OrderService {
     private readonly prisma: PrismaService,
     private readonly quotaService: QuotaService,
     private readonly config: ConfigService,
+    private readonly settings: SettingsService,
   ) {}
 
   async create(userId: string, dto: CreateOrderDto, clientIp?: string) {
@@ -44,10 +46,10 @@ export class OrderService {
     if (product.status !== ProductStatus.ACTIVE)
       throw new BadRequestException('该商品已下架');
 
-    const expireMinutes = this.config.get<number>(
-      'payment.orderExpireMinutes',
-      30,
-    );
+    const paymentSettings = await this.settings.getPaymentSettings();
+    const expireMinutes =
+      paymentSettings.orderExpireMinutes ||
+      this.config.get<number>('payment.orderExpireMinutes', 30);
     const expiresAt = dayjs().add(expireMinutes, 'minute').toDate();
 
     const productSnapshot: Prisma.InputJsonValue = {
@@ -57,6 +59,7 @@ export class OrderService {
       description: product.description,
       priceCents: product.priceCents,
       originalPriceCents: product.originalPriceCents,
+      brainCellAmount: product.brainCellAmount,
       paperQuota: product.paperQuota,
       polishQuota: product.polishQuota,
       exportQuota: product.exportQuota,
@@ -166,10 +169,17 @@ export class OrderService {
       });
       if (!order) throw new NotFoundException('订单不存在');
 
-      if (order.status === OrderStatus.PAID) {
+      if (
+        order.status === OrderStatus.PAID ||
+        order.status === OrderStatus.FULFILLING ||
+        order.status === OrderStatus.COMPLETED
+      ) {
         return { order, alreadyPaid: true };
       }
-      if (order.status !== OrderStatus.PENDING) {
+      if (
+        order.status !== OrderStatus.PENDING &&
+        order.status !== OrderStatus.PENDING_PAYMENT
+      ) {
         throw new BadRequestException(
           `订单状态 ${order.status}，无法标记为已支付`,
         );
@@ -184,8 +194,9 @@ export class OrderService {
       const updated = await tx.order.update({
         where: { id: order.id },
         data: {
-          status: OrderStatus.PAID,
+          status: OrderStatus.COMPLETED,
           paidAt: params.paidAt,
+          completedAt: params.paidAt,
           paidAmountCents: params.paidAmountCents,
           transactionId: params.transactionId,
           method: params.method,
@@ -205,46 +216,22 @@ export class OrderService {
   ): Promise<Order> {
     if (order.quotaGranted) return order;
     const snap = order.productSnapshot as unknown as Record<string, unknown>;
+    const brainCellFromSnapshot = Number(snap['brainCellAmount'] ?? 0);
     const paperQuota = Number(snap['paperQuota'] ?? 0);
     const polishQuota = Number(snap['polishQuota'] ?? 0);
     const exportQuota = Number(snap['exportQuota'] ?? 0);
     const aiChatQuota = Number(snap['aiChatQuota'] ?? 0);
 
-    if (paperQuota > 0) {
+    const fallbackBrainCells =
+      paperQuota + polishQuota + exportQuota + aiChatQuota;
+    const brainCellAmount =
+      brainCellFromSnapshot > 0 ? brainCellFromSnapshot : fallbackBrainCells;
+
+    if (brainCellAmount > 0) {
       await this.quotaService.grant({
         userId: order.userId,
-        type: QuotaType.PAPER_GENERATION,
-        amount: paperQuota,
-        reason: QuotaChangeReason.PURCHASE,
-        orderId: order.id,
-        tx,
-      });
-    }
-    if (polishQuota > 0) {
-      await this.quotaService.grant({
-        userId: order.userId,
-        type: QuotaType.POLISH,
-        amount: polishQuota,
-        reason: QuotaChangeReason.PURCHASE,
-        orderId: order.id,
-        tx,
-      });
-    }
-    if (exportQuota > 0) {
-      await this.quotaService.grant({
-        userId: order.userId,
-        type: QuotaType.EXPORT,
-        amount: exportQuota,
-        reason: QuotaChangeReason.PURCHASE,
-        orderId: order.id,
-        tx,
-      });
-    }
-    if (aiChatQuota > 0) {
-      await this.quotaService.grant({
-        userId: order.userId,
-        type: QuotaType.AI_CHAT,
-        amount: aiChatQuota,
+        type: QuotaType.BRAIN_CELL,
+        amount: brainCellAmount,
         reason: QuotaChangeReason.PURCHASE,
         orderId: order.id,
         tx,

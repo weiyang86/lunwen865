@@ -58,6 +58,11 @@ export class AdminTasksController {
     return this.service.detail(id);
   }
 
+  @Get(':id/timeline')
+  timeline(@Param('id') id: string) {
+    return this.service.timeline(id);
+  }
+
   @Patch(':id/assign')
   assign(
     @Param('id') id: string,

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { ProductListItem, ProductListQuery, ProductListResp, ProductStatus } from '@/types/admin/product';
-import { batchRemoveProducts, batchUpdateProductStatus, fetchProducts, removeProduct, updateProductStatus } from '@/services/admin/products';
+import { batchRemoveProducts, batchUpdateProductStatus, createProduct, fetchProducts, removeProduct, updateProductStatus, type CreateProductPayload } from '@/services/admin/products';
 
 export function useProductList(initial?: Partial<ProductListQuery>) {
   const [query, setQuery] = useState<ProductListQuery>({
@@ -108,6 +108,13 @@ export function useProductList(initial?: Partial<ProductListQuery>) {
     await refresh();
   }, [refresh]);
 
+  const createOne = useCallback(async (payload: CreateProductPayload) => {
+    const created = await createProduct(payload);
+    toast.success('已创建商品');
+    await refresh();
+    return created;
+  }, [refresh]);
+
   const setCategory = useCallback((categoryId: string | undefined) => {
     setSelectedIds(new Set());
     setQuery((q) => ({
@@ -142,6 +149,7 @@ export function useProductList(initial?: Partial<ProductListQuery>) {
     pageSize: data?.pageSize ?? query.pageSize,
     loading,
     refresh,
+    createOne,
     selectedIds,
     selectedCount,
     allSelectedInPage,

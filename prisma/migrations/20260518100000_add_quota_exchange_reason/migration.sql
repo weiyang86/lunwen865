@@ -1,0 +1,2 @@
+ALTER TYPE "QuotaChangeReason" ADD VALUE IF NOT EXISTS 'EXCHANGE';
+

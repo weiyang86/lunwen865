@@ -13,6 +13,7 @@ import type { UserService } from '../user/user.service';
 import { AuthService } from './auth.service';
 import type { SmsService } from './sms/sms.service';
 import type { QuotaService } from '../quota/quota.service';
+import type { SettingsService } from '../settings/settings.service';
 
 describe('AuthService', () => {
   type PrismaMock = {
@@ -42,6 +43,7 @@ describe('AuthService', () => {
   let userService: DeepMockProxy<UserService>;
   let smsService: DeepMockProxy<SmsService>;
   let quotaService: DeepMockProxy<QuotaService>;
+  let settingsService: Pick<SettingsService, 'getSiteSettings'>;
   let jwtService: JwtService;
   let configService: ConfigService;
   let authService: AuthService;
@@ -51,6 +53,17 @@ describe('AuthService', () => {
     userService = mockDeep<UserService>();
     smsService = mockDeep<SmsService>();
     quotaService = mockDeep<QuotaService>();
+    settingsService = {
+      getSiteSettings: jest.fn(() =>
+        Promise.resolve({
+          siteName: '论文通',
+          siteUrl: '',
+          logoUrl: '',
+          supportEmail: '',
+          registerGift: { paperGeneration: 1, polish: 2, export: 1 },
+        }),
+      ),
+    };
 
     jwtService = new JwtService({});
 
@@ -75,6 +88,7 @@ describe('AuthService', () => {
       smsService,
       userService,
       quotaService,
+      settingsService as unknown as SettingsService,
     );
   });
 

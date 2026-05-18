@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -8,9 +9,15 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ProductStatus, UserRole } from '@prisma/client';
+import { FileInterceptor } from '@nestjs/platform-express';
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -22,6 +29,8 @@ import { AdminListProductsDto } from './dto/admin-list-products.dto';
 import { AdminUpdateProductStatusDto } from './dto/admin-update-product-status.dto';
 import { AdminBatchStatusDto } from './dto/admin-batch-status.dto';
 import { AdminBatchRemoveDto } from './dto/admin-batch-remove.dto';
+import type { Request } from 'express';
+import { UploadedFile } from '@nestjs/common';
 
 @Controller('admin/products')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -72,6 +81,78 @@ export class AdminProductController {
       page: r.page,
       pageSize: r.pageSize,
     };
+  }
+
+  @Get(':id')
+  async detail(@Param('id') id: string) {
+    const p = await this.productService.findOne(id);
+    return {
+      id: p.id,
+      code: p.code,
+      name: p.name,
+      description: p.description ?? '',
+      coverUrl: p.coverUrl ?? null,
+      priceCents: p.priceCents,
+      originalPriceCents: p.originalPriceCents ?? null,
+      brainCellAmount: p.brainCellAmount,
+      paperQuota: p.paperQuota,
+      polishQuota: p.polishQuota,
+      exportQuota: p.exportQuota,
+      aiChatQuota: p.aiChatQuota,
+      sortOrder: p.sortOrder,
+      status: this.mapDbStatusToApi(p.status),
+      categoryId: p.categoryId ?? null,
+      totalStock: p.totalStock,
+      soldCount: p.soldCount,
+      updatedAt: p.updatedAt,
+      createdAt: p.createdAt,
+    };
+  }
+
+  @Post('upload-cover')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype?.startsWith('image/')) {
+          cb(new BadRequestException('只支持图片文件'), false);
+          return;
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadCover(
+    @UploadedFile()
+    file:
+      | {
+          originalname?: string;
+          mimetype?: string;
+          buffer?: Buffer;
+        }
+      | undefined,
+    @Req() req: Request,
+  ) {
+    if (!file) throw new BadRequestException('未收到文件');
+    if (!file.mimetype?.startsWith('image/')) {
+      throw new BadRequestException('只支持图片文件');
+    }
+    if (!file.buffer || !Buffer.isBuffer(file.buffer)) {
+      throw new BadRequestException('文件内容为空');
+    }
+
+    const dir = path.join(process.cwd(), 'uploads', 'product-covers');
+    await fs.promises.mkdir(dir, { recursive: true });
+
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.png';
+    const safeExt = ext.length <= 10 ? ext : '.png';
+    const filename = `${Date.now()}_${crypto.randomUUID()}${safeExt}`;
+    const filePath = path.join(dir, filename);
+    await fs.promises.writeFile(filePath, file.buffer);
+
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const urlPath = `/uploads/product-covers/${filename}`;
+    return { url: `${origin}${urlPath}` };
   }
 
   @Post()

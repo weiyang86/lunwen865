@@ -35,6 +35,7 @@ export class ReferenceController {
       taskId,
       dto.count,
       dto.recentYears,
+      dto.focus,
     );
   }
 
