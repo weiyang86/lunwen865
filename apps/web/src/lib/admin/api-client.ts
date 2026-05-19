@@ -51,6 +51,18 @@ adminApi.interceptors.response.use(
     return response;
   },
   (error: AxiosError<unknown>) => {
+    if (
+      (error as any)?.code === 'ERR_CANCELED' ||
+      (error as any)?.name === 'CanceledError' ||
+      axios.isCancel(error)
+    ) {
+      return Promise.reject({
+        code: -1,
+        message: 'canceled',
+        details: null,
+      } satisfies ApiError);
+    }
+
     const status = error.response?.status;
     const respData = error.response?.data as any;
     const silentToast = Boolean((error.config as any)?.silentToast);

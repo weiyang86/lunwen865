@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
+  CircleHelp,
   History,
   Loader2,
   Rocket,
@@ -25,6 +26,7 @@ interface Props {
   onOpenVersions: () => void;
   onOpenMeta: () => void;
   onOpenDiscard: () => void;
+  onOpenHelp: () => void;
   onSaveVersion: () => void;
   onToggleEnabled: () => void;
   togglingEnabled: boolean;
@@ -83,6 +85,7 @@ export function PromptEditorHeader({
   onOpenVersions,
   onOpenMeta,
   onOpenDiscard,
+  onOpenHelp,
   onSaveVersion,
   onToggleEnabled,
   togglingEnabled,
@@ -223,6 +226,25 @@ export function PromptEditorHeader({
               title="丢弃草稿"
             >
               <Undo2 className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              className="hidden sm:inline-flex"
+              onClick={onOpenHelp}
+            >
+              <CircleHelp className="h-4 w-4" />
+              说明
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              className="sm:hidden"
+              onClick={onOpenHelp}
+              title="说明"
+            >
+              <CircleHelp className="h-4 w-4" />
             </Button>
 
             <Button

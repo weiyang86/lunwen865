@@ -20,6 +20,7 @@ export function PromptTestPanel({
   isDirty,
   draftSnapshot,
   onRunningChange,
+  layout = 'sidebar',
 }: {
   open: boolean;
   onClose: () => void;
@@ -28,6 +29,7 @@ export function PromptTestPanel({
   isDirty: boolean;
   draftSnapshot: PromptDraft;
   onRunningChange: (running: boolean) => void;
+  layout?: 'sidebar' | 'dialog';
 }) {
   const [tab, setTab] = useState<TabKey>('run');
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -54,18 +56,26 @@ export function PromptTestPanel({
     setTab('run');
   }, [open]);
 
-  const wrapperCls = cn(
-    'bg-white md:bg-transparent',
-    open ? '' : 'pointer-events-none opacity-0 md:opacity-100 md:pointer-events-auto',
-    'fixed inset-0 z-40 md:static md:z-auto',
-    'md:w-80 lg:w-96',
-    open ? '' : 'md:w-0 md:overflow-hidden',
-  );
+  const wrapperCls =
+    layout === 'dialog'
+      ? 'w-full'
+      : cn(
+          'bg-white md:bg-transparent',
+          open ? '' : 'pointer-events-none opacity-0 md:opacity-100 md:pointer-events-auto',
+          'fixed inset-0 z-40 md:static md:z-auto',
+          'md:w-80 lg:w-96',
+          open ? '' : 'md:w-0 md:overflow-hidden',
+        );
 
   return (
     <div className={wrapperCls}>
-      <div className={cn(open ? 'block' : 'hidden md:block')}>
-        <div className="h-full w-full bg-white md:rounded-lg md:border md:border-slate-200 md:shadow-sm">
+      <div className={layout === 'dialog' ? 'block' : cn(open ? 'block' : 'hidden md:block')}>
+        <div
+          className={cn(
+            'flex h-full w-full flex-col bg-white',
+            layout === 'dialog' ? '' : 'md:rounded-lg md:border md:border-slate-200 md:shadow-sm',
+          )}
+        >
           <div className="flex items-start justify-between border-b border-slate-200 p-4">
             <div>
               <div className="text-base font-semibold text-slate-900">测试运行</div>
@@ -103,7 +113,7 @@ export function PromptTestPanel({
             </button>
           </div>
 
-          <div className="p-4">
+          <div className="flex-1 overflow-auto p-4">
             {tab === 'run' ? (
               <div className="space-y-4">
                 <PromptTestVariablesForm
