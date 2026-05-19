@@ -31,8 +31,7 @@ function unwrapFormula(text: string): { text: string; italic: boolean } {
 }
 
 function buildSectionTitle(sec: SectionContent): string {
-  const prefix = sec.number ? `${sec.number} ` : '';
-  return `${prefix}${sec.title}`.trim();
+  return `${sec.title}`.trim();
 }
 
 @Injectable()

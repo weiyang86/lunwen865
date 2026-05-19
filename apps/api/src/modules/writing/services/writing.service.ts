@@ -74,6 +74,10 @@ export class WritingService {
     return this.orchestrator.startWriting(taskId, dto);
   }
 
+  async assertCanStartWriting(taskId: string): Promise<void> {
+    await this.orchestrator.assertCanStartWriting(taskId);
+  }
+
   resumeStream(
     taskId: string,
     sessionId: string,

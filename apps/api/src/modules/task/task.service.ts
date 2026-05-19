@@ -96,6 +96,7 @@ function mapDomainStatusToPrismaStatus(
 function resumeStatusFromStage(stage: TaskStage | null): PrismaTaskStatus {
   if (stage === TaskStage.OPENING) return PrismaTaskStatus.OPENING_GENERATING;
   if (stage === TaskStage.OUTLINE) return PrismaTaskStatus.OUTLINE_GENERATING;
+  if (stage === TaskStage.ABSTRACT) return PrismaTaskStatus.ABSTRACT_GENERATING;
   if (stage === TaskStage.WRITING) return PrismaTaskStatus.WRITING;
   if (stage === TaskStage.MERGING) return PrismaTaskStatus.MERGING;
   if (stage === TaskStage.FORMATTING) return PrismaTaskStatus.FORMATTING;
@@ -112,6 +113,8 @@ function approvedStatusFromGenerationStage(
     return PrismaTaskStatus.OPENING_APPROVED;
   if (stage === GenerationStage.OUTLINE)
     return PrismaTaskStatus.OUTLINE_APPROVED;
+  if (stage === GenerationStage.SUMMARY)
+    return PrismaTaskStatus.ABSTRACT_APPROVED;
   if (stage === GenerationStage.CHAPTER) return PrismaTaskStatus.WRITING;
   if (stage === GenerationStage.SECTION) return PrismaTaskStatus.MERGING;
   if (stage === GenerationStage.POLISHING) return PrismaTaskStatus.FORMATTING;
@@ -124,9 +127,9 @@ const GENERATION_STAGE_ORDER: Record<GenerationStage, number> = {
   [GenerationStage.TOPIC]: 1,
   [GenerationStage.OPENING]: 2,
   [GenerationStage.OUTLINE]: 3,
-  [GenerationStage.CHAPTER]: 4,
-  [GenerationStage.SECTION]: 5,
-  [GenerationStage.SUMMARY]: 6,
+  [GenerationStage.SUMMARY]: 4,
+  [GenerationStage.CHAPTER]: 5,
+  [GenerationStage.SECTION]: 6,
   [GenerationStage.POLISHING]: 7,
   [GenerationStage.DONE]: 8,
 };
@@ -165,6 +168,13 @@ function mapPrismaStatusToGenerationStage(
   ) {
     return GenerationStage.OUTLINE;
   }
+  if (
+    status === PrismaTaskStatus.ABSTRACT_GENERATING ||
+    status === PrismaTaskStatus.ABSTRACT_PENDING_REVIEW ||
+    status === PrismaTaskStatus.ABSTRACT_APPROVED
+  ) {
+    return GenerationStage.SUMMARY;
+  }
   if (status === PrismaTaskStatus.MERGING) return GenerationStage.SECTION;
   if (
     status === PrismaTaskStatus.FORMATTING ||
@@ -189,6 +199,7 @@ function mapCurrentTaskStageToGenerationStage(
   if (stage === TaskStage.TOPIC) return GenerationStage.TOPIC;
   if (stage === TaskStage.OPENING) return GenerationStage.OPENING;
   if (stage === TaskStage.OUTLINE) return GenerationStage.OUTLINE;
+  if (stage === TaskStage.ABSTRACT) return GenerationStage.SUMMARY;
   if (stage === TaskStage.WRITING) return GenerationStage.CHAPTER;
   if (stage === TaskStage.MERGING) return GenerationStage.SECTION;
   if (stage === TaskStage.FORMATTING) return GenerationStage.POLISHING;
@@ -210,9 +221,9 @@ function mapGenerationStageToPrismaStage(stage: GenerationStage): TaskStage {
     return TaskStage.TOPIC;
   if (stage === GenerationStage.OPENING) return TaskStage.OPENING;
   if (stage === GenerationStage.OUTLINE) return TaskStage.OUTLINE;
+  if (stage === GenerationStage.SUMMARY) return TaskStage.ABSTRACT;
   if (stage === GenerationStage.CHAPTER) return TaskStage.WRITING;
   if (stage === GenerationStage.SECTION) return TaskStage.MERGING;
-  if (stage === GenerationStage.SUMMARY) return TaskStage.MERGING;
   if (stage === GenerationStage.POLISHING) return TaskStage.FORMATTING;
   return TaskStage.REVIEW;
 }

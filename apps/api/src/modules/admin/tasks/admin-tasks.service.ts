@@ -45,6 +45,7 @@ export class AdminTasksService {
   private mapStageToResumeStatus(stage: TaskStage): TaskStatus {
     if (stage === TaskStage.OPENING) return TaskStatus.OPENING_GENERATING;
     if (stage === TaskStage.OUTLINE) return TaskStatus.OUTLINE_GENERATING;
+    if (stage === TaskStage.ABSTRACT) return TaskStatus.ABSTRACT_GENERATING;
     if (stage === TaskStage.WRITING) return TaskStatus.WRITING;
     if (stage === TaskStage.MERGING) return TaskStatus.MERGING;
     if (stage === TaskStage.FORMATTING) return TaskStatus.FORMATTING;

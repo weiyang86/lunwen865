@@ -271,8 +271,7 @@ export class WritingOrchestratorService {
     taskId: string,
     dto: StartWritingDto,
   ): AsyncGenerator<WritingSseEvent, void, unknown> {
-    const existing = await this.sessionService.findActiveByTaskId(taskId);
-    if (existing) throw new WritingAlreadyRunningException(taskId);
+    await this.assertCanStartWriting(taskId);
 
     const outline = await this.prisma.outline.findUnique({ where: { taskId } });
     if (!outline?.locked) throw new OutlineNotLockedException(taskId);
@@ -305,6 +304,40 @@ export class WritingOrchestratorService {
       this.cancelStates.delete(session.id);
       this.logger.log(`写作编排结束: taskId=${taskId} sessionId=${session.id}`);
     }
+  }
+
+  async assertCanStartWriting(taskId: string): Promise<void> {
+    const existing = await this.sessionService.findActiveByTaskId(taskId);
+    if (existing) throw new WritingAlreadyRunningException(taskId);
+
+    const outline = await this.prisma.outline.findUnique({ where: { taskId } });
+    if (!outline?.locked) throw new OutlineNotLockedException(taskId);
+
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { status: true },
+    });
+    if (!task) throw new BadRequestException('任务不存在');
+
+    const prismaWithAbstract = this.prisma as unknown as {
+      taskAbstract: {
+        findFirst: (args: {
+          where: { taskId: string };
+          orderBy: { version: 'desc' };
+          select: { status: true };
+        }) => Promise<{ status: string } | null>;
+      };
+    };
+    const abs = await prismaWithAbstract.taskAbstract.findFirst({
+      where: { taskId },
+      orderBy: { version: 'desc' },
+      select: { status: true },
+    });
+    if (!abs) throw new BadRequestException('请先生成摘要（中英文）');
+    if (abs.status !== 'COMPLETED')
+      throw new BadRequestException('摘要未生成完成，请稍后重试');
+    if ((task.status as unknown as string) !== 'ABSTRACT_APPROVED')
+      throw new BadRequestException('请先确认摘要后再进入正文生成');
   }
 
   private async *runSession(
