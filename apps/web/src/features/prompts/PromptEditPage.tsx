@@ -36,6 +36,7 @@ export function PromptEditPage({ id }: { id: string }) {
   const [rollbackTarget, setRollbackTarget] = useState<PromptVersion | null>(null);
   const [testPanelOpen, setTestPanelOpen] = useState(false);
   const [testRunning, setTestRunning] = useState(false);
+  const [togglingEnabled, setTogglingEnabled] = useState(false);
 
   const [testDraftSnapshot, setTestDraftSnapshot] = useState<PromptDraft>(() => ({
     templateId: id,
@@ -130,6 +131,9 @@ export function PromptEditPage({ id }: { id: string }) {
           <Button variant="outline" onClick={() => router.push('/admin/prompts')}>
             返回列表
           </Button>
+          <Button variant="outline" onClick={() => router.push('/admin/prompts?create=1&example=1')}>
+            新建模板（示例）
+          </Button>
           <Button variant="outline" onClick={editor.refresh}>
             重试
           </Button>
@@ -164,6 +168,22 @@ export function PromptEditPage({ id }: { id: string }) {
         onSaveVersion={() => {
           setRollbackTarget(null);
           setSaveOpen(true);
+        }}
+        togglingEnabled={togglingEnabled}
+        onToggleEnabled={async () => {
+          if (togglingEnabled) return;
+          const enabled = editor.detail?.status === 'ENABLED';
+          const ok = window.confirm(enabled ? '确认禁用该模板吗？禁用后线上不会再使用该模板。' : '确认启用该模板吗？启用后线上会使用该模板。');
+          if (!ok) return;
+          try {
+            setTogglingEnabled(true);
+            await editor.setEnabled(!enabled);
+            toast.success(!enabled ? '已启用' : '已禁用');
+          } catch (e: unknown) {
+            toast.error((e as any)?.message || '操作失败，请稍后重试');
+          } finally {
+            setTogglingEnabled(false);
+          }
         }}
         testOpen={testPanelOpen}
         testRunning={testRunning}

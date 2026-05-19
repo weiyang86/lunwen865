@@ -26,6 +26,8 @@ interface Props {
   onOpenMeta: () => void;
   onOpenDiscard: () => void;
   onSaveVersion: () => void;
+  onToggleEnabled: () => void;
+  togglingEnabled: boolean;
   testOpen: boolean;
   testRunning: boolean;
   onToggleTest: () => void;
@@ -82,6 +84,8 @@ export function PromptEditorHeader({
   onOpenMeta,
   onOpenDiscard,
   onSaveVersion,
+  onToggleEnabled,
+  togglingEnabled,
   testOpen,
   testRunning,
   onToggleTest,
@@ -109,6 +113,17 @@ export function PromptEditorHeader({
             />
             {enabled ? '启用' : '禁用'}
           </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={togglingEnabled}
+            onClick={onToggleEnabled}
+          >
+            {togglingEnabled ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : null}
+            {enabled ? '禁用模板' : '启用模板'}
+          </Button>
         </div>
 
         <div className="hidden sm:flex sm:flex-1 sm:justify-center">

@@ -39,6 +39,7 @@ export function usePromptEditor(templateId: string): {
   setModelConfig: (next: ModelConfig) => void;
   metadata: PromptMetadata;
   updateMetadata: (patch: Partial<PromptMetadata>) => void;
+  setEnabled: (enabled: boolean) => Promise<void>;
 
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   lastSavedAt: Date | null;
@@ -84,6 +85,22 @@ export function usePromptEditor(templateId: string): {
       return next;
     });
   }, []);
+
+  const setEnabled = useCallback(
+    async (enabled: boolean) => {
+      const d = detail;
+      if (!d) return;
+      const nextStatus = enabled ? 'ENABLED' : 'DISABLED';
+      const updated = await promptApi.updateMeta(templateId, {
+        name: d.name,
+        description: d.description,
+        tags: d.tags ?? [],
+        status: nextStatus,
+      });
+      setDetail((prev) => (prev ? { ...prev, status: updated.status } : prev));
+    },
+    [detail, templateId],
+  );
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
     'idle',
@@ -386,6 +403,7 @@ export function usePromptEditor(templateId: string): {
     setModelConfig,
     metadata,
     updateMetadata,
+    setEnabled,
 
     saveStatus,
     lastSavedAt,
