@@ -19,13 +19,15 @@ export class RegisterDto {
   @Matches(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
   email?: string;
 
-  @ValidateIf((o: RegisterDto) => Boolean(o.phone))
+  @ValidateIf((o: RegisterDto) => Boolean(o.phone) || Boolean(o.email))
   @IsOptional()
   @IsString()
   @MinLength(6)
   code?: string;
 
-  @ValidateIf((o: RegisterDto) => Boolean(o.email))
+  @ValidateIf(
+    (o: RegisterDto) => Boolean(o.email) || typeof o.password === 'string',
+  )
   @IsOptional()
   @IsString()
   @MinLength(8)

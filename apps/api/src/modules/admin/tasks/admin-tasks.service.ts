@@ -28,6 +28,7 @@ type ListAdminTasksItem = {
   currentStage: BackendTaskStage;
   deadline: string | null;
   userId: string;
+  customer: { id: string; name: string } | null;
   assignee: { id: string; name: string; email: string | null } | null;
   isLinked: boolean;
   linkedOrderId: string | null;
@@ -195,6 +196,18 @@ export class AdminTasksService {
   private buildWhere(dto: ListAdminTasksDto): Prisma.TaskWhereInput {
     const and: Prisma.TaskWhereInput[] = [];
 
+    if (dto.bizType === 'CONSUMER') {
+      and.push({
+        OR: [
+          { order: { is: { sourceType: 'DIRECT' } } },
+          { order: { is: null } },
+        ],
+      });
+    }
+    if (dto.bizType === 'AGENCY') {
+      and.push({ order: { is: { sourceType: 'AGENCY' } } });
+    }
+
     if (dto.userId) and.push({ userId: dto.userId });
     if (dto.currentStage) and.push({ currentStage: dto.currentStage });
 
@@ -275,6 +288,25 @@ export class AdminTasksService {
     return u;
   }
 
+  private mapCustomerName(
+    u: {
+      id: string;
+      nickname: string | null;
+      realName: string | null;
+      phone: string | null;
+      email: string | null;
+    } | null,
+  ): { id: string; name: string } | null {
+    if (!u) return null;
+    const name =
+      u.nickname?.trim() ||
+      u.realName?.trim() ||
+      u.phone?.trim() ||
+      u.email?.trim() ||
+      u.id;
+    return { id: u.id, name };
+  }
+
   async list(dto: ListAdminTasksDto): Promise<{
     items: ListAdminTasksItem[];
     nextCursor: string | null;
@@ -311,6 +343,15 @@ export class AdminTasksService {
             currentStage: true,
             deadline: true,
             userId: true,
+            user: {
+              select: {
+                id: true,
+                nickname: true,
+                realName: true,
+                phone: true,
+                email: true,
+              },
+            },
             createdAt: true,
             updatedAt: true,
             assignee: { select: { id: true, nickname: true, email: true } },
@@ -340,6 +381,7 @@ export class AdminTasksService {
             writingFixed.get(t.id)?.currentStage ?? t.currentStage ?? 'TOPIC',
           deadline: t.deadline ? t.deadline.toISOString() : null,
           userId: t.userId,
+          customer: this.mapCustomerName(t.user),
           assignee: this.mapAssignee(t.assignee),
           isLinked: Boolean(t.order),
           linkedOrderId: t.order?.id ?? null,
@@ -368,6 +410,15 @@ export class AdminTasksService {
         currentStage: true,
         deadline: true,
         userId: true,
+        user: {
+          select: {
+            id: true,
+            nickname: true,
+            realName: true,
+            phone: true,
+            email: true,
+          },
+        },
         createdAt: true,
         updatedAt: true,
         assignee: { select: { id: true, nickname: true, email: true } },
@@ -400,6 +451,7 @@ export class AdminTasksService {
           writingFixed.get(t.id)?.currentStage ?? t.currentStage ?? 'TOPIC',
         deadline: t.deadline ? t.deadline.toISOString() : null,
         userId: t.userId,
+        customer: this.mapCustomerName(t.user),
         assignee: this.mapAssignee(t.assignee),
         isLinked: Boolean(t.order),
         linkedOrderId: t.order?.id ?? null,

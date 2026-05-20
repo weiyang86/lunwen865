@@ -33,6 +33,7 @@ export type AdminTaskListItem = {
   currentStage: BackendTaskStage;
   deadline: string | null;
   userId: string;
+  customer?: { id: string; name: string } | null;
   assignee?: { id: string; name: string; email: string | null } | null;
   isLinked: boolean;
   linkedOrderId: string | null;
@@ -49,6 +50,7 @@ export type ListAdminTasksResp = {
 };
 
 export type ListAdminTasksQuery = {
+  bizType?: 'CONSUMER' | 'AGENCY';
   userId?: string;
   search?: string;
   currentStage?: BackendTaskStage;

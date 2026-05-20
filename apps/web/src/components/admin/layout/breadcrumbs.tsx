@@ -10,6 +10,7 @@ const LABEL_MAP: Record<string, string> = {
   users: '用户管理',
   orders: '订单管理',
   tasks: '任务管理',
+  agency: '机构',
   prompts: 'Prompt 模板',
   stores: '门店管理',
   products: '商品管理',

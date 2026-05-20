@@ -408,6 +408,7 @@ model User {
   exportTasks   ExportTask[]
   quotas        UserQuota[]
   quotaLogs     QuotaLog[]
+  aiGenerationRuns AiGenerationRun[]
   orders        Order[]
   primaryTutorOrders Order[] @relation("OrderPrimaryTutor")
   taskAdminLogs TaskAdminLog[] @relation("TaskAdminLogOperator")
@@ -506,6 +507,7 @@ model Task {
   chapters        Chapter[]
   paperMemory     PaperMemory?
   generationLogs  GenerationLog[]
+  aiGenerationRuns AiGenerationRun[]
   polishTasks     PolishTask[]
   adminLogs       TaskAdminLog[]
   order           Order?

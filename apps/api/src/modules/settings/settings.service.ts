@@ -63,7 +63,38 @@ type SiteSettings = {
   };
 };
 
-type SettingKey = 'PAYMENT' | 'SITE';
+type NotifySettings = {
+  sms: {
+    provider: 'ALIYUN';
+    enabled: boolean;
+    region: string;
+    accessKeyId: string;
+    accessKeySecret: string;
+    signName: string;
+    templateCode: string;
+    codeTtlSeconds: number;
+  };
+  email: {
+    provider: 'SMTP';
+    enabled: boolean;
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+    fromEmail: string;
+    fromName: string;
+  };
+};
+
+type NotifySettingsForAdmin = {
+  sms: Omit<NotifySettings['sms'], 'accessKeySecret'> & {
+    accessKeySecretConfigured: boolean;
+  };
+  email: Omit<NotifySettings['email'], 'pass'> & { passConfigured: boolean };
+};
+
+type SettingKey = 'PAYMENT' | 'SITE' | 'NOTIFY';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object'
@@ -240,6 +271,96 @@ export class SettingsService {
     };
   }
 
+  async getNotifySettings(): Promise<NotifySettings> {
+    const defaults: NotifySettings = {
+      sms: {
+        provider: 'ALIYUN',
+        enabled: false,
+        region: 'cn-hangzhou',
+        accessKeyId: '',
+        accessKeySecret: '',
+        signName: '',
+        templateCode: '',
+        codeTtlSeconds: 300,
+      },
+      email: {
+        provider: 'SMTP',
+        enabled: false,
+        host: 'smtp.163.com',
+        port: 465,
+        secure: true,
+        user: '',
+        pass: '',
+        fromEmail: '',
+        fromName: '',
+      },
+    };
+
+    const row = await this.prisma.systemSetting.findUnique({
+      where: { key: 'NOTIFY' },
+      select: { value: true },
+    });
+    const raw = asRecord(row?.value);
+    const sms = asRecord(raw['sms']);
+    const email = asRecord(raw['email']);
+
+    return {
+      sms: {
+        provider: 'ALIYUN',
+        enabled: asBoolean(sms['enabled']) ?? defaults.sms.enabled,
+        region: asString(sms['region']) ?? defaults.sms.region,
+        accessKeyId: asString(sms['accessKeyId']) ?? defaults.sms.accessKeyId,
+        accessKeySecret:
+          asString(sms['accessKeySecret']) ?? defaults.sms.accessKeySecret,
+        signName: asString(sms['signName']) ?? defaults.sms.signName,
+        templateCode:
+          asString(sms['templateCode']) ?? defaults.sms.templateCode,
+        codeTtlSeconds:
+          asInt(sms['codeTtlSeconds']) ?? defaults.sms.codeTtlSeconds,
+      },
+      email: {
+        provider: 'SMTP',
+        enabled: asBoolean(email['enabled']) ?? defaults.email.enabled,
+        host: asString(email['host']) ?? defaults.email.host,
+        port: asInt(email['port']) ?? defaults.email.port,
+        secure: asBoolean(email['secure']) ?? defaults.email.secure,
+        user: asString(email['user']) ?? defaults.email.user,
+        pass: asString(email['pass']) ?? defaults.email.pass,
+        fromEmail: asString(email['fromEmail']) ?? defaults.email.fromEmail,
+        fromName: asString(email['fromName']) ?? defaults.email.fromName,
+      },
+    };
+  }
+
+  async getNotifySettingsForAdmin(): Promise<NotifySettingsForAdmin> {
+    const s = await this.getNotifySettings();
+    return {
+      sms: {
+        provider: s.sms.provider,
+        enabled: s.sms.enabled,
+        region: s.sms.region,
+        accessKeyId: s.sms.accessKeyId,
+        accessKeySecretConfigured: Boolean(
+          String(s.sms.accessKeySecret).trim(),
+        ),
+        signName: s.sms.signName,
+        templateCode: s.sms.templateCode,
+        codeTtlSeconds: s.sms.codeTtlSeconds,
+      },
+      email: {
+        provider: s.email.provider,
+        enabled: s.email.enabled,
+        host: s.email.host,
+        port: s.email.port,
+        secure: s.email.secure,
+        user: s.email.user,
+        passConfigured: Boolean(String(s.email.pass).trim()),
+        fromEmail: s.email.fromEmail,
+        fromName: s.email.fromName,
+      },
+    };
+  }
+
   async updatePaymentSettings(patch: {
     sandbox?: boolean;
     orderExpireMinutes?: number;
@@ -368,6 +489,76 @@ export class SettingsService {
     return this.getSiteSettings();
   }
 
+  async updateNotifySettings(patch: {
+    smsEnabled?: boolean;
+    smsRegion?: string;
+    smsAccessKeyId?: string;
+    smsAccessKeySecret?: string;
+    smsSignName?: string;
+    smsTemplateCode?: string;
+    smsCodeTtlSeconds?: number;
+    emailEnabled?: boolean;
+    emailHost?: string;
+    emailPort?: number;
+    emailSecure?: boolean;
+    emailUser?: string;
+    emailPass?: string;
+    emailFromEmail?: string;
+    emailFromName?: string;
+  }): Promise<NotifySettingsForAdmin> {
+    const current = await this.prisma.systemSetting.findUnique({
+      where: { key: 'NOTIFY' },
+      select: { value: true },
+    });
+    const raw = asRecord(current?.value);
+    const next: Record<string, unknown> = { ...raw };
+
+    const sms = { ...asRecord(next['sms']) };
+    sms['provider'] = 'ALIYUN';
+    if (typeof patch.smsEnabled === 'boolean')
+      sms['enabled'] = patch.smsEnabled;
+    if (typeof patch.smsRegion === 'string')
+      sms['region'] = patch.smsRegion.trim();
+    if (typeof patch.smsAccessKeyId === 'string')
+      sms['accessKeyId'] = patch.smsAccessKeyId.trim();
+    if (typeof patch.smsSignName === 'string')
+      sms['signName'] = patch.smsSignName.trim();
+    if (typeof patch.smsTemplateCode === 'string')
+      sms['templateCode'] = patch.smsTemplateCode.trim();
+    if (typeof patch.smsCodeTtlSeconds === 'number')
+      sms['codeTtlSeconds'] = Math.trunc(patch.smsCodeTtlSeconds);
+    if (typeof patch.smsAccessKeySecret === 'string') {
+      const v = patch.smsAccessKeySecret.trim();
+      if (v) sms['accessKeySecret'] = v;
+    }
+    next['sms'] = sms;
+
+    const email = { ...asRecord(next['email']) };
+    email['provider'] = 'SMTP';
+    if (typeof patch.emailEnabled === 'boolean')
+      email['enabled'] = patch.emailEnabled;
+    if (typeof patch.emailHost === 'string')
+      email['host'] = patch.emailHost.trim();
+    if (typeof patch.emailPort === 'number')
+      email['port'] = Math.trunc(patch.emailPort);
+    if (typeof patch.emailSecure === 'boolean')
+      email['secure'] = patch.emailSecure;
+    if (typeof patch.emailUser === 'string')
+      email['user'] = patch.emailUser.trim();
+    if (typeof patch.emailFromEmail === 'string')
+      email['fromEmail'] = patch.emailFromEmail.trim();
+    if (typeof patch.emailFromName === 'string')
+      email['fromName'] = patch.emailFromName.trim();
+    if (typeof patch.emailPass === 'string') {
+      const v = patch.emailPass.trim();
+      if (v) email['pass'] = v;
+    }
+    next['email'] = email;
+
+    await this.upsertSetting('NOTIFY', next as Prisma.InputJsonValue);
+    return this.getNotifySettingsForAdmin();
+  }
+
   private async upsertSetting(key: SettingKey, value: Prisma.InputJsonValue) {
     await this.prisma.systemSetting.upsert({
       where: { key },
@@ -378,4 +569,10 @@ export class SettingsService {
   }
 }
 
-export type { PaymentSdkSettings, PaymentSettingsForAdmin, SiteSettings };
+export type {
+  PaymentSdkSettings,
+  PaymentSettingsForAdmin,
+  SiteSettings,
+  NotifySettings,
+  NotifySettingsForAdmin,
+};

@@ -6,6 +6,7 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { SettingsService } from '../../settings/settings.service';
 import { UpdatePaymentSettingsDto } from './dto/update-payment-settings.dto';
 import { UpdateSiteSettingsDto } from './dto/update-site-settings.dto';
+import { UpdateNotifySettingsDto } from './dto/update-notify-settings.dto';
 
 @Controller('admin/settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -15,11 +16,12 @@ export class AdminSettingsController {
 
   @Get()
   async getAll() {
-    const [payment, site] = await Promise.all([
+    const [payment, site, notify] = await Promise.all([
       this.settings.getPaymentSettingsForAdmin(),
       this.settings.getSiteSettings(),
+      this.settings.getNotifySettingsForAdmin(),
     ]);
-    return { payment, site };
+    return { payment, site, notify };
   }
 
   @Put('payment')
@@ -30,5 +32,10 @@ export class AdminSettingsController {
   @Put('site')
   updateSite(@Body() dto: UpdateSiteSettingsDto) {
     return this.settings.updateSiteSettings(dto);
+  }
+
+  @Put('notify')
+  updateNotify(@Body() dto: UpdateNotifySettingsDto) {
+    return this.settings.updateNotifySettings(dto);
   }
 }

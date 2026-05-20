@@ -25,5 +25,16 @@ export interface DashboardStats {
     status: OrderStatus;
     createdAt: string;
   }>;
+  ops?: {
+    tasks: {
+      active: number;
+      pendingReview: number;
+      failed24h: number;
+    };
+    ai: {
+      runs24h: number;
+      failed24h: number;
+      failureRate: number;
+    };
+  };
 }
-
