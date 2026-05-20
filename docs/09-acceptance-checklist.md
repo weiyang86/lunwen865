@@ -41,3 +41,7 @@
 - [ ] 生产环境证书与密钥托管方式
 - [ ] 告警接收人、值班机制、SLA
 - [ ] 退款财务对账流程
+
+- [ ] AI 生成 run 与额度流水关联（taskId/stage/runId/idempotencyKey）可追溯
+- [ ] 题目生成失败不扣费（或已扣则回退）
+- [ ] 支付 transactionId 重复占用拦截有效

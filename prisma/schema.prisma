@@ -689,6 +689,11 @@ model QuotaLog {
 
   orderId      String?
   order        Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  relatedTaskId String?
+  relatedStageKey String?        @db.VarChar(40)
+  relatedGenerationRunId String? @db.VarChar(50)
+  idempotencyKey String?         @db.VarChar(100)
+  balanceBefore Int?
 
   bizId        String?
   remark       String?           @db.VarChar(255)
@@ -696,6 +701,38 @@ model QuotaLog {
 
   @@index([userId, createdAt])
   @@index([orderId])
+  @@index([relatedTaskId, createdAt])
+  @@index([relatedGenerationRunId])
+  @@index([idempotencyKey])
+}
+
+model AiGenerationRun {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  stageKey String @db.VarChar(40)
+  actionKey String @db.VarChar(50)
+  sceneKey  String @db.VarChar(80)
+  status    String @db.VarChar(30)
+  costBrainCells Int @default(0)
+
+  inputSnapshot Json?
+  outputSnapshot Json?
+  errorMessage String? @db.Text
+  idempotencyKey String? @db.VarChar(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([taskId, createdAt])
+  @@index([stageKey, createdAt])
+  @@index([status, createdAt])
 }
 
 model SystemSetting {
