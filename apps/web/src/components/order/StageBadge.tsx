@@ -8,6 +8,7 @@ const META: Record<StageType, { label: string; Icon: typeof Sparkles }> = {
   TOPIC: { label: '题目', Icon: Sparkles },
   OPENING: { label: '开题', Icon: ScrollText },
   OUTLINE: { label: '大纲', Icon: FileText },
+  ABSTRACT: { label: '摘要', Icon: FileText },
   WRITING: { label: '写作', Icon: PenLine },
   MERGING: { label: '合稿', Icon: FileText },
   FORMATTING: { label: '排版', Icon: FileText },
@@ -26,4 +27,3 @@ export function StageBadge({ stage }: { stage: StageType | null }) {
     </Badge>
   );
 }
-

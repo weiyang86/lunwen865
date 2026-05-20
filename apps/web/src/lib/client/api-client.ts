@@ -3,8 +3,7 @@
 import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import { clientAuth } from './auth';
 
-const baseURL =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001').replace(/\/$/, '') + '/api';
+const baseURL = '/api';
 
 export const clientApi: AxiosInstance = axios.create({
   baseURL,

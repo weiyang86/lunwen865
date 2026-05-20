@@ -5,9 +5,9 @@ const STAGE_PROGRESS_MAP: Record<GenerationStage, number> = {
   [GenerationStage.TOPIC]: 5,
   [GenerationStage.OPENING]: 15,
   [GenerationStage.OUTLINE]: 25,
-  [GenerationStage.CHAPTER]: 25,
-  [GenerationStage.SECTION]: 75,
-  [GenerationStage.SUMMARY]: 90,
+  [GenerationStage.SUMMARY]: 30,
+  [GenerationStage.CHAPTER]: 30,
+  [GenerationStage.SECTION]: 80,
   [GenerationStage.POLISHING]: 95,
   [GenerationStage.DONE]: 100,
 };

@@ -18,6 +18,10 @@ const META: Record<BackendTaskStatus, { label: string; cls: string }> = {
   OUTLINE_PENDING_REVIEW: { label: '大纲待审核', cls: 'bg-amber-100 text-amber-800' },
   OUTLINE_APPROVED: { label: '大纲已通过', cls: 'bg-emerald-100 text-emerald-800' },
 
+  ABSTRACT_GENERATING: { label: '摘要生成中', cls: 'bg-blue-100 text-blue-800' },
+  ABSTRACT_PENDING_REVIEW: { label: '摘要待审核', cls: 'bg-amber-100 text-amber-800' },
+  ABSTRACT_APPROVED: { label: '摘要已通过', cls: 'bg-emerald-100 text-emerald-800' },
+
   WRITING: { label: '写作中', cls: 'bg-indigo-100 text-indigo-800' },
   WRITING_PAUSED: { label: '写作暂停', cls: 'bg-slate-100 text-slate-700' },
   MERGING: { label: '合稿中', cls: 'bg-indigo-100 text-indigo-800' },

@@ -174,6 +174,7 @@ describe('ExportService', () => {
       expiresAt: new Date(Date.now() + 1000),
       filePath: '/tmp/x.docx',
       fileName: 'x.docx',
+      title: 'x',
     });
     jest.spyOn(fs.promises, 'stat').mockResolvedValueOnce({} as never);
 

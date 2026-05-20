@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Patch,
   Param,
   Post,
   Res,
@@ -15,6 +16,7 @@ import { TaskService } from '../task/task.service';
 import { ResumeGenerationDto } from './dto/resume-generation.dto';
 import { RetrySectionDto } from './dto/retry-section.dto';
 import { StartGenerationDto } from './dto/start-generation.dto';
+import { UpdateOpeningReportSectionDto } from './dto/update-opening-report-section.dto';
 import type { SseEvent } from './interfaces/sse-event.interface';
 import { OpeningReportService } from './opening-report.service';
 import { formatSseEvent } from './utils/sse-formatter.util';
@@ -132,6 +134,22 @@ export class OpeningReportController {
   ) {
     await this.taskService.assertTaskOwnership(taskId, userId);
     return this.openingReportService.findSection(taskId, sectionKey);
+  }
+
+  @Patch('sections/:sectionKey')
+  @ApiOperation({ summary: '手工修改单章节（覆盖 content 并重算全文）' })
+  async updateSection(
+    @CurrentUser('id') userId: string,
+    @Param('taskId') taskId: string,
+    @Param('sectionKey') sectionKey: string,
+    @Body() dto: UpdateOpeningReportSectionDto,
+  ) {
+    await this.taskService.assertTaskOwnership(taskId, userId);
+    return this.openingReportService.updateSectionManually(
+      taskId,
+      sectionKey,
+      dto.content,
+    );
   }
 
   @Delete()

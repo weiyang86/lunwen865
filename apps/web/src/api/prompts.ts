@@ -167,7 +167,7 @@ export const promptApi = {
 
   detail: (id: string, signal?: AbortSignal) =>
     adminApi
-      .get<PromptTemplateDetail>(`/admin/prompts/${id}`, { signal })
+      .get<PromptTemplateDetail>(`/admin/prompts/${id}`, { signal, silentToast: true } as any)
       .then((r) => r.data),
 
   create: (p: { sceneKey: string; name: string; description: string; tags: string[] }) =>

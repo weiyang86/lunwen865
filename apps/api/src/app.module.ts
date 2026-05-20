@@ -10,6 +10,7 @@ import { TaskModule } from './modules/task/task.module';
 import { TopicModule } from './modules/topic/topic.module';
 import { OpeningReportModule } from './modules/opening-report/opening-report.module';
 import { OutlineModule } from './modules/outline/outline.module';
+import { AbstractModule } from './modules/abstract/abstract.module';
 import { WritingModule } from './modules/writing/writing.module';
 import { ReferenceModule } from './modules/reference/reference.module';
 import { BullModule } from '@nestjs/bullmq';
@@ -68,6 +69,7 @@ console.log('🔍 Redis ENV:', {
     OpeningReportModule,
     PromptModule,
     OutlineModule,
+    AbstractModule,
     WritingModule,
     ReferenceModule,
     AuthModule,

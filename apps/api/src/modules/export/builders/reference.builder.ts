@@ -39,6 +39,21 @@ export class ReferenceBuilder implements IBuilder {
       }),
     );
 
+    if (refs.length === 0) {
+      children.push(
+        new Paragraph({
+          spacing: { line: style.lineHeight },
+          children: [
+            new TextRun({
+              text: '（未生成参考文献，可在“正文生成”点击“生成参考文献”后再导出）',
+              size: toHps(style.bodySize),
+              font,
+            }),
+          ],
+        }),
+      );
+    }
+
     for (const r of refs) {
       children.push(
         new Paragraph({

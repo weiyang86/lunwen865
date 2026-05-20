@@ -59,6 +59,24 @@ class CreateAdminPromptDto {
 
 type AdminPromptStatus = 'ENABLED' | 'DISABLED';
 
+class UpdateAdminPromptDto {
+  @IsString()
+  @MaxLength(50)
+  name!: string;
+
+  @IsString()
+  @MaxLength(200)
+  description!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @IsIn(['ENABLED', 'DISABLED'])
+  status!: AdminPromptStatus;
+}
+
 class ListAdminPromptsQueryDto {
   @IsOptional()
   @Type(() => Number)
@@ -490,6 +508,66 @@ export class AdminPromptsController {
               updatedAt: toIso(tpl.draftUpdatedAt),
             }
           : null,
+    };
+  }
+
+  @Put(':id')
+  async updateMeta(
+    @CurrentUser('id') uid: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateAdminPromptDto,
+  ) {
+    const tpl = await this.prisma.promptTemplate.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        code: true,
+        currentVersion: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!tpl) throw new NotFoundException('模板不存在');
+
+    const nextStatus =
+      dto.status === 'ENABLED'
+        ? PrismaPromptStatus.ACTIVE
+        : PrismaPromptStatus.ARCHIVED;
+
+    const updated = await this.prisma.promptTemplate.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        description: dto.description || null,
+        tags: dto.tags ?? [],
+        status: nextStatus,
+        updatedBy: uid,
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        description: true,
+        tags: true,
+        currentVersion: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      id: updated.id,
+      sceneKey: updated.code,
+      name: updated.name,
+      description: updated.description ?? '',
+      tags: updated.tags,
+      currentVersionNo: mapCurrentVersionNo(updated),
+      status: mapStatus(updated.status),
+      createdAt: toIso(updated.createdAt),
+      updatedAt: toIso(updated.updatedAt),
+      updatedBy: null,
     };
   }
 

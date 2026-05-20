@@ -39,6 +39,7 @@ export function usePromptEditor(templateId: string): {
   setModelConfig: (next: ModelConfig) => void;
   metadata: PromptMetadata;
   updateMetadata: (patch: Partial<PromptMetadata>) => void;
+  setEnabled: (enabled: boolean) => Promise<void>;
 
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   lastSavedAt: Date | null;
@@ -84,6 +85,22 @@ export function usePromptEditor(templateId: string): {
       return next;
     });
   }, []);
+
+  const setEnabled = useCallback(
+    async (enabled: boolean) => {
+      const d = detail;
+      if (!d) return;
+      const nextStatus = enabled ? 'ENABLED' : 'DISABLED';
+      const updated = await promptApi.updateMeta(templateId, {
+        name: d.name,
+        description: d.description,
+        tags: d.tags ?? [],
+        status: nextStatus,
+      });
+      setDetail((prev) => (prev ? { ...prev, status: updated.status } : prev));
+    },
+    [detail, templateId],
+  );
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
     'idle',
@@ -144,27 +161,59 @@ export function usePromptEditor(templateId: string): {
 
   useEffect(() => {
     const controller = new AbortController();
+    let done = false;
+
     setLoading(true);
     setError(null);
-    promptApi
-      .detail(templateId, controller.signal)
-      .then((r) => {
-        setDetail(r);
-        setBaseVersion(r.currentVersion ?? null);
-        initializedRef.current = false;
-        setSaveStatus('idle');
-        setLastSavedAt(null);
-      })
-      .catch((e: unknown) => {
-        if (controller.signal.aborted) return;
-        const msg =
-          e && typeof e === 'object' && 'message' in e ? String((e as any).message) : '加载失败';
-        toast.error(msg);
-        setError(e instanceof Error ? e : new Error(msg));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(() => resolve(), ms);
       });
+
+    const run = async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const r = await promptApi.detail(templateId, controller.signal);
+          if (controller.signal.aborted || done) return;
+          done = true;
+          setDetail(r);
+          setBaseVersion(r.currentVersion ?? null);
+          initializedRef.current = false;
+          setSaveStatus('idle');
+          setLastSavedAt(null);
+          return;
+        } catch (e: unknown) {
+          if (controller.signal.aborted || done) return;
+
+          if (e && typeof e === 'object') {
+            const code = (e as any).code;
+            const msg = (e as any).message;
+            if (code === -1 && msg === 'canceled') return;
+            if (code === 404) {
+              if (attempt < 2) {
+                await sleep(400 * (attempt + 1));
+                continue;
+              }
+              setError(new Error('模板不存在'));
+              return;
+            }
+          }
+
+          const msg =
+            e && typeof e === 'object' && 'message' in e
+              ? String((e as any).message)
+              : '加载失败';
+          toast.error(msg);
+          setError(e instanceof Error ? e : new Error(msg));
+          return;
+        }
+      }
+    };
+
+    void run().finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
     return () => controller.abort();
   }, [templateId, nonce]);
 
@@ -386,6 +435,7 @@ export function usePromptEditor(templateId: string): {
     setModelConfig,
     metadata,
     updateMetadata,
+    setEnabled,
 
     saveStatus,
     lastSavedAt,
