@@ -59,3 +59,7 @@
 - 是否已全量统一返回 envelope（当前前端有兼容逻辑，但需接口核对）。
 - 机构推单与代下单的权限边界与审批流。
 - 支付回调验签失败的错误码与重试策略。
+
+### P0 增补接口/数据约定（2026-05-20）
+- 额度流水补充追踪字段：`relatedTaskId`、`relatedStageKey`、`relatedGenerationRunId`、`idempotencyKey`、`balanceBefore`。
+- 新增 AI 生成运行记录：`AiGenerationRun`（记录 stage/action/status/cost/input/output/error）。

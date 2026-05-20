@@ -191,6 +191,21 @@ export class OrderService {
         );
       }
 
+      if (params.transactionId) {
+        const dup = await tx.order.findFirst({
+          where: {
+            transactionId: params.transactionId,
+            id: { not: order.id },
+          },
+          select: { id: true, orderNo: true },
+        });
+        if (dup) {
+          throw new BadRequestException(
+            `交易号已被其他订单使用：${dup.orderNo}`,
+          );
+        }
+      }
+
       const updated = await tx.order.update({
         where: { id: order.id },
         data: {

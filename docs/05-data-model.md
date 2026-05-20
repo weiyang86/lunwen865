@@ -56,3 +56,7 @@
 - Order 与 Task 的强绑定策略（是否允许一个订单多任务）。
 - 退款与配额回滚的一致性规则。
 - 导出文件保存周期、存储位置与清理策略。
+
+### 补充（2026-05-20）
+- 新增 `AiGenerationRun`：用于记录 AI 生成执行与扣费关联。
+- `QuotaLog` 新增追踪字段：`relatedTaskId`、`relatedStageKey`、`relatedGenerationRunId`、`idempotencyKey`、`balanceBefore`。
