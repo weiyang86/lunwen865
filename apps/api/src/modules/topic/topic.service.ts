@@ -295,6 +295,31 @@ export class TopicService {
 
     await this.assertCooldown(taskId);
     const nextBatch = await this.getNextBatch(taskId);
+    const aiGenerationRunModel = (
+      this.prisma as unknown as {
+        aiGenerationRun: {
+          create: (args: {
+            data: Prisma.InputJsonObject | Record<string, unknown>;
+          }) => Promise<{ id: string }>;
+          update: (args: {
+            where: { id: string };
+            data: Record<string, unknown>;
+          }) => Promise<unknown>;
+        };
+      }
+    ).aiGenerationRun;
+    const run = await aiGenerationRunModel.create({
+      data: {
+        userId: task.userId,
+        taskId,
+        stageKey: 'TOPIC',
+        actionKey: 'GENERATE',
+        sceneKey: 'topic.generate',
+        status: 'RUNNING',
+        costBrainCells: 1,
+        inputSnapshot: params as unknown as Prisma.InputJsonValue,
+      },
+    });
 
     await this.prisma.task.updateMany({
       where: {

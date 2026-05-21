@@ -950,6 +950,7 @@ model Order {
   updatedAt DateTime @updatedAt
 
   paymentLogs PaymentLog[]
+  paymentRecords PaymentRecord[]
   refunds     Refund[]
   items       OrderItem[]
   quotaLogs   QuotaLog[]
@@ -960,6 +961,48 @@ model Order {
   @@index([sourceType])
   @@index([agencyId])
   @@index([expiresAt])
+}
+
+model PaymentRecord {
+  id String @id @default(cuid())
+  paymentNo String @unique @db.VarChar(40)
+
+  orderId String
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  channel PaymentChannel?
+  method  PaymentMethod?
+  amountCents Int
+  currency String @default("CNY") @db.VarChar(10)
+  status String @default("CREATED") @db.VarChar(30)
+
+  providerTradeNo String? @db.VarChar(64)
+  providerOrderNo String? @db.VarChar(64)
+  providerBuyerId String? @db.VarChar(64)
+
+  payUrl String? @db.Text
+  qrCodeUrl String? @db.Text
+  clientPayload Json?
+  rawRequest Json?
+  rawResponse Json?
+  notifyRaw Json?
+  notifyVerified Boolean?
+  notifyReceivedAt DateTime?
+
+  idempotencyKey String? @db.VarChar(100)
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([providerTradeNo])
+  @@index([providerOrderNo])
 }
 
 model OrderItem {
