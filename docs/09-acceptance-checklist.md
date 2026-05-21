@@ -45,3 +45,15 @@
 - [ ] AI 生成 run 与额度流水关联（taskId/stage/runId/idempotencyKey）可追溯
 - [ ] 题目生成失败不扣费（或已扣则回退）
 - [ ] 支付 transactionId 重复占用拦截有效
+
+- [ ] Issue #92: `POST /api/payments/create` 支持 mock/wechat/alipay 通道与 method 校验。
+- [ ] Issue #92: 仅 mock 可用，wechat/alipay 未启用时返回明确错误。
+- [ ] Issue #92: mock success/fail 可驱动 PaymentRecord 状态变化。
+
+- [ ] Issue #93: wechat/native 返回 code_url 且写入 PaymentRecord.qrCodeUrl。
+- [ ] Issue #93: wechat/h5 返回 mweb_url 且写入 PaymentRecord.payUrl。
+- [ ] Issue #93: 微信回调验签失败/金额不一致仅记日志，不做到账。
+
+- [ ] Issue #94: alipay/page 返回 payUrl 或 clientPayload 并写入 PaymentRecord。
+- [ ] Issue #94: alipay/wap 返回 payUrl 或 clientPayload 并写入 PaymentRecord。
+- [ ] Issue #94: 支付宝异步通知验签失败/金额不一致仅记日志，不做到账。
