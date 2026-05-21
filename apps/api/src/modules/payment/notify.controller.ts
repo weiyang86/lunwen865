@@ -4,12 +4,12 @@ import { Public } from '../auth/decorators/public.decorator';
 import { NotifyResultDto } from './dto/notify-result.dto';
 import { PaymentService } from './payment.service';
 
-@Controller('payment/notify')
+@Controller()
 @Public()
 export class NotifyController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Post('wechat')
+  @Post('api/payments/wechat/notify')
   async wechatPayNotify(
     @Req() req: Request,
     @Body() body: unknown,
@@ -25,10 +25,10 @@ export class NotifyController {
     );
 
     try {
-      await this.paymentService.handleWechatPayNotify({
+      await this.paymentService.handleWechatNotifyV3({
         headers,
         rawBody,
-        body,
+        query: req.query as Record<string, string>,
       });
       return { code: 'SUCCESS' };
     } catch (error: unknown) {
@@ -39,12 +39,27 @@ export class NotifyController {
     }
   }
 
-  @Post('alipay')
+  @Post('api/payments/alipay/notify')
   async alipayPayNotify(
+    @Req() req: Request,
     @Body() body: Record<string, string>,
   ): Promise<NotifyResultDto> {
+    const rawBody =
+      (req as unknown as { rawBody?: Buffer }).rawBody?.toString('utf8') ??
+      JSON.stringify(body);
+    const headers = Object.fromEntries(
+      Object.entries(req.headers).map(([k, v]) => [
+        k,
+        Array.isArray(v) ? v.join(',') : String(v),
+      ]),
+    );
     try {
-      await this.paymentService.handleAlipayPayNotify(body);
+      await this.paymentService.handleAlipayNotifyV3({
+        headers,
+        rawBody,
+        payload: body,
+        query: req.query as Record<string, string>,
+      });
       return { code: 'SUCCESS' };
     } catch (error: unknown) {
       return {
@@ -54,7 +69,7 @@ export class NotifyController {
     }
   }
 
-  @Post('wechat/refund')
+  @Post('api/payment/notify/wechat/refund')
   async wechatRefundNotify(
     @Req() req: Request,
     @Body() body: unknown,
@@ -84,7 +99,7 @@ export class NotifyController {
     }
   }
 
-  @Post('alipay/refund')
+  @Post('api/payment/notify/alipay/refund')
   async alipayRefundNotify(
     @Body() body: Record<string, string>,
   ): Promise<NotifyResultDto> {
