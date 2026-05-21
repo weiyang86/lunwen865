@@ -12,17 +12,14 @@ export default registerAs('payment', () => ({
     notifyUrl: process.env.WECHAT_PAY_NOTIFY_URL ?? '',
   },
   alipay: {
-    appId: process.env.ALIPAY_APPID ?? '',
-    privateKeyPath:
-      process.env.ALIPAY_PRIVATE_KEY_PATH ??
-      './certs/alipay/app_private_key.pem',
-    publicKeyPath:
-      process.env.ALIPAY_PUBLIC_KEY_PATH ??
-      './certs/alipay/alipay_public_key.pem',
+    appId: process.env.ALIPAY_APP_ID ?? '',
+    privateKeyPath: process.env.ALIPAY_PRIVATE_KEY ?? '',
+    publicKeyPath: process.env.ALIPAY_PUBLIC_KEY ?? '',
     gateway:
       process.env.ALIPAY_GATEWAY ?? 'https://openapi.alipay.com/gateway.do',
     notifyUrl: process.env.ALIPAY_NOTIFY_URL ?? '',
     returnUrl: process.env.ALIPAY_RETURN_URL ?? '',
+    sellerId: process.env.ALIPAY_SELLER_ID ?? '',
   },
   orderExpireMinutes: Number(process.env.ORDER_EXPIRE_MINUTES ?? 30),
   sandbox: (process.env.PAYMENT_SANDBOX ?? 'true') === 'true',
