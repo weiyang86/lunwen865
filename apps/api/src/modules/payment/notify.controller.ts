@@ -9,7 +9,7 @@ import { PaymentService } from './payment.service';
 export class NotifyController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Post('api/payments/wechat/notify')
+  @Post('payments/wechat/notify')
   async wechatPayNotify(
     @Req() req: Request,
     @Body() body: unknown,
@@ -39,7 +39,7 @@ export class NotifyController {
     }
   }
 
-  @Post('api/payment/notify/alipay')
+  @Post('payment/notify/alipay')
   async alipayPayNotify(
     @Req() req: Request,
     @Body() body: Record<string, string>,
@@ -56,7 +56,7 @@ export class NotifyController {
     }
   }
 
-  @Post('api/payment/notify/wechat/refund')
+  @Post('payment/notify/wechat/refund')
   async wechatRefundNotify(
     @Req() req: Request,
     @Body() body: unknown,
@@ -86,7 +86,7 @@ export class NotifyController {
     }
   }
 
-  @Post('api/payment/notify/alipay/refund')
+  @Post('payment/notify/alipay/refund')
   async alipayRefundNotify(
     @Body() body: Record<string, string>,
   ): Promise<NotifyResultDto> {

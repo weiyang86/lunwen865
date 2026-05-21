@@ -183,7 +183,12 @@ export class WechatPayProvider {
   async verifyAndParsePayNotify(
     headers: Record<string, string>,
     rawBody: string,
-  ): Promise<{ outTradeNo: string; transactionId: string; paidAmountCents: number; paidAt: Date }> {
+  ): Promise<{
+    outTradeNo: string;
+    transactionId: string;
+    paidAmountCents: number;
+    paidAt: Date;
+  }> {
     const normalized = await this.verifyAndNormalizePayNotify(headers, rawBody);
     return {
       outTradeNo: normalized.providerOrderNo,
@@ -193,7 +198,7 @@ export class WechatPayProvider {
     };
   }
 
-  async refund(params: {
+  refund(params: {
     outTradeNo: string;
     transactionId?: string;
     outRefundNo: string;
@@ -203,19 +208,16 @@ export class WechatPayProvider {
     notifyUrl: string;
   }): Promise<{ refundId?: string }> {
     void params;
-    throw new BadRequestException('微信退款在当前版本未启用');
+    return Promise.reject(new BadRequestException('微信退款在当前版本未启用'));
   }
 
-  async query(
-    outTradeNo: string,
-  ): Promise<{
+  query(outTradeNo: string): Promise<{
     status: 'PENDING' | 'PAID';
     transactionId?: string;
     paidAmountCents?: number;
     paidAt?: Date;
   }> {
     void outTradeNo;
-    return { status: 'PENDING' };
+    return Promise.resolve({ status: 'PENDING' });
   }
-
 }

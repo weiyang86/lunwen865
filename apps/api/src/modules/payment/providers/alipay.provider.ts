@@ -206,9 +206,7 @@ export class AlipayProvider {
     throw new BadRequestException('支付宝退款在当前版本未启用');
   }
 
-  query(
-    outTradeNo: string,
-  ): Promise<{
+  query(outTradeNo: string): Promise<{
     status: 'PENDING' | 'PAID';
     transactionId?: string;
     paidAmountCents?: number;
@@ -217,5 +215,4 @@ export class AlipayProvider {
     void outTradeNo;
     return Promise.resolve({ status: 'PENDING' as const });
   }
-
 }

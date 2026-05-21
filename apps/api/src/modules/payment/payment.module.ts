@@ -11,7 +11,6 @@ import { AlipayProvider } from './providers/alipay.provider';
 import { WechatPayProvider } from './providers/wechat-pay.provider';
 import { MockPayAdapter } from './providers/mock-pay.adapter';
 import { ReconcileService } from './reconcile.service';
-import { PaymentCallbackService } from './payment-callback.service';
 
 @Module({
   imports: [PrismaModule, OrderModule, QuotaModule, SettingsModule],

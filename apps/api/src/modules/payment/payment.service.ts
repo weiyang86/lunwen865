@@ -26,7 +26,6 @@ import { AlipayProvider } from './providers/alipay.provider';
 import { WechatPayProvider } from './providers/wechat-pay.provider';
 import { MockPayAdapter } from './providers/mock-pay.adapter';
 import { generateRefundNo } from '../order/utils/order-no.util';
-import { PaymentCallbackService } from './payment-callback.service';
 
 @Injectable()
 export class PaymentService {
@@ -168,8 +167,13 @@ export class PaymentService {
       });
     }
 
-    const paymentRecordModel = (this.prisma as any).paymentRecord as {
-      updateMany: (args: { where: { orderId: string }; data: { status: string } }) => Promise<unknown>;
+    const paymentRecordModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentRecord'] as {
+      updateMany: (args: {
+        where: { orderId: string };
+        data: { status: string };
+      }) => Promise<unknown>;
     };
     await paymentRecordModel.updateMany({
       where: { orderId: order.id },
@@ -331,13 +335,6 @@ export class PaymentService {
     query: Record<string, string>;
   }) {
     const now = new Date();
-    const rawPayload: Record<string, unknown> = {
-      channel: 'wechat',
-      rawHeaders: params.headers,
-      rawBody: params.rawBody,
-      rawQuery: params.query,
-      receivedAt: now.toISOString(),
-    };
 
     const paymentRecordModel = (
       this.prisma as unknown as Record<string, unknown>
@@ -364,7 +361,10 @@ export class PaymentService {
       const payment = await paymentRecordModel.findFirst({
         where: { providerOrderNo: normalized.providerOrderNo },
       });
-      const orderId = String(payment?.['orderId'] ?? '');
+      const orderId =
+        payment && typeof payment['orderId'] === 'string'
+          ? payment['orderId']
+          : '';
 
       let processStatus = 'IGNORED';
       let errorMessage: string | null = null;
