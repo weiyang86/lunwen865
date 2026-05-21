@@ -4,12 +4,12 @@ import { Public } from '../auth/decorators/public.decorator';
 import { NotifyResultDto } from './dto/notify-result.dto';
 import { PaymentService } from './payment.service';
 
-@Controller('payment/notify')
+@Controller()
 @Public()
 export class NotifyController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Post('wechat')
+  @Post('api/payments/wechat/notify')
   async wechatPayNotify(
     @Req() req: Request,
     @Body() body: unknown,
@@ -25,10 +25,10 @@ export class NotifyController {
     );
 
     try {
-      await this.paymentService.handleWechatPayNotify({
+      await this.paymentService.handleWechatNotifyV3({
         headers,
         rawBody,
-        body,
+        query: req.query as Record<string, string>,
       });
       return { code: 'SUCCESS' };
     } catch (error: unknown) {
@@ -39,7 +39,7 @@ export class NotifyController {
     }
   }
 
-  @Post('alipay')
+  @Post('api/payment/notify/alipay')
   async alipayPayNotify(
     @Body() body: Record<string, string>,
   ): Promise<NotifyResultDto> {
@@ -54,7 +54,7 @@ export class NotifyController {
     }
   }
 
-  @Post('wechat/refund')
+  @Post('api/payment/notify/wechat/refund')
   async wechatRefundNotify(
     @Req() req: Request,
     @Body() body: unknown,
@@ -84,7 +84,7 @@ export class NotifyController {
     }
   }
 
-  @Post('alipay/refund')
+  @Post('api/payment/notify/alipay/refund')
   async alipayRefundNotify(
     @Body() body: Record<string, string>,
   ): Promise<NotifyResultDto> {

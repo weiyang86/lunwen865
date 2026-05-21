@@ -324,6 +324,108 @@ export class PaymentService {
     });
   }
 
+  async handleWechatNotifyV3(params: {
+    headers: Record<string, string>;
+    rawBody: string;
+    query: Record<string, string>;
+  }) {
+    const now = new Date();
+    const rawPayload: Record<string, unknown> = {
+      channel: 'wechat',
+      rawHeaders: params.headers,
+      rawBody: params.rawBody,
+      rawQuery: params.query,
+      receivedAt: now.toISOString(),
+    };
+
+    const paymentRecordModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentRecord'] as {
+      findFirst: (args: {
+        where: Record<string, unknown>;
+      }) => Promise<Record<string, unknown> | null>;
+      update: (args: {
+        where: { id: string };
+        data: Record<string, unknown>;
+      }) => Promise<unknown>;
+    };
+    const callbackLogModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentCallbackLog'] as {
+      create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
+    };
+
+    try {
+      const normalized = await this.wechat.verifyAndNormalizePayNotify(
+        params.headers,
+        params.rawBody,
+      );
+      const payment = await paymentRecordModel.findFirst({
+        where: { providerOrderNo: normalized.providerOrderNo },
+      });
+      const orderId = String(payment?.['orderId'] ?? '');
+
+      let processStatus = 'IGNORED';
+      let errorMessage: string | null = null;
+      if (!payment) {
+        processStatus = 'ORDER_NOT_FOUND';
+        errorMessage = '支付记录不存在';
+      } else if (normalized.amount !== Number(payment['amountCents'])) {
+        processStatus = 'AMOUNT_MISMATCH';
+        errorMessage = '回调金额与订单金额不一致';
+      } else {
+        const status = normalized.success ? 'SUCCEEDED' : 'FAILED';
+        await paymentRecordModel.update({
+          where: { id: String(payment['id']) },
+          data: {
+            status,
+            providerTradeNo: normalized.providerTradeNo,
+            notifyRaw: normalized.raw,
+            notifyVerified: true,
+            notifyReceivedAt: now,
+            paidAt: normalized.paidAt ?? undefined,
+          },
+        });
+        processStatus = 'UPDATED';
+      }
+
+      await callbackLogModel.create({
+        data: {
+          orderId: orderId || null,
+          channel: PaymentChannel.WECHAT,
+          rawHeaders: params.headers,
+          rawBody: params.rawBody,
+          rawQuery: params.query,
+          verified: true,
+          normalizedStatus: normalized.tradeStatus,
+          processStatus,
+          errorMessage,
+          receivedAt: now,
+          processedAt: new Date(),
+        },
+      });
+      return { code: 'SUCCESS' as const };
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : '处理失败';
+      await callbackLogModel.create({
+        data: {
+          orderId: null,
+          channel: PaymentChannel.WECHAT,
+          rawHeaders: params.headers,
+          rawBody: params.rawBody,
+          rawQuery: params.query,
+          verified: false,
+          normalizedStatus: 'UNKNOWN',
+          processStatus: 'FAILED',
+          errorMessage: errMessage,
+          receivedAt: now,
+          processedAt: new Date(),
+        },
+      });
+      throw error;
+    }
+  }
+
   async handleWechatPayNotify(params: {
     headers: Record<string, string>;
     rawBody: string;
