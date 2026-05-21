@@ -183,12 +183,7 @@ export class WechatPayProvider {
   async verifyAndParsePayNotify(
     headers: Record<string, string>,
     rawBody: string,
-  ): Promise<{
-    outTradeNo: string;
-    transactionId: string;
-    paidAmountCents: number;
-    paidAt: Date;
-  }> {
+  ): Promise<{ outTradeNo: string; transactionId: string; paidAmountCents: number; paidAt: Date }> {
     const normalized = await this.verifyAndNormalizePayNotify(headers, rawBody);
     return {
       outTradeNo: normalized.providerOrderNo,
@@ -205,4 +200,5 @@ export class WechatPayProvider {
   async query(): Promise<{ status: 'PENDING' | 'PAID' }> {
     return { status: 'PENDING' };
   }
+
 }

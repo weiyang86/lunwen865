@@ -22,7 +22,6 @@ import { PaymentCallbackService } from './payment-callback.service';
     AlipayProvider,
     ReconcileService,
     MockPayAdapter,
-    PaymentCallbackService,
   ],
   exports: [PaymentService],
 })
