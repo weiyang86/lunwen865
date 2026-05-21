@@ -63,3 +63,10 @@
 ### P0 增补接口/数据约定（2026-05-20）
 - 额度流水补充追踪字段：`relatedTaskId`、`relatedStageKey`、`relatedGenerationRunId`、`idempotencyKey`、`balanceBefore`。
 - 新增 AI 生成运行记录：`AiGenerationRun`（记录 stage/action/status/cost/input/output/error）。
+
+
+### Payment PR-2（Issue #92）
+- 新增 `POST /api/payments/create`，支持 channel: `mock|wechat|alipay`，method: `mock|native|h5|page|wap`。
+- 当前仅 `mock` 可用；`wechat/alipay` 返回“当前通道未配置或未启用”。
+- 支付金额以后端订单 `totalAmount/amountCents` 为准，不信任前端。
+- 新增 mock 驱动接口：`POST /api/payments/mock/success`、`POST /api/payments/mock/fail`（仅 development）。
