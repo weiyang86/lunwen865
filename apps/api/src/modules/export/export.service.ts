@@ -13,6 +13,7 @@ import type { CreateExportDto } from './dto/create-export.dto';
 import type { QueryExportDto } from './dto/query-export.dto';
 import type { ExportResultDto } from './dto/export-result.dto';
 import { deleteFileIfExists } from './utils/cleanup.util';
+import { sanitizeFilename } from './utils/filename.util';
 import { QuotaService } from '../quota/quota.service';
 
 @Injectable()
@@ -150,12 +151,12 @@ export class ExportService {
     const updated = await this.prisma.exportTask.update({
       where: { id },
       data: { downloadCount: { increment: 1 } },
-      select: { filePath: true, fileName: true },
+      select: { filePath: true },
     });
 
     return {
       filePath: updated.filePath ?? task.filePath,
-      fileName: updated.fileName ?? task.fileName ?? 'export.docx',
+      fileName: sanitizeFilename(`${task.title || task.id}.docx`),
     };
   }
 
@@ -264,23 +265,35 @@ export class ExportService {
 
   private toResult(task: {
     id: string;
+    title: string;
+    paperId: string | null;
+    polishTaskId: string | null;
+    scope: 'OUTLINE_ONLY' | 'FULL_PAPER' | 'WITH_REVISIONS';
+    template: 'GENERIC' | 'UNDERGRADUATE' | 'MASTER' | 'CUSTOM';
     status: ExportStatus;
     progress: number;
     fileName: string | null;
     fileSize: number | null;
     downloadCount: number;
     createdAt: Date;
+    updatedAt: Date;
     expiresAt: Date | null;
     errorMessage: string | null;
   }): ExportResultDto {
     return {
       id: task.id,
+      title: task.title,
+      paperId: task.paperId ?? null,
+      polishTaskId: task.polishTaskId ?? null,
+      scope: task.scope,
+      template: task.template,
       status: task.status,
       progress: task.progress,
       fileName: task.fileName ?? null,
       fileSize: task.fileSize ?? null,
       downloadCount: task.downloadCount,
       createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
       expiresAt: task.expiresAt ?? null,
       errorMessage: task.errorMessage ?? null,
     };

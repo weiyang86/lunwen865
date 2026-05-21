@@ -9,10 +9,14 @@ import {
   Min,
 } from 'class-validator';
 
+const TASK_BIZ_TYPES = ['CONSUMER', 'AGENCY'] as const;
+export type TaskBizType = (typeof TASK_BIZ_TYPES)[number];
+
 const TASK_STAGES = [
   'TOPIC',
   'OPENING',
   'OUTLINE',
+  'ABSTRACT',
   'WRITING',
   'MERGING',
   'FORMATTING',
@@ -33,6 +37,9 @@ const TASK_STATUSES = [
   'OUTLINE_GENERATING',
   'OUTLINE_PENDING_REVIEW',
   'OUTLINE_APPROVED',
+  'ABSTRACT_GENERATING',
+  'ABSTRACT_PENDING_REVIEW',
+  'ABSTRACT_APPROVED',
   'WRITING',
   'WRITING_PAUSED',
   'MERGING',
@@ -58,6 +65,10 @@ function toBoolean(value: unknown): boolean | undefined {
 }
 
 export class ListAdminTasksDto {
+  @IsOptional()
+  @IsIn(TASK_BIZ_TYPES)
+  bizType?: TaskBizType;
+
   @IsOptional()
   @IsString()
   userId?: string;

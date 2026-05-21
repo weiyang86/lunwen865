@@ -33,7 +33,7 @@
 ### 管理端
 - `GET /api/admin/orders`
 - `POST /api/admin/orders/:id/refunds`
-- `GET /api/admin/tasks`
+- `GET /api/admin/tasks`（支持 query: `bizType=CONSUMER|AGENCY`，用于区分散客任务与机构任务）
 - `POST /api/payment/prepay`
 - `POST /api/payment/notify/*`
 
@@ -63,9 +63,3 @@
 ### P0 增补接口/数据约定（2026-05-20）
 - 额度流水补充追踪字段：`relatedTaskId`、`relatedStageKey`、`relatedGenerationRunId`、`idempotencyKey`、`balanceBefore`。
 - 新增 AI 生成运行记录：`AiGenerationRun`（记录 stage/action/status/cost/input/output/error）。
-
-
-### PR-1 基线接口补充（2026-05-21）
-- `GET /api/credit-packages`：公开读取启用套餐（当前映射 Product）。
-- `GET /api/orders/my`：用户订单列表（归属过滤）。
-- `POST /api/orders`：只接收套餐标识，金额与脑细胞快照以后端 Product 为准。

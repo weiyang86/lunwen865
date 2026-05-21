@@ -45,8 +45,3 @@
 - [ ] AI 生成 run 与额度流水关联（taskId/stage/runId/idempotencyKey）可追溯
 - [ ] 题目生成失败不扣费（或已扣则回退）
 - [ ] 支付 transactionId 重复占用拦截有效
-
-- [ ] 用户可通过 `/api/credit-packages` 查看启用套餐
-- [ ] `POST /api/orders` 仅接受 packageId/productId，不信任前端金额字段
-- [ ] `GET /api/orders/my` 仅返回当前用户订单
-- [ ] PaymentRecord 基线字段已预留（不接真实支付）

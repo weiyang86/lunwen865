@@ -12,11 +12,21 @@ interface Props {
   collapsed: boolean;
 }
 
+function matchPath(pathname: string, href: string) {
+  if (href === '/admin') return pathname === '/admin';
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function SidebarNavItem({ item, collapsed }: Props) {
   const pathname = usePathname() ?? '';
   const Icon = item.icon;
 
-  const childActive = !!item.children && item.children.some((c) => pathname.startsWith(c.href));
+  const activeChildHref = item.children
+    ? item.children
+        .filter((c) => matchPath(pathname, c.href))
+        .sort((a, b) => b.href.length - a.href.length)[0]?.href
+    : undefined;
+  const childActive = Boolean(activeChildHref);
   const [open, setOpen] = useState(childActive);
 
   useEffect(() => {
@@ -66,7 +76,7 @@ export function SidebarNavItem({ item, collapsed }: Props) {
             {item.label}
           </div>
           {item.children.map((c) => {
-            const active = pathname.startsWith(c.href);
+            const active = c.href === activeChildHref;
             return (
               <Link
                 key={c.href}
@@ -108,7 +118,7 @@ export function SidebarNavItem({ item, collapsed }: Props) {
       {open && (
         <div className="mt-1 ml-7 flex flex-col gap-1 border-l border-slate-800 pl-3">
           {item.children.map((c) => {
-            const active = pathname.startsWith(c.href);
+            const active = c.href === activeChildHref;
             return (
               <Link
                 key={c.href}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { clientAuth } from '@/lib/client/auth';
 import { getApiErrorMessage } from '@/lib/client/api-error';
 
@@ -31,7 +31,12 @@ type OutlineResponse = {
   nodes: OutlineNode[];
 };
 
-const API_BASE = `${(process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001').replace(/\/$/, '')}/api`;
+type OutlineTreeResponse = {
+  outline: Omit<OutlineResponse, 'nodes'>;
+  nodes: OutlineNode[];
+};
+
+const API_BASE = '/api';
 
 function buildAuthHeaders(extra?: Record<string, string>) {
   const headers: Record<string, string> = { ...(extra ?? {}) };
@@ -39,6 +44,31 @@ function buildAuthHeaders(extra?: Record<string, string>) {
   const normalized = token ? token.trim().replace(/\s+/g, '') : '';
   if (normalized) headers.Authorization = `Bearer ${normalized}`;
   return headers;
+}
+
+function normalizeOutlineResponse(input: unknown): OutlineResponse {
+  if (!input || typeof input !== 'object') {
+    throw new Error('Invalid outline response');
+  }
+
+  const obj = input as Record<string, unknown>;
+  if (obj.outline && typeof obj.outline === 'object' && Array.isArray(obj.nodes)) {
+    const tree = obj as unknown as OutlineTreeResponse;
+    const outline = tree.outline as unknown as Record<string, unknown>;
+    return {
+      id: String(outline.id ?? ''),
+      taskId: String(outline.taskId ?? ''),
+      status: String(outline.status ?? ''),
+      locked: Boolean(outline.locked),
+      totalWordCount: Number(outline.totalWordCount ?? 0),
+      targetWordCount: Number(outline.targetWordCount ?? 0),
+      maxDepth: Number(outline.maxDepth ?? 0),
+      nodes: tree.nodes ?? [],
+    };
+  }
+
+  const flat = obj as unknown as OutlineResponse;
+  return flat;
 }
 
 type EditState = {
@@ -61,12 +91,16 @@ export function ClientOutlineWorkbench({
   wordCountTarget,
   onWordCountTargetSaved,
   onLocked,
+  onLockedChange,
+  reloadSignal,
 }: {
   taskId?: string;
   taskTitle?: string | null;
   wordCountTarget?: number | null;
   onWordCountTargetSaved?: (next: number) => void;
   onLocked?: () => void;
+  onLockedChange?: (locked: boolean) => void;
+  reloadSignal?: number;
 }) {
   const [outline, setOutline] = useState<OutlineResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -75,6 +109,8 @@ export function ClientOutlineWorkbench({
   const [submitting, setSubmitting] = useState(false);
   const [locking, setLocking] = useState(false);
   const [savingWordCountTarget, setSavingWordCountTarget] = useState(false);
+  const [progressPercent, setProgressPercent] = useState<number | null>(null);
+  const [progressHint, setProgressHint] = useState('');
 
   const [additionalRequirements, setAdditionalRequirements] = useState('');
   const [maxDepth, setMaxDepth] = useState(3);
@@ -83,8 +119,14 @@ export function ClientOutlineWorkbench({
   );
 
   const [editMap, setEditMap] = useState<Record<string, EditState>>({});
+  const progressTimerRef = useRef<number | null>(null);
+  const progressStartedAtRef = useRef<number | null>(null);
 
   const title = useMemo(() => (taskTitle ?? '').trim() || '论文大纲', [taskTitle]);
+
+  useEffect(() => {
+    onLockedChange?.(Boolean(outline?.locked));
+  }, [onLockedChange, outline?.locked]);
 
   useEffect(() => {
     if (typeof wordCountTarget === 'number' && Number.isFinite(wordCountTarget)) {
@@ -127,7 +169,8 @@ export function ClientOutlineWorkbench({
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
-      const data = (await res.json()) as OutlineResponse;
+      const raw = (await res.json()) as unknown;
+      const data = normalizeOutlineResponse(raw);
       setOutline(data);
       hydrateEditMap(data);
     } catch (e: unknown) {
@@ -139,7 +182,45 @@ export function ClientOutlineWorkbench({
 
   useEffect(() => {
     void loadOutline();
-  }, [loadOutline]);
+  }, [loadOutline, reloadSignal]);
+
+  const stopProgress = useCallback(() => {
+    if (progressTimerRef.current != null) {
+      window.clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    progressStartedAtRef.current = null;
+  }, []);
+
+  const startProgress = useCallback(() => {
+    stopProgress();
+    progressStartedAtRef.current = Date.now();
+    setProgressPercent(0);
+    setProgressHint('开始生成目录/大纲…');
+    progressTimerRef.current = window.setInterval(() => {
+      const startedAt = progressStartedAtRef.current;
+      if (!startedAt) return;
+      const elapsed = Date.now() - startedAt;
+      let p = 0;
+      if (elapsed < 5000) {
+        p = (elapsed / 5000) * 40;
+      } else if (elapsed < 15000) {
+        p = 40 + ((elapsed - 5000) / 10000) * 45;
+      } else {
+        p = 85 + Math.min(((elapsed - 15000) / 20000) * 10, 10);
+      }
+      const percent = Math.max(0, Math.min(95, Math.round(p)));
+      setProgressPercent(percent);
+      if (percent < 35) setProgressHint('生成中…');
+      else if (percent < 70) setProgressHint('组织目录结构…');
+      else if (percent < 90) setProgressHint('分配字数与校验结构…');
+      else setProgressHint('即将完成…');
+    }, 500);
+  }, [stopProgress]);
+
+  useEffect(() => {
+    return () => stopProgress();
+  }, [stopProgress]);
 
   const handleGenerate = async () => {
     if (!taskId || submitting) return;
@@ -152,6 +233,7 @@ export function ClientOutlineWorkbench({
     try {
       setSubmitting(true);
       setError(null);
+      startProgress();
       const res = await fetch(`${API_BASE}/tasks/${taskId}/outline/generate`, {
         method: 'POST',
         headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -171,11 +253,18 @@ export function ClientOutlineWorkbench({
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
-      const data = (await res.json()) as OutlineResponse;
+      const raw = (await res.json()) as unknown;
+      const data = normalizeOutlineResponse(raw);
       setOutline(data);
       hydrateEditMap(data);
+      stopProgress();
+      setProgressPercent(100);
+      setProgressHint('生成完成');
     } catch (e: unknown) {
       setError(getApiErrorMessage(e, '生成大纲失败，请稍后重试。'));
+      stopProgress();
+      setProgressPercent(null);
+      setProgressHint('');
     } finally {
       setSubmitting(false);
     }
@@ -186,6 +275,7 @@ export function ClientOutlineWorkbench({
     try {
       setLocking(true);
       setError(null);
+      setToast('锁定中…');
       const res = await fetch(`${API_BASE}/tasks/${taskId}/outline/lock`, {
         method: 'POST',
         headers: buildAuthHeaders(),
@@ -199,10 +289,14 @@ export function ClientOutlineWorkbench({
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
+      setOutline((prev) => (prev ? { ...prev, locked: true, status: 'LOCKED' } : prev));
       await loadOutline();
+      setToast('已锁定目录/大纲');
       onLocked?.();
     } catch (e: unknown) {
-      setError(getApiErrorMessage(e, '锁定大纲失败，请稍后重试。'));
+      const message = getApiErrorMessage(e, '锁定大纲失败，请稍后重试。');
+      setError(message);
+      setToast(message);
     } finally {
       setLocking(false);
     }
@@ -484,9 +578,24 @@ export function ClientOutlineWorkbench({
           disabled={!outline || outline.locked || locking}
           className="rounded bg-emerald-600 px-4 py-2 text-white disabled:opacity-60"
         >
-          {locking ? '锁定中...' : outline?.locked ? '已锁定' : '锁定目录并进入正文'}
+          {locking ? '锁定中...' : outline?.locked ? '已锁定' : '锁定目录'}
         </button>
       </div>
+
+      {typeof progressPercent === 'number' ? (
+        <div className="rounded border border-slate-200 bg-white p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-slate-700">{progressHint || '生成中…'}</p>
+            <p className="text-sm font-medium text-slate-900">{progressPercent}%</p>
+          </div>
+          <div className="mt-2 h-2 w-full rounded bg-slate-200">
+            <div
+              className="h-2 rounded bg-emerald-600 transition-[width]"
+              style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {toast ? (
         <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{toast}</p>

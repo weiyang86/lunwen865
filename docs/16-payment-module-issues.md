@@ -230,9 +230,3 @@
 - [ ] 查脑细胞流水
 - [ ] 查回调日志
 - [ ] 可定位“付款未到账/重复到账/金额不一致”
-
-
-## PR-1（已落地更新）
-- 增加 `GET /api/credit-packages`（读取 active product）。
-- 增加 `PaymentRecord` 基线数据结构（仅预留字段，不接真实支付）。
-- 增加 `GET /api/orders/my`（用户订单归属查询）。

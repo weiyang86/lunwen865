@@ -12,6 +12,9 @@ export type BackendTaskStatus =
   | 'OUTLINE_GENERATING'
   | 'OUTLINE_PENDING_REVIEW'
   | 'OUTLINE_APPROVED'
+  | 'ABSTRACT_GENERATING'
+  | 'ABSTRACT_PENDING_REVIEW'
+  | 'ABSTRACT_APPROVED'
   | 'WRITING'
   | 'WRITING_PAUSED'
   | 'MERGING'
@@ -30,6 +33,7 @@ export type AdminTaskListItem = {
   currentStage: BackendTaskStage;
   deadline: string | null;
   userId: string;
+  customer?: { id: string; name: string } | null;
   assignee?: { id: string; name: string; email: string | null } | null;
   isLinked: boolean;
   linkedOrderId: string | null;
@@ -46,6 +50,7 @@ export type ListAdminTasksResp = {
 };
 
 export type ListAdminTasksQuery = {
+  bizType?: 'CONSUMER' | 'AGENCY';
   userId?: string;
   search?: string;
   currentStage?: BackendTaskStage;

@@ -11,15 +11,29 @@ export type ClientUser = {
 const CLIENT_TOKEN_KEY = 'client_token';
 const CLIENT_USER_KEY = 'client_user';
 
+function normalizeToken(raw: string | null): string | null {
+  if (!raw) return null;
+  const stripped = raw.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+  if (!stripped) return null;
+  const withoutBearer = stripped.toLowerCase().startsWith('bearer ')
+    ? stripped.slice('bearer '.length).trim()
+    : stripped;
+  const jwtMatch = withoutBearer.match(/[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/);
+  if (jwtMatch?.[0]) return jwtMatch[0];
+  const asciiOnly = withoutBearer.replace(/[^\x21-\x7E]/g, '');
+  return asciiOnly || null;
+}
+
 export const clientAuth = {
   getToken() {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem(CLIENT_TOKEN_KEY);
+    return normalizeToken(localStorage.getItem(CLIENT_TOKEN_KEY));
   },
   setToken(token: string) {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(CLIENT_TOKEN_KEY, token);
-    document.cookie = `${CLIENT_TOKEN_KEY}=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+    const normalized = normalizeToken(token) ?? '';
+    localStorage.setItem(CLIENT_TOKEN_KEY, normalized);
+    document.cookie = `${CLIENT_TOKEN_KEY}=${encodeURIComponent(normalized)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
   },
   clearToken() {
     if (typeof window === 'undefined') return;

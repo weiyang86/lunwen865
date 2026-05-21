@@ -60,9 +60,3 @@
 ### 补充（2026-05-20）
 - 新增 `AiGenerationRun`：用于记录 AI 生成执行与扣费关联。
 - `QuotaLog` 新增追踪字段：`relatedTaskId`、`relatedStageKey`、`relatedGenerationRunId`、`idempotencyKey`、`balanceBefore`。
-
-
-### PR-1 数据基线补充（2026-05-21）
-- 复用 `Product` 作为套餐主体（price + brainCellAmount + status + sortOrder）。
-- 新增 `PaymentRecord`（基线预留，不含真实支付接入逻辑）。
-- 订单仍使用 `productSnapshot` 记录下单时商品快照，防止后续套餐变更影响历史订单。

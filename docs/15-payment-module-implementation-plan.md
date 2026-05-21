@@ -446,10 +446,3 @@
 3. **支付宝支付上线前最少要完成 PR**：`PR-1`、`PR-2`、`PR-4`、`PR-5`、`PR-6`。
 
 4. **建议路线**：强烈建议先用 **MockPay** 打通“下单→支付→到账→扣费→审计日志”闭环，再接微信/支付宝真实通道，可显著降低联调和账务风险。
-
-
-## 2026-05-21 PR-1 更新（payment-base）
-- 复用现有 Product 作为 CreditPackage 能力，新增公开只读入口：`GET /api/credit-packages`（映射 active products）。
-- 新增 `PaymentRecord` 基线模型（仅字段预留，不接微信/支付宝，不处理回调、不做到账）。
-- 订单接口补充 `GET /api/orders/my`（复用既有归属过滤逻辑）。
-- 订单创建继续严格以后端商品配置为准，忽略前端 price/amount/brainCell 参数。

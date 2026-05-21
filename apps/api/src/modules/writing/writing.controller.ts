@@ -20,6 +20,7 @@ import { formatSseEvent } from '../opening-report/utils/sse-formatter.util';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { TaskService } from '../task/task.service';
 import { WritingService } from './services/writing.service';
+import { WritingSessionNotFoundException } from './exceptions/writing-session-not-found.exception';
 
 @Controller('tasks/:taskId/writing')
 export class WritingController {
@@ -37,6 +38,7 @@ export class WritingController {
     @Res() res: Response,
   ): Promise<void> {
     await this.taskService.assertTaskOwnership(taskId, userId);
+    await this.writingService.assertCanStartWriting(taskId);
     await this.writeSse(res, this.writingService.generateStream(taskId, dto));
   }
 
@@ -127,7 +129,11 @@ export class WritingController {
     @Param('taskId') taskId: string,
   ) {
     await this.taskService.assertTaskOwnership(taskId, userId);
-    return this.writingService.getLatestSession(taskId);
+    const session = await this.writingService.getLatestSession(taskId);
+    if (!session) {
+      throw new WritingSessionNotFoundException(taskId);
+    }
+    return session;
   }
 
   @Get('sessions/:sessionId/sections')

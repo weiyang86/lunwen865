@@ -23,7 +23,14 @@ export const NAV_ITEMS: NavItem[] = [
   { label: '仪表盘', href: '/admin', icon: LayoutDashboard },
   { label: '用户管理', href: '/admin/users', icon: Users },
   { label: '订单管理', href: '/admin/orders', icon: ShoppingBag },
-  { label: '任务管理', href: '/admin/tasks', icon: ClipboardList },
+  {
+    label: '任务管理',
+    icon: ClipboardList,
+    children: [
+      { label: '任务管理（散客）', href: '/admin/tasks' },
+      { label: '任务管理（机构）', href: '/admin/tasks/agency' },
+    ],
+  },
   { label: '后台参数设置', href: '/admin/settings', icon: Settings },
   { label: 'Prompt 模板', href: '/admin/prompts', icon: Sparkles },
   { label: '门店管理', href: '/admin/stores', icon: Store },

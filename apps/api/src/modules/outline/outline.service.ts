@@ -15,6 +15,7 @@ import type {
 import { buildTree, flattenLlmTree } from './utils/tree-builder.util';
 import { computeNumbering } from './utils/numbering.util';
 import { normalizeWordCount } from './utils/word-allocator.util';
+import { nodeTypeByDepth } from './constants/node-type.constants';
 import {
   OUTLINE_DEFAULT_MAX_DEPTH,
   OUTLINE_GENERATION_WORDCOUNT_MAX_RATIO,
@@ -25,6 +26,29 @@ import { OutlineValidatorService } from './outline-validator.service';
 import type { AcademicLevel } from './prompts/outline-generation.prompt';
 
 type OutlineWithNodes = OutlineRecord & { nodes: OutlineNodeRecord[] };
+
+function normalizePositiveInt(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
+function allocateEvenWordCount(
+  leafIds: string[],
+  target: number,
+): Map<string, number> {
+  const res = new Map<string, number>();
+  if (!Number.isInteger(target) || target <= 0) return res;
+  if (leafIds.length === 0) return res;
+
+  const base = Math.floor(target / leafIds.length);
+  let remainder = target - base * leafIds.length;
+  for (const id of leafIds) {
+    const extra = remainder > 0 ? 1 : 0;
+    remainder = Math.max(0, remainder - extra);
+    res.set(id, base + extra);
+  }
+  return res;
+}
 
 function toAcademicLevel(educationLevel: string): AcademicLevel {
   if (educationLevel.includes('博士')) return 'DOCTOR';
@@ -252,11 +276,61 @@ export class OutlineService {
     if (!outline) throw new OutlineNotFoundException(taskId);
     if (outline.locked) return outline;
 
-    this.validator.validateForLock(outline, outline.targetWordCount);
+    const nodes = outline.nodes ?? [];
+    const leaves = nodes.filter((n) => n.isLeaf);
+    if (leaves.length === 0) {
+      throw new InvalidTreeStructureException('大纲叶子节点为空');
+    }
 
-    const updated = await this.prisma.outline.update({
-      where: { id: outline.id },
-      data: { locked: true, lockedAt: new Date(), status: 'LOCKED' },
+    const leafInputs = leaves.map((l) => ({
+      id: l.id,
+      expectedWords: normalizePositiveInt(l.expectedWords),
+    }));
+    const leafSum = leafInputs.reduce((acc, n) => acc + n.expectedWords, 0);
+    const normalized =
+      leafSum > 0
+        ? normalizeWordCount(leafInputs, outline.targetWordCount)
+        : allocateEvenWordCount(
+            leafInputs.map((x) => x.id),
+            outline.targetWordCount,
+          );
+
+    const normalizedTotal = Array.from(normalized.values()).reduce(
+      (acc, v) => acc + v,
+      0,
+    );
+
+    const normalizedNodes: OutlineNodeRecord[] = nodes.map((n) => ({
+      ...n,
+      nodeType: nodeTypeByDepth(n.depth),
+      expectedWords: n.isLeaf ? (normalized.get(n.id) ?? 0) : 0,
+    }));
+
+    this.validator.validateForLock(
+      { ...outline, nodes: normalizedNodes },
+      outline.targetWordCount,
+    );
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      for (const n of normalizedNodes) {
+        await tx.outlineNode.update({
+          where: { id: n.id },
+          data: {
+            nodeType: n.nodeType,
+            expectedWords: n.expectedWords,
+          },
+        });
+      }
+
+      return tx.outline.update({
+        where: { id: outline.id },
+        data: {
+          locked: true,
+          lockedAt: new Date(),
+          status: 'LOCKED',
+          totalWordCount: normalizedTotal,
+        },
+      });
     });
 
     await this.taskService.onStageCompleted(taskId, GenerationStage.OUTLINE);

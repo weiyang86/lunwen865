@@ -43,7 +43,10 @@ describe('AuthService', () => {
   let userService: DeepMockProxy<UserService>;
   let smsService: DeepMockProxy<SmsService>;
   let quotaService: DeepMockProxy<QuotaService>;
-  let settingsService: Pick<SettingsService, 'getSiteSettings'>;
+  let settingsService: Pick<
+    SettingsService,
+    'getSiteSettings' | 'getNotifySettings'
+  >;
   let jwtService: JwtService;
   let configService: ConfigService;
   let authService: AuthService;
@@ -61,6 +64,37 @@ describe('AuthService', () => {
           logoUrl: '',
           supportEmail: '',
           registerGift: { paperGeneration: 1, polish: 2, export: 1 },
+          exchangeRates: {
+            paperGeneration: 1,
+            polish: 1,
+            export: 1,
+            aiChat: 1,
+          },
+        }),
+      ),
+      getNotifySettings: jest.fn(() =>
+        Promise.resolve({
+          sms: {
+            provider: 'ALIYUN',
+            enabled: true,
+            region: 'cn-hangzhou',
+            accessKeyId: 'ak',
+            accessKeySecret: 'sk',
+            signName: 'sign',
+            templateCode: 'tpl',
+            codeTtlSeconds: 300,
+          },
+          email: {
+            provider: 'SMTP',
+            enabled: false,
+            host: 'smtp.163.com',
+            port: 465,
+            secure: true,
+            user: '',
+            pass: '',
+            fromEmail: '',
+            fromName: '',
+          },
         }),
       ),
     };
@@ -338,9 +372,18 @@ describe('AuthService', () => {
 
     prisma.refreshToken.create.mockResolvedValue({ id: 'rt_create' });
 
+    prisma.verifyCode.findFirst.mockResolvedValueOnce({
+      id: 'vc1',
+      code: '123456',
+      attemptCount: 0,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.verifyCode.update.mockResolvedValueOnce({ id: 'vc1' });
+
     const first = await authService.register(
       {
         email: 'u1@example.com',
+        code: '123456',
         password: 'User@123456',
         nickname: '测试用户',
       },
@@ -441,9 +484,18 @@ describe('AuthService', () => {
       id: 'rt_create',
     });
 
+    prisma.verifyCode.findFirst.mockResolvedValueOnce({
+      id: 'vc1',
+      code: '123456',
+      attemptCount: 0,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.verifyCode.update.mockResolvedValueOnce({ id: 'vc1' });
+
     const first = await authService.register(
       {
         email: 'u1@example.com',
+        code: '123456',
         password: 'User@123456',
         nickname: '测试用户',
       },
@@ -530,9 +582,18 @@ describe('AuthService', () => {
       id: 'rt_create',
     });
 
+    prisma.verifyCode.findFirst.mockResolvedValueOnce({
+      id: 'vc1',
+      code: '123456',
+      attemptCount: 0,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.verifyCode.update.mockResolvedValueOnce({ id: 'vc1' });
+
     await authService.register(
       {
         email: 'u1@example.com',
+        code: '123456',
         password: 'User@123456',
         nickname: '测试用户',
       },

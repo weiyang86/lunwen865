@@ -338,6 +338,26 @@ export class TopicService {
     const extracted = extractTopicKeywordsLanguage(task);
     const academicLevel = toAcademicLevel(task.educationLevel);
 
+    const run = await this.prisma.aiGenerationRun.create({
+      data: {
+        userId: task.userId,
+        taskId,
+        stageKey: 'TOPIC',
+        actionKey: 'GENERATE',
+        sceneKey: 'paper.topic.generate',
+        status: 'RUNNING',
+        costBrainCells: 1,
+        inputSnapshot: {
+          taskId,
+          batch: nextBatch,
+          params,
+          extracted,
+          academicLevel,
+        },
+        idempotencyKey: `topic-${taskId}-${nextBatch}`,
+      },
+    });
+
     const prompt = buildTopicGenerationPrompt({
       taskTitle: task.title ?? undefined,
       major: task.major ?? undefined,
@@ -367,7 +387,7 @@ export class TopicService {
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'LLM generation failed';
-      await aiGenerationRunModel.update({
+      await this.prisma.aiGenerationRun.update({
         where: { id: run.id },
         data: { status: 'FAILED', errorMessage: message },
       });
@@ -391,7 +411,7 @@ export class TopicService {
     );
 
     if (deduped.length < 3) {
-      await aiGenerationRunModel.update({
+      await this.prisma.aiGenerationRun.update({
         where: { id: run.id },
         data: {
           status: 'FAILED',
@@ -444,22 +464,11 @@ export class TopicService {
         remark: '题目生成扣费',
         tx,
       });
-      await (
-        tx as unknown as {
-          aiGenerationRun: {
-            update: (args: {
-              where: { id: string };
-              data: Record<string, unknown>;
-            }) => Promise<unknown>;
-          };
-        }
-      ).aiGenerationRun.update({
+      await tx.aiGenerationRun.update({
         where: { id: run.id },
         data: {
           status: 'SUCCESS',
-          outputSnapshot: {
-            count: rows.length,
-          },
+          outputSnapshot: { count: rows.length },
         },
       });
       return rows;
@@ -553,3 +562,15 @@ export class TopicService {
     };
   }
 }
+    const run = await this.prisma.aiGenerationRun.create({
+      data: {
+        userId: task.userId,
+        taskId,
+        stageKey: 'TOPIC',
+        actionKey: 'GENERATE',
+        sceneKey: 'topic.generate',
+        status: 'RUNNING',
+        costBrainCells: 1,
+        inputSnapshot: params as unknown as Prisma.InputJsonValue,
+      },
+    });

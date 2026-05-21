@@ -40,7 +40,31 @@ type SiteSettings = {
   exchangeRates: { paperGeneration: number; polish: number; export: number; aiChat: number };
 };
 
-type SettingsResp = { payment: PaymentSettings; site: SiteSettings };
+type NotifySettings = {
+  sms: {
+    provider: 'ALIYUN';
+    enabled: boolean;
+    region: string;
+    accessKeyId: string;
+    accessKeySecretConfigured: boolean;
+    signName: string;
+    templateCode: string;
+    codeTtlSeconds: number;
+  };
+  email: {
+    provider: 'SMTP';
+    enabled: boolean;
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    passConfigured: boolean;
+    fromEmail: string;
+    fromName: string;
+  };
+};
+
+type SettingsResp = { payment: PaymentSettings; site: SiteSettings; notify: NotifySettings };
 
 function toNonNegativeInt(raw: string): number | null {
   const s = raw.trim();
@@ -66,9 +90,11 @@ export default function AdminSettingsPage() {
 
   const [payment, setPayment] = useState<PaymentSettings | null>(null);
   const [site, setSite] = useState<SiteSettings | null>(null);
+  const [notify, setNotify] = useState<NotifySettings | null>(null);
 
   const [savingPayment, setSavingPayment] = useState(false);
   const [savingSite, setSavingSite] = useState(false);
+  const [savingNotify, setSavingNotify] = useState(false);
 
   const paymentForm = useMemo(() => {
     if (!payment) return null;
@@ -107,8 +133,30 @@ export default function AdminSettingsPage() {
     };
   }, [site]);
 
+  const notifyForm = useMemo(() => {
+    if (!notify) return null;
+    return {
+      smsEnabled: Boolean(notify.sms?.enabled),
+      smsRegion: notify.sms?.region ?? 'cn-hangzhou',
+      smsAccessKeyId: notify.sms?.accessKeyId ?? '',
+      smsAccessKeySecret: '',
+      smsSignName: notify.sms?.signName ?? '',
+      smsTemplateCode: notify.sms?.templateCode ?? '',
+      smsCodeTtlSeconds: String(notify.sms?.codeTtlSeconds ?? 300),
+      emailEnabled: Boolean(notify.email?.enabled),
+      emailHost: notify.email?.host ?? 'smtp.163.com',
+      emailPort: String(notify.email?.port ?? 465),
+      emailSecure: Boolean(notify.email?.secure ?? true),
+      emailUser: notify.email?.user ?? '',
+      emailPass: '',
+      emailFromEmail: notify.email?.fromEmail ?? '',
+      emailFromName: notify.email?.fromName ?? '',
+    };
+  }, [notify]);
+
   const [paymentDraft, setPaymentDraft] = useState<NonNullable<typeof paymentForm> | null>(null);
   const [siteDraft, setSiteDraft] = useState<NonNullable<typeof siteForm> | null>(null);
+  const [notifyDraft, setNotifyDraft] = useState<NonNullable<typeof notifyForm> | null>(null);
 
   useEffect(() => {
     if (paymentForm) setPaymentDraft(paymentForm);
@@ -116,6 +164,9 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     if (siteForm) setSiteDraft(siteForm);
   }, [siteForm]);
+  useEffect(() => {
+    if (notifyForm) setNotifyDraft(notifyForm);
+  }, [notifyForm]);
 
   async function refresh() {
     setLoading(true);
@@ -124,6 +175,7 @@ export default function AdminSettingsPage() {
       const data = await adminHttp.get<SettingsResp>('/admin/settings');
       setPayment(data.payment);
       setSite(data.site);
+      setNotify(data.notify);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '加载失败');
     } finally {
@@ -239,6 +291,92 @@ export default function AdminSettingsPage() {
     }
   }
 
+  async function saveNotify() {
+    if (!notifyDraft || !notify) return;
+    if (savingNotify) return;
+
+    const smsCodeTtlSeconds = toPositiveInt(notifyDraft.smsCodeTtlSeconds);
+    if (smsCodeTtlSeconds == null || smsCodeTtlSeconds < 60) {
+      toast.error('短信验证码有效期必须为不小于 60 秒的正整数');
+      return;
+    }
+
+    const emailPort = toPositiveInt(notifyDraft.emailPort);
+    if (emailPort == null || emailPort > 65535) {
+      toast.error('邮件端口必须为 1-65535 的正整数');
+      return;
+    }
+
+    if (notifyDraft.smsEnabled) {
+      if (!notifyDraft.smsRegion.trim()) {
+        toast.error('短信 Region 不能为空');
+        return;
+      }
+      if (!notifyDraft.smsAccessKeyId.trim()) {
+        toast.error('短信 AccessKeyId 不能为空');
+        return;
+      }
+      if (!notify.sms.accessKeySecretConfigured && !notifyDraft.smsAccessKeySecret.trim()) {
+        toast.error('短信 AccessKeySecret 不能为空');
+        return;
+      }
+      if (!notifyDraft.smsSignName.trim()) {
+        toast.error('短信签名不能为空');
+        return;
+      }
+      if (!notifyDraft.smsTemplateCode.trim()) {
+        toast.error('短信模板 Code 不能为空');
+        return;
+      }
+    }
+
+    if (notifyDraft.emailEnabled) {
+      if (!notifyDraft.emailHost.trim()) {
+        toast.error('邮件 Host 不能为空');
+        return;
+      }
+      if (!notifyDraft.emailUser.trim()) {
+        toast.error('邮箱账号不能为空');
+        return;
+      }
+      if (!notify.email.passConfigured && !notifyDraft.emailPass.trim()) {
+        toast.error('邮箱密码/授权码不能为空');
+        return;
+      }
+      if (!notifyDraft.emailFromEmail.trim()) {
+        toast.error('发件人邮箱不能为空');
+        return;
+      }
+    }
+
+    try {
+      setSavingNotify(true);
+      const updated = await adminHttp.put<NotifySettings>('/admin/settings/notify', {
+        smsEnabled: notifyDraft.smsEnabled,
+        smsRegion: notifyDraft.smsRegion,
+        smsAccessKeyId: notifyDraft.smsAccessKeyId,
+        smsAccessKeySecret: notifyDraft.smsAccessKeySecret,
+        smsSignName: notifyDraft.smsSignName,
+        smsTemplateCode: notifyDraft.smsTemplateCode,
+        smsCodeTtlSeconds,
+        emailEnabled: notifyDraft.emailEnabled,
+        emailHost: notifyDraft.emailHost,
+        emailPort,
+        emailSecure: notifyDraft.emailSecure,
+        emailUser: notifyDraft.emailUser,
+        emailPass: notifyDraft.emailPass,
+        emailFromEmail: notifyDraft.emailFromEmail,
+        emailFromName: notifyDraft.emailFromName,
+      });
+      setNotify(updated);
+      toast.success('短信/邮件参数已保存');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : '保存失败');
+    } finally {
+      setSavingNotify(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -262,6 +400,7 @@ export default function AdminSettingsPage() {
           <TabsList variant="line">
             <TabsTrigger value="payment">支付设置</TabsTrigger>
             <TabsTrigger value="site">网站站点参数</TabsTrigger>
+            <TabsTrigger value="notify">短信邮件参数配置</TabsTrigger>
           </TabsList>
 
           <TabsContent value="payment" className="mt-4">
@@ -710,6 +849,256 @@ export default function AdminSettingsPage() {
                 <div className="flex justify-end">
                   <Button onClick={() => void saveSite()} disabled={savingSite}>
                     {savingSite ? '保存中...' : '保存'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="notify" className="mt-4">
+            {loading || !notifyDraft || !notify ? (
+              <div className="text-sm text-slate-500">加载中...</div>
+            ) : (
+              <div className="grid gap-4">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">
+                        短信验证码（阿里云）
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        用于手机号注册/登录的验证码发送与校验。
+                      </div>
+                    </div>
+                    <Switch
+                      checked={notifyDraft.smsEnabled}
+                      onCheckedChange={(v) =>
+                        setNotifyDraft((prev) => (prev ? { ...prev, smsEnabled: v } : prev))
+                      }
+                      disabled={savingNotify}
+                    />
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="sms-region">Region</Label>
+                      <Input
+                        id="sms-region"
+                        value={notifyDraft.smsRegion}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) => (prev ? { ...prev, smsRegion: e.target.value } : prev))
+                        }
+                        placeholder="cn-hangzhou"
+                        disabled={savingNotify}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="sms-ttl">验证码有效期（秒）</Label>
+                      <Input
+                        id="sms-ttl"
+                        inputMode="numeric"
+                        value={notifyDraft.smsCodeTtlSeconds}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) =>
+                            prev ? { ...prev, smsCodeTtlSeconds: e.target.value } : prev,
+                          )
+                        }
+                        disabled={savingNotify}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="sms-ak">AccessKeyId</Label>
+                      <Input
+                        id="sms-ak"
+                        value={notifyDraft.smsAccessKeyId}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) =>
+                            prev ? { ...prev, smsAccessKeyId: e.target.value } : prev,
+                          )
+                        }
+                        disabled={savingNotify}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="sms-sk">AccessKeySecret（敏感）</Label>
+                        <div className="text-xs text-slate-500">
+                          {notify.sms.accessKeySecretConfigured ? '已配置' : '未配置'}
+                        </div>
+                      </div>
+                      <Input
+                        id="sms-sk"
+                        type="password"
+                        value={notifyDraft.smsAccessKeySecret}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) =>
+                            prev ? { ...prev, smsAccessKeySecret: e.target.value } : prev,
+                          )
+                        }
+                        placeholder="留空不修改；输入新值将覆盖"
+                        disabled={savingNotify}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="sms-sign">签名（SignName）</Label>
+                      <Input
+                        id="sms-sign"
+                        value={notifyDraft.smsSignName}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) => (prev ? { ...prev, smsSignName: e.target.value } : prev))
+                        }
+                        disabled={savingNotify}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="sms-tpl">模板 Code（TemplateCode）</Label>
+                      <Input
+                        id="sms-tpl"
+                        value={notifyDraft.smsTemplateCode}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) =>
+                            prev ? { ...prev, smsTemplateCode: e.target.value } : prev,
+                          )
+                        }
+                        disabled={savingNotify}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">
+                        邮件验证码（163 邮箱 SMTP）
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        用于邮箱注册/登录的验证码发送与校验。
+                      </div>
+                    </div>
+                    <Switch
+                      checked={notifyDraft.emailEnabled}
+                      onCheckedChange={(v) =>
+                        setNotifyDraft((prev) => (prev ? { ...prev, emailEnabled: v } : prev))
+                      }
+                      disabled={savingNotify}
+                    />
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="email-host">SMTP Host</Label>
+                      <Input
+                        id="email-host"
+                        value={notifyDraft.emailHost}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) => (prev ? { ...prev, emailHost: e.target.value } : prev))
+                        }
+                        placeholder="smtp.163.com"
+                        disabled={savingNotify}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="email-port">SMTP Port</Label>
+                      <Input
+                        id="email-port"
+                        inputMode="numeric"
+                        value={notifyDraft.emailPort}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) => (prev ? { ...prev, emailPort: e.target.value } : prev))
+                        }
+                        disabled={savingNotify}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="email-user">邮箱账号（User）</Label>
+                      <Input
+                        id="email-user"
+                        value={notifyDraft.emailUser}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) => (prev ? { ...prev, emailUser: e.target.value } : prev))
+                        }
+                        placeholder="xxx@163.com"
+                        disabled={savingNotify}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="email-pass">密码/授权码（敏感）</Label>
+                        <div className="text-xs text-slate-500">
+                          {notify.email.passConfigured ? '已配置' : '未配置'}
+                        </div>
+                      </div>
+                      <Input
+                        id="email-pass"
+                        type="password"
+                        value={notifyDraft.emailPass}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) => (prev ? { ...prev, emailPass: e.target.value } : prev))
+                        }
+                        placeholder="留空不修改；输入新值将覆盖"
+                        disabled={savingNotify}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="email-from-email">发件人邮箱（From）</Label>
+                      <Input
+                        id="email-from-email"
+                        value={notifyDraft.emailFromEmail}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) =>
+                            prev ? { ...prev, emailFromEmail: e.target.value } : prev,
+                          )
+                        }
+                        placeholder="xxx@163.com"
+                        disabled={savingNotify}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="email-from-name">发件人名称（可选）</Label>
+                      <Input
+                        id="email-from-name"
+                        value={notifyDraft.emailFromName}
+                        onChange={(e) =>
+                          setNotifyDraft((prev) =>
+                            prev ? { ...prev, emailFromName: e.target.value } : prev,
+                          )
+                        }
+                        disabled={savingNotify}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">SSL/TLS</div>
+                      <div className="mt-0.5 text-xs text-slate-500">163 邮箱常用 465（SSL）</div>
+                    </div>
+                    <Switch
+                      checked={notifyDraft.emailSecure}
+                      onCheckedChange={(v) =>
+                        setNotifyDraft((prev) => (prev ? { ...prev, emailSecure: v } : prev))
+                      }
+                      disabled={savingNotify}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button onClick={() => void saveNotify()} disabled={savingNotify}>
+                    {savingNotify ? '保存中...' : '保存'}
                   </Button>
                 </div>
               </div>
