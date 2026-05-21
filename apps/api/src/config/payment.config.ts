@@ -2,13 +2,13 @@ import { registerAs } from '@nestjs/config';
 
 export default registerAs('payment', () => ({
   wechat: {
-    appid: process.env.WECHAT_PAY_APPID ?? '',
-    mchid: process.env.WECHAT_PAY_MCHID ?? '',
-    serialNo: process.env.WECHAT_PAY_SERIAL_NO ?? '',
-    privateKeyPath:
-      process.env.WECHAT_PAY_PRIVATE_KEY_PATH ??
-      './certs/wechat/apiclient_key.pem',
+    appid: process.env.WECHAT_PAY_APP_ID ?? '',
+    mchid: process.env.WECHAT_PAY_MCH_ID ?? '',
+    serialNo: process.env.WECHAT_PAY_CERT_SERIAL_NO ?? '',
+    privateKeyPath: process.env.WECHAT_PAY_PRIVATE_KEY ?? '',
     apiV3Key: process.env.WECHAT_PAY_API_V3_KEY ?? '',
+    publicKey: process.env.WECHAT_PAY_PUBLIC_KEY ?? '',
+    platformCert: process.env.WECHAT_PAY_PLATFORM_CERT ?? '',
     notifyUrl: process.env.WECHAT_PAY_NOTIFY_URL ?? '',
   },
   alipay: {
