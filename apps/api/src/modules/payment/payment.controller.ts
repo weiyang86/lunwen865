@@ -20,22 +20,6 @@ import { PaymentService } from './payment.service';
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Get('api/payments/order/:orderId')
-  paymentByOrder(
-    @CurrentUser('id') uid: string,
-    @Param('orderId') orderId: string,
-  ) {
-    return this.paymentService.getMyPaymentByOrder(uid, orderId);
-  }
-
-  @Get('api/orders/:orderId/payment-status')
-  paymentStatus(
-    @CurrentUser('id') uid: string,
-    @Param('orderId') orderId: string,
-  ) {
-    return this.paymentService.getMyOrderPaymentStatus(uid, orderId);
-  }
-
   @Post('api/payments/create')
   createPayment(
     @CurrentUser('id') uid: string,
