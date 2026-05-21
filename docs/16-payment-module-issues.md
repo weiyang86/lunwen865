@@ -235,7 +235,3 @@
 - [x] API 新增：`POST /api/payments/create`。
 - [x] mock success/fail 接口已补齐（development 可用）。
 - [ ] 未处理：真实 wechat/alipay provider 接入（后续 PR-3/PR-4）。
-
-- [x] PR-3 进行中：Wechat Native/H5 prepay + callback logging。
-- [x] 新增微信回调接口：`POST /api/payments/wechat/notify`。
-- [ ] 未处理：统一到账编排（PR-5）、退款（后续 PR）。
