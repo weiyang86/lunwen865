@@ -404,6 +404,8 @@ model User {
   exportTasks   ExportTask[]
   quotas        UserQuota[]
   quotaLogs     QuotaLog[]
+  paymentRecords PaymentRecord[]
+  aiGenerationRuns AiGenerationRun[]
   orders        Order[]
   primaryTutorOrders Order[] @relation("OrderPrimaryTutor")
   taskAdminLogs TaskAdminLog[] @relation("TaskAdminLogOperator")
@@ -500,6 +502,7 @@ model Task {
   chapters        Chapter[]
   paperMemory     PaperMemory?
   generationLogs  GenerationLog[]
+  aiGenerationRuns AiGenerationRun[]
   polishTasks     PolishTask[]
   adminLogs       TaskAdminLog[]
   order           Order?
@@ -689,6 +692,11 @@ model QuotaLog {
 
   orderId      String?
   order        Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  relatedTaskId String?
+  relatedStageKey String?        @db.VarChar(40)
+  relatedGenerationRunId String? @db.VarChar(50)
+  idempotencyKey String?         @db.VarChar(100)
+  balanceBefore Int?
 
   bizId        String?
   remark       String?           @db.VarChar(255)
@@ -696,6 +704,38 @@ model QuotaLog {
 
   @@index([userId, createdAt])
   @@index([orderId])
+  @@index([relatedTaskId, createdAt])
+  @@index([relatedGenerationRunId])
+  @@index([idempotencyKey])
+}
+
+model AiGenerationRun {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  stageKey String @db.VarChar(40)
+  actionKey String @db.VarChar(50)
+  sceneKey  String @db.VarChar(80)
+  status    String @db.VarChar(30)
+  costBrainCells Int @default(0)
+
+  inputSnapshot Json?
+  outputSnapshot Json?
+  errorMessage String? @db.Text
+  idempotencyKey String? @db.VarChar(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([taskId, createdAt])
+  @@index([stageKey, createdAt])
+  @@index([status, createdAt])
 }
 
 model SystemSetting {
@@ -834,6 +874,7 @@ model Order {
   updatedAt DateTime @updatedAt
 
   paymentLogs PaymentLog[]
+  paymentRecords PaymentRecord[]
   refunds     Refund[]
   items       OrderItem[]
   quotaLogs   QuotaLog[]
@@ -844,6 +885,48 @@ model Order {
   @@index([sourceType])
   @@index([agencyId])
   @@index([expiresAt])
+}
+
+model PaymentRecord {
+  id String @id @default(cuid())
+  paymentNo String @unique @db.VarChar(40)
+
+  orderId String
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  channel PaymentChannel?
+  method  PaymentMethod?
+  amountCents Int
+  currency String @default("CNY") @db.VarChar(10)
+  status String @default("CREATED") @db.VarChar(30)
+
+  providerTradeNo String? @db.VarChar(64)
+  providerOrderNo String? @db.VarChar(64)
+  providerBuyerId String? @db.VarChar(64)
+
+  payUrl String? @db.Text
+  qrCodeUrl String? @db.Text
+  clientPayload Json?
+  rawRequest Json?
+  rawResponse Json?
+  notifyRaw Json?
+  notifyVerified Boolean?
+  notifyReceivedAt DateTime?
+
+  idempotencyKey String? @db.VarChar(100)
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([providerTradeNo])
+  @@index([providerOrderNo])
 }
 
 model OrderItem {

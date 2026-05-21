@@ -1,8 +1,9 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
-import { TaskStatus as PrismaTaskStatus } from '@prisma/client';
+import { QuotaType, TaskStatus as PrismaTaskStatus } from '@prisma/client';
 import type { Prisma, Task, TopicCandidate } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
+import { QuotaService } from '../quota/quota.service';
 import { TaskService } from '../task/task.service';
 import { GenerationStage } from '../task/constants/generation-stage.enum';
 import {
@@ -125,6 +126,7 @@ export class TopicService {
     private readonly prisma: PrismaService,
     private readonly llmService: LlmService,
     private readonly taskService: TaskService,
+    private readonly quotaService: QuotaService,
   ) {}
 
   /**
@@ -293,6 +295,31 @@ export class TopicService {
 
     await this.assertCooldown(taskId);
     const nextBatch = await this.getNextBatch(taskId);
+    const aiGenerationRunModel = (
+      this.prisma as unknown as {
+        aiGenerationRun: {
+          create: (args: {
+            data: Prisma.InputJsonObject | Record<string, unknown>;
+          }) => Promise<{ id: string }>;
+          update: (args: {
+            where: { id: string };
+            data: Record<string, unknown>;
+          }) => Promise<unknown>;
+        };
+      }
+    ).aiGenerationRun;
+    const run = await aiGenerationRunModel.create({
+      data: {
+        userId: task.userId,
+        taskId,
+        stageKey: 'TOPIC',
+        actionKey: 'GENERATE',
+        sceneKey: 'topic.generate',
+        status: 'RUNNING',
+        costBrainCells: 1,
+        inputSnapshot: params as unknown as Prisma.InputJsonValue,
+      },
+    });
 
     await this.prisma.task.updateMany({
       where: {
@@ -340,6 +367,10 @@ export class TopicService {
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'LLM generation failed';
+      await aiGenerationRunModel.update({
+        where: { id: run.id },
+        data: { status: 'FAILED', errorMessage: message },
+      });
       await this.taskService.onStageFailed(
         taskId,
         GenerationStage.TOPIC,
@@ -360,6 +391,13 @@ export class TopicService {
     );
 
     if (deduped.length < 3) {
+      await aiGenerationRunModel.update({
+        where: { id: run.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: '候选题目数量不足（少于 3 个）',
+        },
+      });
       await this.taskService.onStageFailed(
         taskId,
         GenerationStage.TOPIC,
@@ -389,9 +427,43 @@ export class TopicService {
         };
       });
 
-    const created = await this.prisma.$transaction(
-      createInputs.map((data) => this.prisma.topicCandidate.create({ data })),
-    );
+    const created = await this.prisma.$transaction(async (tx) => {
+      const rows: TopicCandidate[] = [];
+      for (const data of createInputs) {
+        rows.push(await tx.topicCandidate.create({ data }));
+      }
+      await this.quotaService.consume({
+        userId: task.userId,
+        type: QuotaType.BRAIN_CELL,
+        amount: 1,
+        bizId: `TOPIC_RUN_${run.id}`,
+        relatedTaskId: taskId,
+        relatedStageKey: 'TOPIC',
+        relatedGenerationRunId: run.id,
+        idempotencyKey: `topic-${taskId}-${nextBatch}`,
+        remark: '题目生成扣费',
+        tx,
+      });
+      await (
+        tx as unknown as {
+          aiGenerationRun: {
+            update: (args: {
+              where: { id: string };
+              data: Record<string, unknown>;
+            }) => Promise<unknown>;
+          };
+        }
+      ).aiGenerationRun.update({
+        where: { id: run.id },
+        data: {
+          status: 'SUCCESS',
+          outputSnapshot: {
+            count: rows.length,
+          },
+        },
+      });
+      return rows;
+    });
 
     await this.prisma.task.updateMany({
       where: { id: taskId, status: PrismaTaskStatus.TOPIC_GENERATING },

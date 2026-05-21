@@ -59,3 +59,13 @@
 - 是否已全量统一返回 envelope（当前前端有兼容逻辑，但需接口核对）。
 - 机构推单与代下单的权限边界与审批流。
 - 支付回调验签失败的错误码与重试策略。
+
+### P0 增补接口/数据约定（2026-05-20）
+- 额度流水补充追踪字段：`relatedTaskId`、`relatedStageKey`、`relatedGenerationRunId`、`idempotencyKey`、`balanceBefore`。
+- 新增 AI 生成运行记录：`AiGenerationRun`（记录 stage/action/status/cost/input/output/error）。
+
+
+### PR-1 基线接口补充（2026-05-21）
+- `GET /api/credit-packages`：公开读取启用套餐（当前映射 Product）。
+- `GET /api/orders/my`：用户订单列表（归属过滤）。
+- `POST /api/orders`：只接收套餐标识，金额与脑细胞快照以后端 Product 为准。

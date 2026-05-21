@@ -99,6 +99,10 @@ export class QuotaService {
     type: QuotaType;
     amount: number;
     bizId?: string;
+    relatedTaskId?: string;
+    relatedStageKey?: string;
+    relatedGenerationRunId?: string;
+    idempotencyKey?: string;
     remark?: string;
     tx?: PrismaTypes.TransactionClient;
   }): Promise<void> {
@@ -155,9 +159,14 @@ export class QuotaService {
           userId: params.userId,
           quotaType: params.type,
           change: -params.amount,
+          balanceBefore: balanceAfter + params.amount,
           balanceAfter,
           reason: QuotaChangeReason.CONSUME,
           bizId: params.bizId ?? null,
+          relatedTaskId: params.relatedTaskId ?? null,
+          relatedStageKey: params.relatedStageKey ?? null,
+          relatedGenerationRunId: params.relatedGenerationRunId ?? null,
+          idempotencyKey: params.idempotencyKey ?? null,
           remark: params.remark ?? null,
         },
         select: { id: true },

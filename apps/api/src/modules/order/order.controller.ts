@@ -35,6 +35,11 @@ export class OrderController {
     return this.orderService.findAll(uid, q);
   }
 
+  @Get('my')
+  findMine(@CurrentUser('id') uid: string, @Query() q: QueryOrderDto) {
+    return this.orderService.findAll(uid, q);
+  }
+
   @Get(':id')
   findOne(@CurrentUser('id') uid: string, @Param('id') id: string) {
     return this.orderService.findOne(uid, id);
