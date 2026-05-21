@@ -39,7 +39,7 @@ export class NotifyController {
     }
   }
 
-  @Post('api/payments/alipay/notify')
+  @Post('api/payment/notify/alipay')
   async alipayPayNotify(
     @Req() req: Request,
     @Body() body: Record<string, string>,
