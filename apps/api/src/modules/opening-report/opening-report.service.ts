@@ -118,7 +118,7 @@ export class OpeningReportService {
     const startTime = Date.now();
 
     const task = await this.taskService.findById(taskId);
-    this.assertCanGenerate(task);
+    this.assertCanGenerateReport(task);
 
     const report = await this.getOrCreateReport(taskId);
     this.assertNoConcurrentGenerating(report);
@@ -318,7 +318,7 @@ export class OpeningReportService {
       : 0;
 
     const task = await this.taskService.findById(taskId);
-    this.assertCanGenerate(task);
+    this.assertCanGenerateReport(task);
     this.assertNoConcurrentGenerating(report);
     await this.ensureAllSectionsExist(report.id);
 
@@ -495,7 +495,7 @@ export class OpeningReportService {
     dto?: RetrySectionDto,
   ): AsyncGenerator<SseEvent, void, unknown> {
     const task = await this.taskService.findById(taskId);
-    this.assertCanGenerate(task);
+    this.assertCanRevise(task);
 
     const report = await this.getOrCreateReport(taskId);
     await this.ensureAllSectionsExist(report.id);
@@ -506,6 +506,16 @@ export class OpeningReportService {
     }
 
     const section = await this.getSection(report.id, sectionKey);
+    const beforeContent = section.content;
+    const revision = await this.prisma.openingReportSectionRevision.create({
+      data: {
+        sectionId: section.id,
+        type: 'ADVISOR_REWRITE',
+        feedback: dto?.feedback?.trim() ? dto.feedback.trim() : null,
+        beforeContent,
+        afterContent: null,
+      },
+    });
 
     await this.prisma.openingReportSection.update({
       where: { id: section.id },
@@ -571,6 +581,15 @@ export class OpeningReportService {
       return;
     }
 
+    const afterSection = await this.prisma.openingReportSection.findUnique({
+      where: { reportId_sectionKey: { reportId: report.id, sectionKey } },
+      select: { content: true },
+    });
+    await this.prisma.openingReportSectionRevision.update({
+      where: { id: revision.id },
+      data: { afterContent: afterSection?.content ?? null },
+    });
+
     const { content, wordCount } = await this.assembleFullContent(report.id);
 
     await this.prisma.openingReport.update({
@@ -605,7 +624,87 @@ export class OpeningReportService {
       orderBy: { sectionIndex: 'asc' },
     });
 
-    return { ...report, sections };
+    const sectionIds = sections.map((s) => s.id);
+    const revisions = sectionIds.length
+      ? await this.prisma.openingReportSectionRevision.findMany({
+          where: { sectionId: { in: sectionIds } },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+    const bySectionId = new Map<string, typeof revisions>();
+    for (const r of revisions) {
+      const prev = bySectionId.get(r.sectionId);
+      if (prev) prev.push(r);
+      else bySectionId.set(r.sectionId, [r]);
+    }
+
+    const withRevisions = sections.map((s) => ({
+      ...s,
+      revisions: bySectionId.get(s.id) ?? [],
+    }));
+
+    return {
+      ...report,
+      sections: withRevisions as unknown as OpeningReportSectionRecord[],
+    };
+  }
+
+  async updateSectionManually(
+    taskId: string,
+    sectionKey: string,
+    content: string,
+  ) {
+    const task = await this.taskService.findById(taskId);
+    this.assertCanRevise(task);
+
+    const report = await this.prisma.openingReport.findUnique({
+      where: {
+        taskId_version: { taskId, version: OPENING_REPORT_VERSION },
+      },
+    });
+    if (!report) {
+      throw new InvalidReportStateException('开题报告不存在');
+    }
+
+    const section = await this.prisma.openingReportSection.findFirst({
+      where: { reportId: report.id, sectionKey },
+    });
+    if (!section) {
+      throw new InvalidReportStateException(`未知章节: ${sectionKey}`);
+    }
+
+    const normalized = (content ?? '').replace(/\r\n/g, '\n').trim();
+    const beforeContent = section.content;
+    await this.prisma.openingReportSection.update({
+      where: { id: section.id },
+      data: {
+        status: 'COMPLETED',
+        content: normalized,
+        wordCount: countWords(normalized),
+        errorMessage: null,
+      },
+    });
+
+    await this.prisma.openingReportSectionRevision.create({
+      data: {
+        sectionId: section.id,
+        type: 'MANUAL_EDIT',
+        feedback: null,
+        beforeContent,
+        afterContent: normalized,
+      },
+    });
+
+    const assembled = await this.assembleFullContent(report.id);
+    await this.prisma.openingReport.update({
+      where: { id: report.id },
+      data: {
+        fullContent: assembled.content,
+        totalWordCount: assembled.wordCount,
+      },
+    });
+
+    return this.findSection(taskId, sectionKey);
   }
 
   async exportDocx(
@@ -664,7 +763,7 @@ export class OpeningReportService {
     await this.prisma.openingReport.delete({ where: { id: report.id } });
   }
 
-  private assertCanGenerate(task: {
+  private assertCanGenerateReport(task: {
     currentStage: unknown;
     title: string | null;
   }): void {
@@ -677,6 +776,20 @@ export class OpeningReportService {
       throw new InvalidReportStateException(
         `任务阶段不允许生成开题报告: ${String(task.currentStage)}`,
       );
+    }
+  }
+
+  private assertCanRevise(task: {
+    currentStage: unknown;
+    title: string | null;
+  }): void {
+    if (!task.title || task.title.trim().length === 0) {
+      throw new InvalidReportStateException(
+        '任务 title 为空，无法修改开题报告',
+      );
+    }
+    if (String(task.currentStage) === 'TOPIC') {
+      throw new InvalidReportStateException('请先完成题目生成后再修改开题报告');
     }
   }
 

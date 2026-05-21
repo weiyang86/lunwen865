@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
 import { getApiErrorMessage } from '@/lib/client/api-error';
 
@@ -33,9 +33,11 @@ type TopicCandidateGroup = { batch: number; items: TopicCandidate[] };
 export function ClientTopicWorkbench({
   taskId,
   onTopicConfirmed,
+  onSelectionChange,
 }: {
   taskId?: string;
   onTopicConfirmed?: (candidate: TopicCandidate) => void;
+  onSelectionChange?: (selected: boolean) => void;
 }) {
   const [count, setCount] = useState(5);
   const [topicDirection, setTopicDirection] = useState('');
@@ -50,6 +52,8 @@ export function ClientTopicWorkbench({
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<TopicCandidate[]>([]);
   const [viewMode, setViewMode] = useState<'latest' | 'all'>('latest');
+  const [progress, setProgress] = useState<number | null>(null);
+  const progressTimerRef = useRef<number | null>(null);
 
   const emptyReason = useMemo(() => {
     if (!taskId) return '请先提供 taskId（例如：/tasks?taskId=xxx）';
@@ -72,9 +76,40 @@ export function ClientTopicWorkbench({
     }
   }, [taskId]);
 
+  const stopProgressTimer = useCallback(() => {
+    if (progressTimerRef.current !== null) {
+      window.clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  }, []);
+
+  const startProgress = useCallback(() => {
+    stopProgressTimer();
+    setProgress(0);
+    progressTimerRef.current = window.setInterval(() => {
+      setProgress((prev) => {
+        if (prev === null) return 0;
+        if (prev >= 95) return prev;
+        return Math.min(95, prev + 1);
+      });
+    }, 200);
+  }, [stopProgressTimer]);
+
+  const finishProgress = useCallback(() => {
+    stopProgressTimer();
+    setProgress(100);
+    window.setTimeout(() => setProgress(null), 1200);
+  }, [stopProgressTimer]);
+
   useEffect(() => {
     void loadCandidates(viewMode);
   }, [loadCandidates, viewMode]);
+
+  useEffect(() => {
+    return () => {
+      stopProgressTimer();
+    };
+  }, [stopProgressTimer]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -98,10 +133,14 @@ export function ClientTopicWorkbench({
     try {
       setSubmitting(true);
       setError(null);
+      startProgress();
       await clientHttp.post(`/tasks/${taskId}/topics/generate`, payload);
       setViewMode('latest');
       await loadCandidates('latest');
+      finishProgress();
     } catch (err: unknown) {
+      stopProgressTimer();
+      setProgress(null);
       setError(getApiErrorMessage(err, '生成失败，请检查任务状态或稍后重试。'));
     } finally {
       setSubmitting(false);
@@ -132,10 +171,14 @@ export function ClientTopicWorkbench({
     try {
       setRegenerating(true);
       setError(null);
+      startProgress();
       await clientHttp.post(`/tasks/${taskId}/topics/regenerate`, payload);
       setViewMode('latest');
       await loadCandidates('latest');
+      finishProgress();
     } catch (err: unknown) {
+      stopProgressTimer();
+      setProgress(null);
       setError(getApiErrorMessage(err, '重试生成失败，请稍后重试。'));
     } finally {
       setRegenerating(false);
@@ -145,6 +188,10 @@ export function ClientTopicWorkbench({
   const selectedCandidate = useMemo(() => {
     return items.find((x) => x.isSelected) ?? null;
   }, [items]);
+
+  useEffect(() => {
+    onSelectionChange?.(Boolean(selectedCandidate));
+  }, [onSelectionChange, selectedCandidate]);
 
   const grouped = useMemo((): TopicCandidateGroup[] => {
     if (viewMode !== 'all') return [];
@@ -245,6 +292,20 @@ export function ClientTopicWorkbench({
         <label className="text-sm md:col-span-2">补充说明 / 重试反馈（选填）
           <textarea value={additionalContext} onChange={(e) => setAdditionalContext(e.target.value)} rows={3} placeholder="如：不想要某些关键词、需要包含某些理论/模型、希望更聚焦/更可落地" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting || regenerating || !taskId} />
         </label>
+        {progress !== null ? (
+          <div className="md:col-span-2 space-y-1">
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>{submitting ? '生成中' : regenerating ? '重试生成中' : '处理中'}</span>
+              <span>{Math.min(100, Math.max(0, Math.round(progress)))}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded bg-slate-100">
+              <div
+                className="h-2 rounded bg-emerald-500"
+                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
         {error ? <p className="md:col-span-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p> : null}
         <div className="md:col-span-2 flex flex-wrap gap-2">
           <button type="submit" disabled={submitting || regenerating || !taskId} className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60">{submitting ? '生成中...' : '生成题目'}</button>

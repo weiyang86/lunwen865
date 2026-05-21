@@ -52,21 +52,21 @@ export function PromptVariableRow({ value, onUpdate, onRemove }: RowProps) {
 
   return (
     <div className="relative mb-2 rounded-md border border-slate-200 p-3">
-      <div className="grid grid-cols-12 items-center gap-2">
+      <div className="grid grid-cols-12 items-center gap-x-3 gap-y-2">
         <div className="col-span-1 hidden items-center justify-center md:flex">
           <GripVertical className="h-4 w-4 opacity-40" />
         </div>
 
-        <div className="col-span-12 font-mono text-sm text-slate-700 md:col-span-3">
+        <div
+          className="col-span-12 min-w-0 break-all font-mono text-sm text-slate-700 md:col-span-3 md:truncate md:break-normal"
+          title={value.name}
+        >
           {value.name}
         </div>
 
-        <div className="col-span-6 md:col-span-2">
-          <Select
-            value={uiType}
-            onValueChange={(v) => onUpdate(toPatchByUiType(v as UiType))}
-          >
-            <SelectTrigger className="h-9">
+        <div className="col-span-6 min-w-0 md:col-span-2">
+          <Select value={uiType} onValueChange={(v) => onUpdate(toPatchByUiType(v as UiType))}>
+            <SelectTrigger className="h-9 w-full text-slate-900">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -77,21 +77,21 @@ export function PromptVariableRow({ value, onUpdate, onRemove }: RowProps) {
           </Select>
         </div>
 
-        <div className="col-span-6 flex items-center gap-2 md:col-span-2">
+        <div className="col-span-6 flex items-center gap-2 whitespace-nowrap md:col-span-2">
           <Checkbox
             checked={value.required}
             onCheckedChange={(v) => onUpdate({ required: v === true })}
           />
-          <span className="text-sm text-slate-700">必填</span>
+          <span className="text-sm text-slate-800">必填</span>
         </div>
 
-        <div className="col-span-12 md:col-span-3">
+        <div className="col-span-12 min-w-0 md:col-span-3">
           {uiType === 'boolean' ? (
             <Select
               value={boolValue}
               onValueChange={(v) => onUpdate({ defaultValue: v })}
             >
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 w-full text-slate-900">
                 <SelectValue placeholder="-- 请选择 --" />
               </SelectTrigger>
               <SelectContent>
@@ -106,7 +106,7 @@ export function PromptVariableRow({ value, onUpdate, onRemove }: RowProps) {
                 onChange={(e) => onUpdate({ defaultValue: e.target.value })}
                 placeholder="默认值"
                 className={cn(
-                  'h-9',
+                  'h-9 w-full text-slate-900 placeholder:text-slate-400',
                   uiType === 'number' ? 'font-mono' : '',
                   numberInvalid ? 'border-rose-300' : '',
                 )}
@@ -144,4 +144,3 @@ export function PromptVariableRow({ value, onUpdate, onRemove }: RowProps) {
     </div>
   );
 }
-

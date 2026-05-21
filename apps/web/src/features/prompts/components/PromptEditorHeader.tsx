@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
+  CircleHelp,
   History,
   Loader2,
   Rocket,
@@ -25,7 +26,10 @@ interface Props {
   onOpenVersions: () => void;
   onOpenMeta: () => void;
   onOpenDiscard: () => void;
+  onOpenHelp: () => void;
   onSaveVersion: () => void;
+  onToggleEnabled: () => void;
+  togglingEnabled: boolean;
   testOpen: boolean;
   testRunning: boolean;
   onToggleTest: () => void;
@@ -81,7 +85,10 @@ export function PromptEditorHeader({
   onOpenVersions,
   onOpenMeta,
   onOpenDiscard,
+  onOpenHelp,
   onSaveVersion,
+  onToggleEnabled,
+  togglingEnabled,
   testOpen,
   testRunning,
   onToggleTest,
@@ -109,6 +116,17 @@ export function PromptEditorHeader({
             />
             {enabled ? '启用' : '禁用'}
           </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={togglingEnabled}
+            onClick={onToggleEnabled}
+          >
+            {togglingEnabled ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : null}
+            {enabled ? '禁用模板' : '启用模板'}
+          </Button>
         </div>
 
         <div className="hidden sm:flex sm:flex-1 sm:justify-center">
@@ -208,6 +226,25 @@ export function PromptEditorHeader({
               title="丢弃草稿"
             >
               <Undo2 className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              className="hidden sm:inline-flex"
+              onClick={onOpenHelp}
+            >
+              <CircleHelp className="h-4 w-4" />
+              说明
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              className="sm:hidden"
+              onClick={onOpenHelp}
+              title="说明"
+            >
+              <CircleHelp className="h-4 w-4" />
             </Button>
 
             <Button

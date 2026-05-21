@@ -33,7 +33,7 @@
 ### 管理端
 - `GET /api/admin/orders`
 - `POST /api/admin/orders/:id/refunds`
-- `GET /api/admin/tasks`
+- `GET /api/admin/tasks`（支持 query: `bizType=CONSUMER|AGENCY`，用于区分散客任务与机构任务）
 - `POST /api/payment/prepay`
 - `POST /api/payment/notify/*`
 

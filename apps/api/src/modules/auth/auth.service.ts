@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcrypt';
+import nodemailer from 'nodemailer';
 import {
   BadRequestException,
   ConflictException,
@@ -111,7 +112,39 @@ export class AuthService {
     }
 
     const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
-    const expiresAt = new Date(now + 5 * 60_000);
+    const notifySettings =
+      dto.type === 'phone' ? await this.settings.getNotifySettings() : null;
+
+    if (dto.type === 'phone') {
+      const sms = notifySettings?.sms;
+      if (!sms?.enabled) throw new BadRequestException('短信服务未启用');
+      if (!sms.accessKeyId.trim() || !sms.accessKeySecret.trim()) {
+        throw new BadRequestException('短信服务未配置完整');
+      }
+      if (!sms.signName.trim() || !sms.templateCode.trim()) {
+        throw new BadRequestException('短信服务未配置完整');
+      }
+    }
+
+    if (dto.type === 'email') {
+      const emailSettings = (await this.settings.getNotifySettings()).email;
+      if (!emailSettings.enabled)
+        throw new BadRequestException('邮件服务未启用');
+      if (
+        !emailSettings.host.trim() ||
+        !emailSettings.user.trim() ||
+        !emailSettings.pass.trim()
+      ) {
+        throw new BadRequestException('邮件服务未配置完整');
+      }
+      if (!emailSettings.fromEmail.trim()) {
+        throw new BadRequestException('邮件服务未配置完整');
+      }
+    }
+
+    const ttlSeconds =
+      dto.type === 'phone' ? (notifySettings?.sms.codeTtlSeconds ?? 300) : 300;
+    const expiresAt = new Date(now + Math.max(ttlSeconds, 60) * 1000);
 
     await this.prisma.verifyCode.create({
       data: { target: dto.target, scene: dto.scene, code, expiresAt },
@@ -122,10 +155,7 @@ export class AuthService {
       await this.smsService.sendCode(dto.target, code, dto.scene);
       return;
     }
-
-    console.log(
-      `\n[Mock Email] 📧 ${dto.target} 验证码: ${code} (scene=${dto.scene})\n`,
-    );
+    await this.sendEmailCode(dto.target, code, dto.scene);
   }
 
   async register(dto: RegisterDto, ctx: ReqContext): Promise<AuthResult> {
@@ -153,9 +183,15 @@ export class AuthService {
       const existing = await this.userService.findByPhone(dto.phone);
       if (existing) throw new ConflictException('手机号已注册');
 
+      let hashed: string | undefined;
+      if (dto.password && dto.password.trim()) {
+        hashed = await bcrypt.hash(dto.password, 10);
+      }
+
       const nickname = dto.nickname ?? `用户_${dto.phone.slice(-4)}`;
       const user = await this.userService.create({
         phone: dto.phone,
+        password: hashed,
         nickname,
         registerChannel: dto.registerChannel,
         inviter: inviterId ? { connect: { id: inviterId } } : undefined,
@@ -167,6 +203,8 @@ export class AuthService {
 
     if (!dto.password) throw new BadRequestException('邮箱注册需要密码');
     if (!dto.email) throw new BadRequestException('请提供邮箱');
+    if (!dto.code) throw new BadRequestException('邮箱注册需要验证码');
+    await this.verifyCode(dto.email, dto.code, VerifyScene.REGISTER);
     const existing = await this.userService.findByEmail(dto.email);
     if (existing) throw new ConflictException('邮箱已注册');
 
@@ -181,6 +219,48 @@ export class AuthService {
 
     await this.grantRegisterGift(user.id);
     return this.generateTokens(this.userService.toSafeUser(user), ctx);
+  }
+
+  private async sendEmailCode(
+    target: string,
+    code: string,
+    scene: VerifyScene,
+  ): Promise<void> {
+    const settings = await this.settings.getNotifySettings();
+    if (!settings.email.enabled) {
+      throw new BadRequestException('邮件服务未启用');
+    }
+
+    const host = settings.email.host.trim();
+    const user = settings.email.user.trim();
+    const pass = settings.email.pass.trim();
+    const fromEmail = settings.email.fromEmail.trim();
+    const fromName = settings.email.fromName.trim();
+    if (!host || !user || !pass || !fromEmail) {
+      throw new BadRequestException('邮件服务未配置完整');
+    }
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port: settings.email.port,
+      secure: settings.email.secure,
+      auth: { user, pass },
+    });
+
+    const from = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
+    const subject =
+      scene === VerifyScene.REGISTER
+        ? '注册验证码'
+        : scene === VerifyScene.LOGIN
+          ? '登录验证码'
+          : '验证码';
+
+    await transporter.sendMail({
+      from,
+      to: target,
+      subject,
+      text: `你的验证码是：${code}（5 分钟内有效）。如非本人操作请忽略。`,
+    });
   }
 
   async loginByPhoneCode(
@@ -518,8 +598,10 @@ export class AuthService {
   async getMe(userId: string): Promise<{
     id: string;
     email: string | null;
+    phone: string | null;
     role: User['role'];
     name: string | null;
+    nickname: string | null;
     avatar: string | null;
   }> {
     const user = await this.prisma.user.findUnique({
@@ -527,6 +609,7 @@ export class AuthService {
       select: {
         id: true,
         email: true,
+        phone: true,
         role: true,
         nickname: true,
         avatar: true,
@@ -539,8 +622,10 @@ export class AuthService {
     return {
       id: user.id,
       email: user.email ?? null,
+      phone: user.phone ?? null,
       role: user.role,
       name: user.nickname ?? null,
+      nickname: user.nickname ?? null,
       avatar: user.avatar ?? null,
     };
   }

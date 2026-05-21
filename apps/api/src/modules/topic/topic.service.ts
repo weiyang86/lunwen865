@@ -313,6 +313,26 @@ export class TopicService {
     const extracted = extractTopicKeywordsLanguage(task);
     const academicLevel = toAcademicLevel(task.educationLevel);
 
+    const run = await this.prisma.aiGenerationRun.create({
+      data: {
+        userId: task.userId,
+        taskId,
+        stageKey: 'TOPIC',
+        actionKey: 'GENERATE',
+        sceneKey: 'paper.topic.generate',
+        status: 'RUNNING',
+        costBrainCells: 1,
+        inputSnapshot: {
+          taskId,
+          batch: nextBatch,
+          params,
+          extracted,
+          academicLevel,
+        },
+        idempotencyKey: `topic-${taskId}-${nextBatch}`,
+      },
+    });
+
     const prompt = buildTopicGenerationPrompt({
       taskTitle: task.title ?? undefined,
       major: task.major ?? undefined,
@@ -368,7 +388,10 @@ export class TopicService {
     if (deduped.length < 3) {
       await this.prisma.aiGenerationRun.update({
         where: { id: run.id },
-        data: { status: 'FAILED', errorMessage: '候选题目数量不足（少于 3 个）' },
+        data: {
+          status: 'FAILED',
+          errorMessage: '候选题目数量不足（少于 3 个）',
+        },
       });
       await this.taskService.onStageFailed(
         taskId,
@@ -420,7 +443,7 @@ export class TopicService {
         where: { id: run.id },
         data: {
           status: 'SUCCESS',
-          outputSnapshot: { count: rows.length } as unknown as Prisma.InputJsonValue,
+          outputSnapshot: { count: rows.length },
         },
       });
       return rows;

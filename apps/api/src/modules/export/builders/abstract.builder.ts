@@ -42,18 +42,38 @@ export class AbstractBuilder implements IBuilder {
       }),
     );
 
-    for (const p of snapshot.abstract
-      ? snapshot.abstract.split(/\n{2,}/g)
-      : []) {
-      const text = p.trim();
-      if (!text) continue;
+    const zhParas = snapshot.abstract
+      ? snapshot.abstract
+          .split(/\n{2,}/g)
+          .map((p) => p.trim())
+          .filter(Boolean)
+      : [];
+    if (zhParas.length === 0) {
       children.push(
         new Paragraph({
           indent: { firstLine: style.firstLineIndent },
           spacing: { line: style.lineHeight },
-          children: [new TextRun({ text, size: toHps(style.bodySize), font })],
+          children: [
+            new TextRun({
+              text: '（未生成摘要，可在“摘要生成”生成并确认后再导出）',
+              size: toHps(style.bodySize),
+              font,
+            }),
+          ],
         }),
       );
+    } else {
+      for (const text of zhParas) {
+        children.push(
+          new Paragraph({
+            indent: { firstLine: style.firstLineIndent },
+            spacing: { line: style.lineHeight },
+            children: [
+              new TextRun({ text, size: toHps(style.bodySize), font }),
+            ],
+          }),
+        );
+      }
     }
 
     const keywords = snapshot.keywords?.filter(Boolean) ?? [];

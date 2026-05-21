@@ -17,6 +17,31 @@ type JwtUser = {
   agencyId?: string;
 };
 
+function extractTokenFromCookieHeader(cookieHeader: unknown): string | null {
+  if (typeof cookieHeader !== 'string' || !cookieHeader.trim()) return null;
+  const parts = cookieHeader.split(';');
+  for (const part of parts) {
+    const [rawKey, ...rest] = part.split('=');
+    const key = (rawKey ?? '').trim();
+    if (key !== 'client_token') continue;
+    const value = rest.join('=').trim();
+    if (!value) return null;
+    const decoded = (() => {
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    })();
+    const stripped = decoded.trim();
+    const withoutBearer = stripped.toLowerCase().startsWith('bearer ')
+      ? stripped.slice('bearer '.length).trim()
+      : stripped;
+    return withoutBearer || null;
+  }
+  return null;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
@@ -24,7 +49,14 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly prisma: PrismaService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (req: unknown) => {
+          if (!req || typeof req !== 'object') return null;
+          const r = req as { headers?: { cookie?: unknown } };
+          return extractTokenFromCookieHeader(r.headers?.cookie);
+        },
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_ACCESS_SECRET', ''),
     });

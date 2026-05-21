@@ -116,7 +116,7 @@ export default function AccountPage() {
         clientAuth.setUser(cachedUser);
       }
     } catch (e: unknown) {
-      setError(getApiErrorMessage(e, '加载账户信息失败，请稍后重试。'));
+      setError(getApiErrorMessage(e, '加载个人中心信息失败，请稍后重试。'));
     } finally {
       setLoading(false);
     }
@@ -251,7 +251,7 @@ export default function AccountPage() {
   if (loading) {
     return (
       <section className="space-y-3">
-        <h1 className="text-2xl font-semibold">账户中心</h1>
+        <h1 className="text-2xl font-semibold">个人中心</h1>
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           加载中...
         </div>
@@ -262,7 +262,7 @@ export default function AccountPage() {
   if (error) {
     return (
       <section className="space-y-3">
-        <h1 className="text-2xl font-semibold">账户中心</h1>
+        <h1 className="text-2xl font-semibold">个人中心</h1>
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
           {error}
         </div>
@@ -280,9 +280,9 @@ export default function AccountPage() {
   if (!user) {
     return (
       <section className="space-y-3">
-        <h1 className="text-2xl font-semibold">账户中心</h1>
+        <h1 className="text-2xl font-semibold">个人中心</h1>
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          暂无账户信息
+          暂无个人信息
         </div>
       </section>
     );
@@ -292,7 +292,7 @@ export default function AccountPage() {
     <section className="space-y-4">
       <header className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">账户中心</h1>
+          <h1 className="text-2xl font-semibold">个人中心</h1>
           <p className="text-sm text-slate-600">完善个人资料与查看配额信息。</p>
         </div>
         <button

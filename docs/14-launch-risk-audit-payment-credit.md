@@ -364,11 +364,3 @@
 4. **正文等核心高成本节点的重复触发防重机制**。  
 
 在上述 P0 未补齐前，系统存在“重复扣费 / 重复发放 / 投诉难排障”的上线风险。
-
-
-## 2026-05-20 P0 修复进展（代码已落地）
-
-- 已新增 `AiGenerationRun`（最小版）用于记录题目生成 run 状态、输入输出快照、错误信息。
-- 已增强 `QuotaLog` 追踪字段（relatedTaskId / relatedStageKey / relatedGenerationRunId / idempotencyKey / balanceBefore）。
-- 已在题目生成链路实现：生成成功后扣减 1 脑细胞并记录流水；生成失败标记 run 失败且不扣费。
-- 已在订单支付落库环节增加 transactionId 重复占用校验，降低重复回调串单风险。

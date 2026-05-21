@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Paragraph, TableOfContents, TextRun } from 'docx';
+import { Paragraph, TextRun } from 'docx';
 import type { IBuilder } from './docx-builder.interface';
 import type { DocxStyleConfig } from '../templates/template.config';
 import type { PaperSnapshot } from '../utils/snapshot.util';
@@ -18,7 +18,7 @@ function toHps(pt: number): number {
 
 @Injectable()
 export class TocBuilder implements IBuilder {
-  build(_: PaperSnapshot, style: DocxStyleConfig) {
+  build(snapshot: PaperSnapshot, style: DocxStyleConfig) {
     const font = fontOf(style);
     const children: Paragraph[] = [];
 
@@ -35,12 +35,49 @@ export class TocBuilder implements IBuilder {
       }),
     );
 
-    children.push(
-      new TableOfContents('目录', {
-        hyperlink: true,
-        headingStyleRange: '1-3',
-      }) as unknown as Paragraph,
-    );
+    const lines: Array<{ level: 1 | 2 | 3; text: string }> = [];
+    const walk = (nodes: PaperSnapshot['outline'], level: 1 | 2 | 3) => {
+      for (const n of nodes ?? []) {
+        const prefix = n.number ? `${n.number} ` : '';
+        lines.push({ level, text: `${prefix}${n.title}`.trim() });
+        if (n.children?.length) {
+          const nextLevel: 1 | 2 | 3 = level === 1 ? 2 : 3;
+          walk(n.children, nextLevel);
+        }
+      }
+    };
+    walk(snapshot.outline ?? [], 1);
+
+    if (!lines.length) {
+      children.push(
+        new Paragraph({
+          spacing: { line: style.lineHeight },
+          children: [
+            new TextRun({
+              text: '（未生成目录大纲，可在“目录/大纲”生成并锁定后再导出）',
+              size: toHps(style.bodySize),
+              font,
+            }),
+          ],
+        }),
+      );
+    } else {
+      for (const l of lines) {
+        children.push(
+          new Paragraph({
+            indent: { left: l.level === 1 ? 0 : l.level === 2 ? 400 : 800 },
+            spacing: { line: style.lineHeight },
+            children: [
+              new TextRun({
+                text: l.text,
+                size: toHps(style.bodySize),
+                font,
+              }),
+            ],
+          }),
+        );
+      }
+    }
 
     return { children };
   }

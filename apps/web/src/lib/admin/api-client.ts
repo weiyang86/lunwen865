@@ -9,11 +9,7 @@ import { toast } from 'sonner';
 import { adminAuth } from './auth';
 import type { ApiError } from './types';
 
-const baseURL =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001').replace(
-    /\/$/,
-    '',
-  ) + '/api';
+const baseURL = '/api';
 
 export const adminApi: AxiosInstance = axios.create({
   baseURL,
@@ -55,8 +51,21 @@ adminApi.interceptors.response.use(
     return response;
   },
   (error: AxiosError<unknown>) => {
+    if (
+      (error as any)?.code === 'ERR_CANCELED' ||
+      (error as any)?.name === 'CanceledError' ||
+      axios.isCancel(error)
+    ) {
+      return Promise.reject({
+        code: -1,
+        message: 'canceled',
+        details: null,
+      } satisfies ApiError);
+    }
+
     const status = error.response?.status;
     const respData = error.response?.data as any;
+    const silentToast = Boolean((error.config as any)?.silentToast);
     const serverMsg =
       respData && typeof respData === 'object' && 'message' in respData
         ? String(respData.message)
@@ -74,32 +83,42 @@ adminApi.interceptors.response.use(
 
       if (shouldTreatAsSessionExpired) {
         adminAuth.removeToken();
-        toast.error(
-          serverMsg && serverMsg !== 'Unauthorized'
-            ? serverMsg
-            : '登录已过期，请重新登录',
-        );
+        if (!silentToast) {
+          toast.error(
+            serverMsg && serverMsg !== 'Unauthorized'
+              ? serverMsg
+              : '登录已过期，请重新登录',
+          );
+        }
         const redirect = encodeURIComponent(window.location.pathname);
         window.location.href = `/admin/login?redirect=${redirect}`;
       } else {
-        toast.error(
-          serverMsg && serverMsg !== 'Unauthorized' ? serverMsg : '账号或密码错误',
-        );
+        if (!silentToast) {
+          toast.error(
+            serverMsg && serverMsg !== 'Unauthorized'
+              ? serverMsg
+              : '账号或密码错误',
+          );
+        }
       }
     } else if (status === 403) {
-      toast.error(
-        serverMsg && serverMsg !== 'Forbidden resource' ? serverMsg : '权限不足',
-      );
+      if (!silentToast) {
+        toast.error(
+          serverMsg && serverMsg !== 'Forbidden resource' ? serverMsg : '权限不足',
+        );
+      }
     } else if (status === 429) {
-      toast.error(
-        serverMsg && serverMsg !== 'Too Many Requests'
-          ? serverMsg
-          : '请求过于频繁，请稍后再试',
-      );
+      if (!silentToast) {
+        toast.error(
+          serverMsg && serverMsg !== 'Too Many Requests'
+            ? serverMsg
+            : '请求过于频繁，请稍后再试',
+        );
+      }
     } else if (status && status >= 500) {
-      toast.error(`服务器错误 (${status})`);
+      if (!silentToast) toast.error(`服务器错误 (${status})`);
     } else {
-      toast.error(msg);
+      if (!silentToast) toast.error(msg);
     }
 
     return Promise.reject({

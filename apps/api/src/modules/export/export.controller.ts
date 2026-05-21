@@ -72,13 +72,23 @@ export class ExportController {
       uid,
       id,
     );
+
+    const safeAsciiName = (fileName || 'export.docx')
+      .replace(/[^\x20-\x7E]/g, '_')
+      .replace(/["\\]/g, '_')
+      .slice(0, 180);
+    const encoded = encodeURIComponent(fileName || 'export.docx').replace(
+      /\*/g,
+      '%2A',
+    );
+
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     );
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${encodeURIComponent(fileName)}"`,
+      `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encoded}`,
     );
     fs.createReadStream(filePath).pipe(res);
   }

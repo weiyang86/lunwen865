@@ -112,8 +112,7 @@ export class DocxBuilder {
     sections.push(this.abstract.build(snapshot, style));
     if (style.includeTOC) sections.push(this.toc.build(snapshot, style));
     sections.push(this.content.build(snapshot, style));
-    if (snapshot.references?.length)
-      sections.push(this.reference.build(snapshot, style));
+    sections.push(this.reference.build(snapshot, style));
     if (snapshot.revisions?.length)
       sections.push(this.revision.build(snapshot, style));
 

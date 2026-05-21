@@ -166,7 +166,8 @@ function buildQueryString(args: {
   return sp.toString();
 }
 
-export default function AdminTasksPage() {
+export function AdminTasksPageView(props: { kind: 'consumer' | 'agency' }) {
+  const kind = props.kind;
   const router = useRouter();
   const searchParams = useSearchParams();
   const sp = searchParams ?? (new URLSearchParams() as any);
@@ -272,6 +273,7 @@ export default function AdminTasksPage() {
     setError(null);
 
     listAdminTasks({
+      bizType: kind === 'agency' ? 'AGENCY' : 'CONSUMER',
       page: pageState.page,
       pageSize: pageState.pageSize,
       sortBy: filters.sortBy,
@@ -306,7 +308,7 @@ export default function AdminTasksPage() {
     return () => {
       cancelled = true;
     };
-  }, [pageState.page, pageState.pageSize, filters]);
+  }, [pageState.page, pageState.pageSize, filters, kind]);
 
   const selectedStatusLabels = useMemo(() => {
     if (draft.statuses.length === 0) return '全部状态';
@@ -394,6 +396,7 @@ export default function AdminTasksPage() {
       setBatchAssignOpen(false);
       setSelectedIds([]);
       await listAdminTasks({
+        bizType: kind === 'agency' ? 'AGENCY' : 'CONSUMER',
         page: pageState.page,
         pageSize: pageState.pageSize,
         sortBy: filters.sortBy,
@@ -435,6 +438,7 @@ export default function AdminTasksPage() {
       setBatchOverrideOpen(false);
       setSelectedIds([]);
       await listAdminTasks({
+        bizType: kind === 'agency' ? 'AGENCY' : 'CONSUMER',
         page: pageState.page,
         pageSize: pageState.pageSize,
         sortBy: filters.sortBy,
@@ -470,6 +474,7 @@ export default function AdminTasksPage() {
       setBatchUnlinkOpen(false);
       setSelectedIds([]);
       await listAdminTasks({
+        bizType: kind === 'agency' ? 'AGENCY' : 'CONSUMER',
         page: pageState.page,
         pageSize: pageState.pageSize,
         sortBy: filters.sortBy,
@@ -499,6 +504,7 @@ export default function AdminTasksPage() {
     setExporting(true);
     try {
       const { blob, filename } = await exportAdminTasksCsv({
+        bizType: kind === 'agency' ? 'AGENCY' : 'CONSUMER',
         page: undefined,
         pageSize: undefined,
         limit: undefined,
@@ -536,8 +542,14 @@ export default function AdminTasksPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">任务管理</h1>
-          <p className="text-sm text-slate-500">查看所有论文任务（只读）</p>
+          <h1 className="text-xl font-semibold text-slate-900">
+            {kind === 'agency' ? '任务管理（机构）' : '任务管理（散客）'}
+          </h1>
+          <div className="text-sm text-slate-500">
+            {kind === 'agency'
+              ? '机构代下单任务：管理员指派写手执行并交付'
+              : '散客自助下单任务：学生自行完成论文生成'}
+          </div>
         </div>
         <div className="h-9" />
       </div>
@@ -797,6 +809,9 @@ export default function AdminTasksPage() {
                   <TableHead className="min-w-72">标题 / 类型</TableHead>
                   <TableHead className="w-44">状态</TableHead>
                   <TableHead className="w-44">
+                    {kind === 'agency' ? '处理人（写手）' : '处理人（客户）'}
+                  </TableHead>
+                  <TableHead className="w-44">
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 text-left text-slate-700 hover:text-slate-900"
@@ -848,7 +863,7 @@ export default function AdminTasksPage() {
                 {loading && items.length === 0 ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 8 }).map((__, j) => (
+                      {Array.from({ length: 9 }).map((__, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-5 w-full" />
                         </TableCell>
@@ -857,7 +872,7 @@ export default function AdminTasksPage() {
                   ))
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-14 text-center">
+                    <TableCell colSpan={9} className="py-14 text-center">
                       <div className="text-sm text-muted-foreground">暂无任务</div>
                     </TableCell>
                   </TableRow>
@@ -898,6 +913,11 @@ export default function AdminTasksPage() {
                       </TableCell>
                       <TableCell>
                         <TaskStatusBadge status={t.status} />
+                      </TableCell>
+                      <TableCell className="text-sm text-slate-600">
+                        {kind === 'agency'
+                          ? (t.assignee?.name ?? '未指派')
+                          : (t.customer?.name ?? '—')}
                       </TableCell>
                       <TableCell className="text-sm text-slate-500">
                         {formatDateTime(t.createdAt)}
@@ -1168,4 +1188,8 @@ export default function AdminTasksPage() {
       </Dialog>
     </div>
   );
+}
+
+export default function AdminTasksPage() {
+  return <AdminTasksPageView kind="consumer" />;
 }

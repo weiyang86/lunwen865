@@ -89,6 +89,9 @@ enum TaskStatus {
   OUTLINE_GENERATING
   OUTLINE_PENDING_REVIEW
   OUTLINE_APPROVED
+  ABSTRACT_GENERATING
+  ABSTRACT_PENDING_REVIEW
+  ABSTRACT_APPROVED
   WRITING
   WRITING_PAUSED
   MERGING
@@ -105,6 +108,7 @@ enum TaskStage {
   TOPIC
   OPENING
   OUTLINE
+  ABSTRACT
   WRITING
   MERGING
   FORMATTING
@@ -404,6 +408,7 @@ model User {
   exportTasks   ExportTask[]
   quotas        UserQuota[]
   quotaLogs     QuotaLog[]
+  aiGenerationRuns AiGenerationRun[]
   orders        Order[]
   primaryTutorOrders Order[] @relation("OrderPrimaryTutor")
   taskAdminLogs TaskAdminLog[] @relation("TaskAdminLogOperator")
@@ -495,11 +500,14 @@ model Task {
   topicCandidates TopicCandidate[]
   openingReports  OpeningReport[]
   outline         Outline?
+  abstracts       TaskAbstract[]
+  abstractRevisions TaskAbstractRevision[]
   writingSessions WritingSession[]
   references      Reference[]
   chapters        Chapter[]
   paperMemory     PaperMemory?
   generationLogs  GenerationLog[]
+  aiGenerationRuns AiGenerationRun[]
   polishTasks     PolishTask[]
   adminLogs       TaskAdminLog[]
   order           Order?
@@ -515,6 +523,77 @@ model Task {
   @@index([title])
   @@index([createdAt])
   @@index([updatedAt])
+}
+
+enum AbstractStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum TaskAbstractRevisionType {
+  GENERATE
+  REWRITE
+  MANUAL_EDIT
+}
+
+model TaskAbstract {
+  id String @id @default(cuid())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  status AbstractStatus @default(PENDING)
+
+  abstractZh String? @db.Text
+  abstractEn String? @db.Text
+
+  feedback     String?  @db.Text
+  errorMessage String?  @db.Text
+  retryCount   Int      @default(0)
+  durationMs   Int?
+
+  llmModel String?
+
+  version Int
+
+  revisions TaskAbstractRevision[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([taskId, version])
+  @@index([taskId])
+  @@index([status])
+}
+
+model TaskAbstractRevision {
+  id String @id @default(cuid())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  abstractId String?
+  abstract   TaskAbstract? @relation(fields: [abstractId], references: [id], onDelete: SetNull)
+
+  type TaskAbstractRevisionType
+  feedback String? @db.Text
+
+  fromVersion Int?
+  toVersion   Int?
+
+  beforeZh String? @db.Text
+  beforeEn String? @db.Text
+  afterZh  String? @db.Text
+  afterEn  String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([abstractId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 model TaskAdminLog {
@@ -1092,6 +1171,7 @@ model OpeningReportSection {
   retryCount  Int                      @default(0)
 
   report OpeningReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  revisions OpeningReportSectionRevision[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1100,6 +1180,30 @@ model OpeningReportSection {
   @@index([reportId])
   @@index([status])
   @@index([reportId, sectionIndex])
+}
+
+enum OpeningReportSectionRevisionType {
+  ADVISOR_REWRITE
+  MANUAL_EDIT
+}
+
+model OpeningReportSectionRevision {
+  id String @id @default(cuid())
+
+  sectionId String
+  section   OpeningReportSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  type OpeningReportSectionRevisionType
+  feedback String? @db.Text
+
+  beforeContent String? @db.Text
+  afterContent  String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([sectionId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 //////////////////////////////////////////////////////

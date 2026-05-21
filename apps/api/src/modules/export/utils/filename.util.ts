@@ -10,7 +10,7 @@ export function sanitizeFilename(input: string): string {
     })
     .join('');
 
-  const allowed = removed.replace(/[^\p{L}\p{N}_\-\s]/gu, '');
+  const allowed = removed.replace(/[^\p{L}\p{N}._\-\s]/gu, '');
   const collapsed = allowed.replace(/\s+/g, ' ').trim();
   return collapsed.length > 100 ? collapsed.slice(0, 100) : collapsed;
 }

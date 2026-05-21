@@ -5,9 +5,9 @@ export const STAGE_ORDER: GenerationStage[] = [
   GenerationStage.TOPIC,
   GenerationStage.OPENING,
   GenerationStage.OUTLINE,
+  GenerationStage.SUMMARY,
   GenerationStage.CHAPTER,
   GenerationStage.SECTION,
-  GenerationStage.SUMMARY,
   GenerationStage.POLISHING,
   GenerationStage.DONE,
 ];

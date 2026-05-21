@@ -65,9 +65,7 @@ export class ExportProcessor {
       const dir = path.join(process.cwd(), 'uploads', 'exports', task.userId);
       await fs.promises.mkdir(dir, { recursive: true });
 
-      const safeName = sanitizeFilename(
-        `${task.title}_${task.template}_${Date.now()}.docx`,
-      );
+      const safeName = sanitizeFilename(`${task.title || task.id}.docx`);
       const filePath = path.join(dir, `${task.id}.docx`);
       await fs.promises.writeFile(filePath, buffer);
       writtenFilePath = filePath;

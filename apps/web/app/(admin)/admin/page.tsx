@@ -38,7 +38,7 @@ export default function DashboardPage() {
         <DashboardSkeleton />
       ) : data ? (
         <>
-          <MetricCards metrics={data.metrics} />
+          <MetricCards metrics={data.metrics} ops={data.ops} />
           <RevenueChart data={data.trend} />
           <RecentOrdersTable orders={data.recentOrders} />
         </>

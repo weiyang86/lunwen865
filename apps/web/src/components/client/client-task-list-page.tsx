@@ -158,7 +158,7 @@ export function ClientTaskListPage() {
       <header className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">我的任务列表</h1>
-          <p className="text-sm text-slate-600">先创建论文任务，再进入题目生成流程。</p>
+          <p className="text-sm text-slate-600">先创建论文任务，再进入论文工作台按阶段推进。</p>
         </div>
         <button
           type="button"
@@ -202,7 +202,7 @@ export function ClientTaskListPage() {
       {error ? <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div> : null}
 
       {!loading && !error && (data?.items?.length || 0) === 0 ? (
-        <div className="rounded border border-slate-200 bg-white p-4 text-sm text-slate-600">暂无任务，先创建任务后再进入题目生成。</div>
+        <div className="rounded border border-slate-200 bg-white p-4 text-sm text-slate-600">暂无任务，先创建任务后再进入论文工作台。</div>
       ) : null}
 
       {!loading && !error && (data?.items?.length || 0) > 0 ? (
@@ -216,7 +216,7 @@ export function ClientTaskListPage() {
                   <p className="text-xs text-slate-500">状态：{task.status}</p>
                 </div>
                 <Link href={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="rounded bg-slate-900 px-3 py-2 text-xs text-white hover:bg-slate-800">
-                  进入题目生成
+                  进入论文工作台
                 </Link>
               </div>
             </li>
