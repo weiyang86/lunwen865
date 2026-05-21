@@ -63,3 +63,25 @@
 ### P0 增补接口/数据约定（2026-05-20）
 - 额度流水补充追踪字段：`relatedTaskId`、`relatedStageKey`、`relatedGenerationRunId`、`idempotencyKey`、`balanceBefore`。
 - 新增 AI 生成运行记录：`AiGenerationRun`（记录 stage/action/status/cost/input/output/error）。
+
+
+### Payment PR-2（Issue #92）
+- 新增 `POST /api/payments/create`，支持 channel: `mock|wechat|alipay`，method: `mock|native|h5|page|wap`。
+- 当前仅 `mock` 可用；`wechat/alipay` 返回“当前通道未配置或未启用”。
+- 支付金额以后端订单 `totalAmount/amountCents` 为准，不信任前端。
+- 新增 mock 驱动接口：`POST /api/payments/mock/success`、`POST /api/payments/mock/fail`（仅 development）。
+
+### Payment PR-3（Issue #93）
+- 新增 `POST /api/payments/wechat/notify`，接收 rawBody/headers/query，并记录回调日志。
+- `POST /api/payments/create` 支持 `wechat/native` 与 `wechat/h5`，分别返回 `code_url` 与 `mweb_url`。
+- 本 PR 仅做微信发起 + 回调验签解密 + 归一化 + 回调日志；不做最终到账（统一由 PR-5 处理）。
+
+### Payment PR-4（Issue #94）
+- 新增 `POST /api/payments/alipay/notify`，接收 rawBody/headers/query/body，进行验签归一化并写回调日志。
+- `POST /api/payments/create` 支持 `alipay/page` 与 `alipay/wap`，返回支付链接（payUrl）。
+- 本 PR 仅做支付宝发起 + 异步通知验签 + 归一化 + 回调日志；不做最终到账（统一由 PR-5 处理）。
+
+### Payment PR-5（Issue #95）
+- 新增统一到账服务 `PaymentCallbackService`，对 wechat/alipay/mock 统一执行：订单与支付记录校验、金额校验、providerTradeNo 冲突校验、幂等处理、到账编排。
+- 回调成功统一进入：PaymentRecord succeeded + Order paid + 脑细胞发放（沿用 OrderService.markPaid 内事务与 quotaGrant）。
+- 明确：本 PR 为支付到账核心 P0。

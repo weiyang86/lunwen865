@@ -20,10 +20,13 @@ import { OrderService } from '../order/order.service';
 import { QuotaService } from '../quota/quota.service';
 import { SettingsService } from '../settings/settings.service';
 import { PrepayDto } from './dto/prepay.dto';
+import { CreatePaymentDto } from './dto/create-payment.dto';
 import { RefundDto } from './dto/refund.dto';
 import { AlipayProvider } from './providers/alipay.provider';
 import { WechatPayProvider } from './providers/wechat-pay.provider';
+import { MockPayAdapter } from './providers/mock-pay.adapter';
 import { generateRefundNo } from '../order/utils/order-no.util';
+import { PaymentCallbackService } from './payment-callback.service';
 
 @Injectable()
 export class PaymentService {
@@ -35,6 +38,8 @@ export class PaymentService {
     private readonly settings: SettingsService,
     private readonly wechat: WechatPayProvider,
     private readonly alipay: AlipayProvider,
+    private readonly mockPay: MockPayAdapter,
+    private readonly callbackService: PaymentCallbackService,
   ) {}
 
   private async isSandbox(): Promise<boolean> {
@@ -75,6 +80,233 @@ export class PaymentService {
     return typeof id === 'string' ? id : null;
   }
 
+  async createPayment(userId: string, dto: CreatePaymentDto, clientIp: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: dto.orderId },
+      include: { product: true },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+    if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
+    if (order.status !== OrderStatus.PENDING)
+      throw new BadRequestException('订单当前状态不可支付');
+
+    if (dto.channel === 'mock' && dto.method !== 'mock') {
+      throw new BadRequestException('mock 通道仅支持 mock method');
+    }
+    if (dto.channel === 'wechat' && !['native', 'h5'].includes(dto.method)) {
+      throw new BadRequestException('wechat 通道仅支持 native/h5');
+    }
+    if (dto.channel === 'alipay' && !['page', 'wap'].includes(dto.method)) {
+      throw new BadRequestException('alipay 通道仅支持 page/wap');
+    }
+
+    const paymentRecordModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentRecord'] as {
+      create: (args: {
+        data: Record<string, unknown>;
+      }) => Promise<Record<string, unknown>>;
+      update: (args: {
+        where: { id: string };
+        data: Record<string, unknown>;
+      }) => Promise<Record<string, unknown>>;
+    };
+
+    const paymentNo = `PM_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const created = await paymentRecordModel.create({
+      data: {
+        paymentNo,
+        orderId: order.id,
+        userId,
+        amountCents: order.amountCents,
+        status: 'CREATED',
+      },
+    });
+    const paymentId = String(created['id'] ?? '');
+
+    if (dto.channel === 'mock') {
+      const payload = await this.mockPay.createPayment(
+        {
+          id: order.id,
+          orderNo: order.orderNo,
+          amountCents: order.amountCents,
+        },
+        dto.method,
+        { clientIp, userId },
+      );
+      return {
+        orderId: order.id,
+        paymentNo,
+        amountCents: order.amountCents,
+        ...payload,
+      };
+    }
+
+    if (dto.channel === 'wechat') {
+      const paymentSettings = await this.settings.getPaymentSettings();
+      const notifyUrl = paymentSettings.wechat.notifyUrl;
+      if (!notifyUrl)
+        throw new BadRequestException(
+          '微信支付未配置：缺少 WECHAT_PAY_NOTIFY_URL',
+        );
+
+      const method = dto.method === 'native' ? 'native' : 'h5';
+      const providerOrderNo = order.orderNo;
+      const reqInfo = {
+        outTradeNo: providerOrderNo,
+        description: order.product.name,
+        amountCents: order.amountCents,
+        clientIp,
+        notifyUrl,
+      };
+
+      if (method === 'native') {
+        const providerResult = await this.wechat.nativePrepay(reqInfo);
+        await paymentRecordModel.update({
+          where: { id: paymentId },
+          data: {
+            channel: PaymentChannel.WECHAT,
+            method: PaymentMethod.WECHAT_NATIVE,
+            status: 'PENDING',
+            providerOrderNo,
+            qrCodeUrl: providerResult.codeUrl,
+            rawRequest: reqInfo,
+            rawResponse: providerResult.rawResponse,
+          },
+        });
+        return {
+          channel: 'wechat',
+          method: 'native',
+          paymentNo,
+          orderId: order.id,
+          qrCodeUrl: providerResult.codeUrl,
+          codeUrl: providerResult.codeUrl,
+        };
+      }
+
+      const providerResult = await this.wechat.h5Prepay(reqInfo);
+      await paymentRecordModel.update({
+        where: { id: paymentId },
+        data: {
+          channel: PaymentChannel.WECHAT,
+          method: PaymentMethod.WECHAT_H5,
+          status: 'PENDING',
+          providerOrderNo,
+          payUrl: providerResult.mwebUrl,
+          rawRequest: reqInfo,
+          rawResponse: providerResult.rawResponse,
+        },
+      });
+      return {
+        channel: 'wechat',
+        method: 'h5',
+        paymentNo,
+        orderId: order.id,
+        payUrl: providerResult.mwebUrl,
+        mwebUrl: providerResult.mwebUrl,
+      };
+    }
+
+    if (dto.channel === 'alipay') {
+      const paymentSettings = await this.settings.getPaymentSettings();
+      if (!paymentSettings.alipay.notifyUrl) {
+        throw new BadRequestException('支付宝未配置：缺少 ALIPAY_NOTIFY_URL');
+      }
+      const reqInfo = {
+        outTradeNo: order.orderNo,
+        subject: order.product.name,
+        totalAmountCents: order.amountCents,
+        notifyUrl: paymentSettings.alipay.notifyUrl,
+        returnUrl: paymentSettings.alipay.returnUrl,
+      };
+      if (dto.method === 'page') {
+        const providerResult = await this.alipay.pagePay(reqInfo);
+        await paymentRecordModel.update({
+          where: { id: paymentId },
+          data: {
+            channel: PaymentChannel.ALIPAY,
+            method: PaymentMethod.ALIPAY_PAGE,
+            status: 'PENDING',
+            providerOrderNo: order.orderNo,
+            payUrl: providerResult.paymentUrl,
+            rawRequest: reqInfo,
+            rawResponse: providerResult.rawResponse,
+          },
+        });
+        return {
+          channel: 'alipay',
+          method: 'page',
+          paymentNo,
+          orderId: order.id,
+          payUrl: providerResult.paymentUrl,
+        };
+      }
+      const providerResult = await this.alipay.wapPay(reqInfo);
+      await paymentRecordModel.update({
+        where: { id: paymentId },
+        data: {
+          channel: PaymentChannel.ALIPAY,
+          method: PaymentMethod.ALIPAY_WAP,
+          status: 'PENDING',
+          providerOrderNo: order.orderNo,
+          payUrl: providerResult.paymentUrl,
+          rawRequest: reqInfo,
+          rawResponse: providerResult.rawResponse,
+        },
+      });
+      return {
+        channel: 'alipay',
+        method: 'wap',
+        paymentNo,
+        orderId: order.id,
+        payUrl: providerResult.paymentUrl,
+      };
+    }
+
+    throw new BadRequestException('当前通道未配置或未启用');
+  }
+
+  async mockSettle(
+    userId: string,
+    orderId: string,
+    action: 'success' | 'fail',
+  ) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException(
+        'mock success/fail 仅允许 development 环境或管理员使用',
+      );
+    }
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+    if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
+
+    if (action === 'success') {
+      return this.callbackService.process({
+        channel: 'mock',
+        providerOrderNo: order.orderNo,
+        providerTradeNo: `MOCK_${Date.now()}`,
+        amount: order.amountCents,
+        paidAt: new Date(),
+        tradeStatus: 'SUCCESS',
+        success: true,
+        raw: { source: 'mock-settle' },
+      });
+    }
+
+    const paymentRecordModel = (this.prisma as any).paymentRecord as {
+      updateMany: (args: {
+        where: { orderId: string };
+        data: { status: string };
+      }) => Promise<unknown>;
+    };
+    await paymentRecordModel.updateMany({
+      where: { orderId: order.id },
+      data: { status: 'FAILED' },
+    });
+    return { orderId: order.id, status: 'FAILED' };
+  }
   async prepay(userId: string, dto: PrepayDto, clientIp: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: dto.orderId },
@@ -221,6 +453,219 @@ export class PaymentService {
       total_amount: this.centsToYuanString(order.amountCents),
       gmt_payment: new Date().toISOString(),
     });
+  }
+
+  async handleAlipayNotifyV3(params: {
+    headers: Record<string, string>;
+    rawBody: string;
+    payload: Record<string, string>;
+    query: Record<string, string>;
+  }) {
+    const now = new Date();
+    const paymentRecordModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentRecord'] as {
+      findFirst: (args: {
+        where: Record<string, unknown>;
+      }) => Promise<Record<string, unknown> | null>;
+      update: (args: {
+        where: { id: string };
+        data: Record<string, unknown>;
+      }) => Promise<unknown>;
+    };
+    const callbackLogModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentCallbackLog'] as {
+      create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
+    };
+    try {
+      const normalized = await this.alipay.verifyAndNormalizeNotify(
+        params.payload,
+      );
+      if (
+        !normalized.providerOrderNo ||
+        !normalized.providerTradeNo ||
+        !normalized.amount
+      ) {
+        throw new BadRequestException('支付宝异步通知字段不完整');
+      }
+      const payment = await paymentRecordModel.findFirst({
+        where: { providerOrderNo: normalized.providerOrderNo },
+      });
+      let processStatus = 'IGNORED';
+      let errorMessage: string | null = null;
+      let orderId: string | null = null;
+      if (!payment) {
+        processStatus = 'ORDER_NOT_FOUND';
+        errorMessage = '支付记录不存在';
+      } else {
+        orderId = String(payment['orderId'] ?? '');
+        if (normalized.amount !== Number(payment['amountCents'])) {
+          processStatus = 'AMOUNT_MISMATCH';
+          errorMessage = '回调金额与订单金额不一致';
+        } else {
+          await paymentRecordModel.update({
+            where: { id: String(payment['id']) },
+            data: {
+              status: normalized.success ? 'SUCCEEDED' : 'FAILED',
+              providerTradeNo: normalized.providerTradeNo,
+              notifyRaw: normalized.raw,
+              notifyVerified: true,
+              notifyReceivedAt: now,
+              paidAt: normalized.paidAt ?? undefined,
+            },
+          });
+          processStatus = 'UPDATED';
+        }
+      }
+      await callbackLogModel.create({
+        data: {
+          orderId,
+          channel: PaymentChannel.ALIPAY,
+          rawHeaders: params.headers,
+          rawBody: params.rawBody,
+          rawQuery: params.query,
+          verified: true,
+          normalizedStatus: normalized.tradeStatus,
+          processStatus,
+          errorMessage,
+          receivedAt: now,
+          processedAt: new Date(),
+        },
+      });
+      return { code: 'SUCCESS' as const };
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : '处理失败';
+      await callbackLogModel.create({
+        data: {
+          orderId: null,
+          channel: PaymentChannel.ALIPAY,
+          rawHeaders: params.headers,
+          rawBody: params.rawBody,
+          rawQuery: params.query,
+          verified: false,
+          normalizedStatus: 'UNKNOWN',
+          processStatus: 'FAILED',
+          errorMessage: errMessage,
+          receivedAt: now,
+          processedAt: new Date(),
+        },
+      });
+      throw error;
+    }
+  }
+
+  async handleWechatNotifyV3(params: {
+    headers: Record<string, string>;
+    rawBody: string;
+    query: Record<string, string>;
+  }) {
+    const now = new Date();
+    const rawPayload: Record<string, unknown> = {
+      channel: 'wechat',
+      rawHeaders: params.headers,
+      rawBody: params.rawBody,
+      rawQuery: params.query,
+      receivedAt: now.toISOString(),
+    };
+
+    const paymentRecordModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentRecord'] as {
+      findFirst: (args: {
+        where: Record<string, unknown>;
+      }) => Promise<Record<string, unknown> | null>;
+      update: (args: {
+        where: { id: string };
+        data: Record<string, unknown>;
+      }) => Promise<unknown>;
+    };
+    const callbackLogModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentCallbackLog'] as {
+      create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
+    };
+
+    try {
+      const normalized = await this.wechat.verifyAndNormalizePayNotify(
+        params.headers,
+        params.rawBody,
+      );
+      const payment = await paymentRecordModel.findFirst({
+        where: { providerOrderNo: normalized.providerOrderNo },
+      });
+      const orderId = String(payment?.['orderId'] ?? '');
+
+      let processStatus = 'IGNORED';
+      let errorMessage: string | null = null;
+      if (!payment) {
+        processStatus = 'ORDER_NOT_FOUND';
+        errorMessage = '支付记录不存在';
+      } else if (normalized.amount !== Number(payment['amountCents'])) {
+        processStatus = 'AMOUNT_MISMATCH';
+        errorMessage = '回调金额与订单金额不一致';
+      } else {
+        const status = normalized.success ? 'SUCCEEDED' : 'FAILED';
+        await paymentRecordModel.update({
+          where: { id: String(payment['id']) },
+          data: {
+            status,
+            providerTradeNo: normalized.providerTradeNo,
+            notifyRaw: normalized.raw,
+            notifyVerified: true,
+            notifyReceivedAt: now,
+            paidAt: normalized.paidAt ?? undefined,
+          },
+        });
+        processStatus = 'UPDATED';
+      }
+
+      await this.callbackService.process({
+        channel: 'wechat',
+        providerOrderNo: normalized.providerOrderNo,
+        providerTradeNo: normalized.providerTradeNo,
+        amount: normalized.amount,
+        paidAt: normalized.paidAt ?? new Date(),
+        tradeStatus: normalized.tradeStatus,
+        success: normalized.success,
+        raw: normalized.raw as Record<string, unknown>,
+      });
+
+      await callbackLogModel.create({
+        data: {
+          orderId: orderId || null,
+          channel: PaymentChannel.WECHAT,
+          rawHeaders: params.headers,
+          rawBody: params.rawBody,
+          rawQuery: params.query,
+          verified: true,
+          normalizedStatus: normalized.tradeStatus,
+          processStatus,
+          errorMessage,
+          receivedAt: now,
+          processedAt: new Date(),
+        },
+      });
+      return { code: 'SUCCESS' as const };
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : '处理失败';
+      await callbackLogModel.create({
+        data: {
+          orderId: null,
+          channel: PaymentChannel.WECHAT,
+          rawHeaders: params.headers,
+          rawBody: params.rawBody,
+          rawQuery: params.query,
+          verified: false,
+          normalizedStatus: 'UNKNOWN',
+          processStatus: 'FAILED',
+          errorMessage: errMessage,
+          receivedAt: now,
+          processedAt: new Date(),
+        },
+      });
+      throw error;
+    }
   }
 
   async handleWechatPayNotify(params: {

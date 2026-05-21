@@ -951,6 +951,7 @@ model Order {
 
   paymentLogs PaymentLog[]
   paymentRecords PaymentRecord[]
+  paymentCallbackLogs PaymentCallbackLog[]
   refunds     Refund[]
   items       OrderItem[]
   quotaLogs   QuotaLog[]
@@ -1018,6 +1019,31 @@ model OrderItem {
   createdAt   DateTime @default(now())
 
   @@index([orderId])
+}
+
+
+model PaymentCallbackLog {
+  id String @id @default(cuid())
+
+  orderId String?
+  order   Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  channel PaymentChannel
+  rawHeaders Json?
+  rawBody String? @db.Text
+  rawQuery Json?
+
+  verified Boolean @default(false)
+  normalizedStatus String? @db.VarChar(30)
+  processStatus String? @db.VarChar(30)
+  errorMessage String? @db.Text
+
+  receivedAt DateTime @default(now())
+  processedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([channel, createdAt])
+  @@index([orderId, createdAt])
 }
 
 model PaymentLog {

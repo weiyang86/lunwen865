@@ -1,24 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import fs from 'node:fs';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import AlipaySdk from 'alipay-sdk';
 import { SettingsService } from '../../settings/settings.service';
-
-type AlipayPrepayResult = { paymentUrl: string };
-
-type AlipayPayNotifyResult = {
-  outTradeNo: string;
-  tradeNo: string;
-  paidAmountCents: number;
-  paidAt: Date;
-};
-
-type AlipayRefundResult = { outRefundNo: string; refundId?: string };
-type AlipayQueryResult = {
-  status: 'PENDING' | 'PAID';
-  transactionId?: string;
-  paidAmountCents?: number;
-  paidAt?: Date;
-};
 
 type AlipayExecResult = string | Record<string, unknown>;
 
@@ -29,6 +11,17 @@ type AlipayClient = {
     options?: Record<string, unknown>,
   ) => Promise<AlipayExecResult>;
   checkNotifySign: (payload: Record<string, string>) => boolean;
+};
+
+export type AlipayNotifyNormalizedResult = {
+  channel: 'alipay';
+  providerOrderNo: string;
+  providerTradeNo: string;
+  amount: number;
+  paidAt: Date | null;
+  tradeStatus: 'TRADE_SUCCESS' | 'TRADE_FINISHED' | 'FAILED' | 'UNKNOWN';
+  success: boolean;
+  raw: Record<string, string>;
 };
 
 @Injectable()
@@ -61,37 +54,39 @@ export class AlipayProvider {
     return neg ? -cents : cents;
   }
 
-  getChannel(): 'ALIPAY' {
-    return 'ALIPAY';
-  }
-
   private async isSandbox(): Promise<boolean> {
     const cfg = await this.settings.getPaymentSettings();
     return cfg.sandbox === true;
   }
 
-  private async getClient(): Promise<AlipayClient> {
+  private async assertConfigReady() {
     const cfg = await this.settings.getPaymentSettings();
-    const a = cfg.alipay;
-    const key = [a.appId, a.gateway, a.privateKeyPath, a.publicKeyPath].join(
-      '|',
-    );
-    if (this.client && this.clientKey === key) return this.client;
+    const a = cfg.alipay as Record<string, string>;
+    if (
+      !a.appId ||
+      !a.privateKeyPath ||
+      !a.publicKeyPath ||
+      !a.gateway ||
+      !a.notifyUrl
+    ) {
+      throw new BadRequestException('支付宝未配置完整，请检查环境变量');
+    }
+  }
 
-    const privateKey = a.privateKeyPath
-      ? fs.readFileSync(a.privateKeyPath, 'utf8')
-      : '';
-    const alipayPublicKey = a.publicKeyPath
-      ? fs.readFileSync(a.publicKeyPath, 'utf8')
-      : '';
+  private async getClient(): Promise<AlipayClient> {
+    await this.assertConfigReady();
+    const cfg = await this.settings.getPaymentSettings();
+    const a = cfg.alipay as Record<string, string>;
+    const key = [a.appId, a.gateway, 'alipay'].join('|');
+    if (this.client && this.clientKey === key) return this.client;
 
     const AlipayCtor = AlipaySdk as unknown as new (
       options: Record<string, unknown>,
     ) => AlipayClient;
     this.client = new AlipayCtor({
       appId: a.appId,
-      privateKey,
-      alipayPublicKey,
+      privateKey: a.privateKeyPath,
+      alipayPublicKey: a.publicKeyPath,
       gateway: a.gateway,
     });
     this.clientKey = key;
@@ -104,13 +99,11 @@ export class AlipayProvider {
     totalAmountCents: number;
     notifyUrl: string;
     returnUrl?: string;
-  }): Promise<AlipayPrepayResult> {
+  }) {
     if (await this.isSandbox()) {
-      return {
-        paymentUrl: `https://openapi.alipay.com/gateway.do/mockpay?out_trade_no=${params.outTradeNo}`,
-      };
+      const url = `https://openapi.alipay.com/gateway.do/mock-page-pay?out_trade_no=${params.outTradeNo}`;
+      return { paymentUrl: url, rawResponse: { paymentUrl: url } };
     }
-
     const client = await this.getClient();
     const totalAmount = this.centsToYuan(params.totalAmountCents);
     const url = await client.exec(
@@ -127,100 +120,88 @@ export class AlipayProvider {
       },
       { method: 'GET' },
     );
-
-    return { paymentUrl: typeof url === 'string' ? url : JSON.stringify(url) };
-  }
-
-  async verifyAndParsePayNotify(
-    payload: Record<string, string>,
-  ): Promise<AlipayPayNotifyResult> {
-    const client = await this.getClient();
-    const ok = client.checkNotifySign(payload);
-    if (!ok) throw new Error('支付宝回调验签失败');
-
-    const outTradeNo = String(payload['out_trade_no'] ?? '');
-    const tradeNo = String(payload['trade_no'] ?? '');
-    const paidAmountCents = this.yuanToCents(
-      String(payload['total_amount'] ?? '0'),
-    );
-    const paidAt = payload['gmt_payment']
-      ? new Date(String(payload['gmt_payment']))
-      : new Date();
-    return { outTradeNo, tradeNo, paidAmountCents, paidAt };
-  }
-
-  async refund(params: {
-    outTradeNo: string;
-    outRefundNo: string;
-    refundAmountCents: number;
-    reason: string;
-  }): Promise<AlipayRefundResult> {
-    if (await this.isSandbox()) {
-      return {
-        outRefundNo: params.outRefundNo,
-        refundId: `ALI_REFUND_${Date.now()}`,
-      };
-    }
-
-    const client = await this.getClient();
-    const refundAmount = this.centsToYuan(params.refundAmountCents);
-    const res = await client.exec('alipay.trade.refund', {
-      bizContent: {
-        out_trade_no: params.outTradeNo,
-        out_request_no: params.outRefundNo,
-        refund_amount: refundAmount,
-        refund_reason: params.reason,
-      },
-    });
-    const refundId =
-      typeof res === 'object' && res
-        ? typeof res['refund_id'] === 'string'
-          ? String(res['refund_id'])
-          : undefined
-        : undefined;
     return {
-      outRefundNo: params.outRefundNo,
-      refundId,
+      paymentUrl: typeof url === 'string' ? url : JSON.stringify(url),
+      rawResponse: url,
     };
   }
 
-  async query(outTradeNo: string): Promise<AlipayQueryResult> {
+  async wapPay(params: {
+    outTradeNo: string;
+    subject: string;
+    totalAmountCents: number;
+    notifyUrl: string;
+    returnUrl?: string;
+  }) {
     if (await this.isSandbox()) {
-      if (outTradeNo.startsWith('SIM_PAID_')) {
-        return {
-          status: 'PAID',
-          transactionId: `SIM_TX_${outTradeNo}`,
-          paidAmountCents: 100,
-          paidAt: new Date(),
-        };
-      }
-      return { status: 'PENDING' };
+      const url = `https://openapi.alipay.com/gateway.do/mock-wap-pay?out_trade_no=${params.outTradeNo}`;
+      return { paymentUrl: url, rawResponse: { paymentUrl: url } };
     }
     const client = await this.getClient();
-    const res = await client.exec('alipay.trade.query', {
-      bizContent: {
-        out_trade_no: outTradeNo,
+    const totalAmount = this.centsToYuan(params.totalAmountCents);
+    const url = await client.exec(
+      'alipay.trade.wap.pay',
+      {
+        notify_url: params.notifyUrl,
+        return_url: params.returnUrl,
+        bizContent: {
+          out_trade_no: params.outTradeNo,
+          product_code: 'QUICK_WAP_WAY',
+          total_amount: totalAmount,
+          subject: params.subject,
+        },
       },
-    });
-    if (!res || typeof res !== 'object') return { status: 'PENDING' };
-    const r = res;
-    const tradeStatus =
-      typeof r['trade_status'] === 'string' ? r['trade_status'] : '';
-    if (tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED') {
-      const totalAmountRaw = r['total_amount'];
-      const totalAmount =
-        typeof totalAmountRaw === 'string' ? totalAmountRaw : '0';
-      return {
-        status: 'PAID',
-        transactionId:
-          typeof r['trade_no'] === 'string' ? String(r['trade_no']) : undefined,
-        paidAmountCents: this.yuanToCents(totalAmount),
-        paidAt:
-          typeof r['send_pay_date'] === 'string'
-            ? new Date(r['send_pay_date'])
-            : undefined,
-      };
-    }
-    return { status: 'PENDING' };
+      { method: 'GET' },
+    );
+    return {
+      paymentUrl: typeof url === 'string' ? url : JSON.stringify(url),
+      rawResponse: url,
+    };
   }
+
+  async verifyAndNormalizeNotify(
+    payload: Record<string, string>,
+  ): Promise<AlipayNotifyNormalizedResult> {
+    const client = await this.getClient();
+    if (!client.checkNotifySign(payload)) {
+      throw new BadRequestException('支付宝异步通知验签失败');
+    }
+    const tradeStatusRaw = String(payload['trade_status'] ?? 'UNKNOWN');
+    const tradeStatus =
+      tradeStatusRaw === 'TRADE_SUCCESS' || tradeStatusRaw === 'TRADE_FINISHED'
+        ? tradeStatusRaw
+        : tradeStatusRaw
+          ? 'FAILED'
+          : 'UNKNOWN';
+    return {
+      channel: 'alipay',
+      providerOrderNo: String(payload['out_trade_no'] ?? ''),
+      providerTradeNo: String(payload['trade_no'] ?? ''),
+      amount: this.yuanToCents(String(payload['total_amount'] ?? '0')),
+      paidAt: payload['gmt_payment'] ? new Date(payload['gmt_payment']) : null,
+      tradeStatus,
+      success:
+        tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED',
+      raw: payload,
+    };
+  }
+
+  async verifyAndParsePayNotify(payload: Record<string, string>) {
+    const normalized = await this.verifyAndNormalizeNotify(payload);
+    return {
+      outTradeNo: normalized.providerOrderNo,
+      tradeNo: normalized.providerTradeNo,
+      paidAmountCents: normalized.amount,
+      paidAt: normalized.paidAt ?? new Date(),
+    };
+  }
+
+  refund() {
+    throw new BadRequestException('支付宝退款在当前版本未启用');
+  }
+
+  query() {
+    return Promise.resolve({ status: 'PENDING' as const });
+  }
+
 }
