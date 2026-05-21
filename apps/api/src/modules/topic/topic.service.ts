@@ -537,3 +537,15 @@ export class TopicService {
     };
   }
 }
+    const run = await this.prisma.aiGenerationRun.create({
+      data: {
+        userId: task.userId,
+        taskId,
+        stageKey: 'TOPIC',
+        actionKey: 'GENERATE',
+        sceneKey: 'topic.generate',
+        status: 'RUNNING',
+        costBrainCells: 1,
+        inputSnapshot: params as unknown as Prisma.InputJsonValue,
+      },
+    });
