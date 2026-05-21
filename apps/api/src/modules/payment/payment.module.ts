@@ -9,6 +9,7 @@ import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { AlipayProvider } from './providers/alipay.provider';
 import { WechatPayProvider } from './providers/wechat-pay.provider';
+import { MockPayAdapter } from './providers/mock-pay.adapter';
 import { ReconcileService } from './reconcile.service';
 
 @Module({
@@ -19,6 +20,7 @@ import { ReconcileService } from './reconcile.service';
     WechatPayProvider,
     AlipayProvider,
     ReconcileService,
+    MockPayAdapter,
   ],
   exports: [PaymentService],
 })

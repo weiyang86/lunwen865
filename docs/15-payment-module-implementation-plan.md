@@ -446,3 +446,10 @@
 3. **支付宝支付上线前最少要完成 PR**：`PR-1`、`PR-2`、`PR-4`、`PR-5`、`PR-6`。
 
 4. **建议路线**：强烈建议先用 **MockPay** 打通“下单→支付→到账→扣费→审计日志”闭环，再接微信/支付宝真实通道，可显著降低联调和账务风险。
+
+
+## PR-2 实施进度（Issue #92）
+- 已补齐 `PaymentProviderAdapter` 核心方法：createPayment/handleCallback/queryPayment/closePayment。
+- 已新增 `MockPayAdapter` 并接入 `PaymentService`。
+- 已新增 `POST /api/payments/create`，并对订单归属、pending 状态、channel/method 做校验。
+- wechat/alipay 当前保持未启用策略：返回明确错误，避免误接真实支付。

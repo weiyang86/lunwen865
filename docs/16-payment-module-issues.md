@@ -230,3 +230,8 @@
 - [ ] 查脑细胞流水
 - [ ] 查回调日志
 - [ ] 可定位“付款未到账/重复到账/金额不一致”
+
+- [x] PR-2 进行中：Provider Adapter 抽象 + MockPay。
+- [x] API 新增：`POST /api/payments/create`。
+- [x] mock success/fail 接口已补齐（development 可用）。
+- [ ] 未处理：真实 wechat/alipay provider 接入（后续 PR-3/PR-4）。
