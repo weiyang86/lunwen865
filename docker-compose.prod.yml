@@ -14,7 +14,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    networks: [app_net]
+    networks:
+      - app_net
 
   redis:
     image: redis:7-alpine
@@ -28,7 +29,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    networks: [app_net]
+    networks:
+      - app_net
 
   api:
     build:
@@ -36,7 +38,8 @@ services:
       dockerfile: deploy/api.Dockerfile
     container_name: thesis-api
     restart: always
-    env_file: .env.prod
+    env_file:
+      - .env.prod
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,7 +47,8 @@ services:
         condition: service_healthy
     ports:
       - "3001:3001"
-    networks: [app_net]
+    networks:
+      - app_net
 
   web:
     build:
@@ -52,12 +56,14 @@ services:
       dockerfile: deploy/web.Dockerfile
     container_name: thesis-web
     restart: always
-    env_file: .env.prod
+    env_file:
+      - .env.prod
     depends_on:
       - api
     ports:
       - "3000:3000"
-    networks: [app_net]
+    networks:
+      - app_net
 
 volumes:
   postgres_data:
@@ -65,3 +71,4 @@ volumes:
 
 networks:
   app_net:
+    driver: bridge
