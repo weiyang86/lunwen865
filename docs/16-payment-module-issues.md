@@ -230,3 +230,27 @@
 - [ ] 查脑细胞流水
 - [ ] 查回调日志
 - [ ] 可定位“付款未到账/重复到账/金额不一致”
+
+- [x] PR-2 进行中：Provider Adapter 抽象 + MockPay。
+- [x] API 新增：`POST /api/payments/create`。
+- [x] mock success/fail 接口已补齐（development 可用）。
+- [ ] 未处理：真实 wechat/alipay provider 接入（后续 PR-3/PR-4）。
+
+- [x] PR-3 进行中：Wechat Native/H5 prepay + callback logging。
+- [x] 新增微信回调接口：`POST /api/payments/wechat/notify`。
+- [ ] 未处理：统一到账编排（PR-5）、退款（后续 PR）。
+
+- [x] PR-4 进行中：Alipay Page/Wap prepay + callback logging。
+- [x] 新增支付宝通知接口：`POST /api/payments/alipay/notify`。
+- [ ] 未处理：统一到账编排（PR-5）、退款（后续 PR）。
+
+- [x] PR-5 进行中：统一回调幂等处理与脑细胞到账。
+- [x] wechat/alipay/mock 已接入统一到账服务。
+- [ ] 未处理：退款全流程、复杂对账（后续 PR）。
+
+- [x] PR-6 进行中：用户端支付页面与后台支付可观测性。
+- [x] 后台已新增支付记录和回调日志页面。
+
+- [x] PR-7 进行中：主动查询、超时关闭、异常修复入口。
+- [x] 查询成功后统一走幂等到账服务。
+- [ ] 未处理：复杂财务对账系统（不在本 PR 范围）。
