@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { PaymentChannel, PaymentMethod } from '@prisma/client';
 import type { Request } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';

@@ -44,15 +44,6 @@ export class NotifyController {
     @Req() req: Request,
     @Body() body: Record<string, string>,
   ): Promise<NotifyResultDto> {
-    const rawBody =
-      (req as unknown as { rawBody?: Buffer }).rawBody?.toString('utf8') ??
-      JSON.stringify(body);
-    const headers = Object.fromEntries(
-      Object.entries(req.headers).map(([k, v]) => [
-        k,
-        Array.isArray(v) ? v.join(',') : String(v),
-      ]),
-    );
     try {
       void req;
       await this.paymentService.handleAlipayPayNotify(body);
