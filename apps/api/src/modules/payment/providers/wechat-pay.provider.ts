@@ -200,11 +200,9 @@ export class WechatPayProvider {
 
   refund(params: {
     outTradeNo: string;
-    transactionId?: string;
-    outRefundNo: string;
-    reason: string;
-    refundAmountCents: number;
-    totalAmountCents: number;
+    description: string;
+    amountCents: number;
+    clientIp: string;
     notifyUrl: string;
   }): Promise<{ refundId?: string }> {
     void params;

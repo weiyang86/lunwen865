@@ -26,6 +26,7 @@ import { AlipayProvider } from './providers/alipay.provider';
 import { WechatPayProvider } from './providers/wechat-pay.provider';
 import { MockPayAdapter } from './providers/mock-pay.adapter';
 import { generateRefundNo } from '../order/utils/order-no.util';
+import { PaymentCallbackService } from './payment-callback.service';
 
 @Injectable()
 export class PaymentService {

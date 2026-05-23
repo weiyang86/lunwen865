@@ -215,4 +215,23 @@ export class AlipayProvider {
     void outTradeNo;
     return Promise.resolve({ status: 'PENDING' as const });
   }
+
+  async verifyAndParsePayNotify(payload: Record<string, string>) {
+    const normalized = await this.verifyAndNormalizeNotify(payload);
+    return {
+      outTradeNo: normalized.providerOrderNo,
+      tradeNo: normalized.providerTradeNo,
+      paidAmountCents: normalized.amount,
+      paidAt: normalized.paidAt ?? new Date(),
+    };
+  }
+
+  refund() {
+    throw new BadRequestException('支付宝退款在当前版本未启用');
+  }
+
+  query() {
+    return Promise.resolve({ status: 'PENDING' as const });
+  }
+
 }

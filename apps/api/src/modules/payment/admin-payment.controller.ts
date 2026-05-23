@@ -16,6 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RefundDto } from './dto/refund.dto';
 import { PaymentService } from './payment.service';
+import { ReconcileService } from './reconcile.service';
 
 @Controller('admin/payment')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -24,6 +25,7 @@ export class AdminPaymentController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
+    private readonly reconcileService: ReconcileService,
   ) {}
 
   @Get('logs/:orderId')
