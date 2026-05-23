@@ -232,22 +232,6 @@ export class AdminPaymentController {
     };
   }
 
-
-  @Post('orders/:id/query-payment')
-  queryPayment(@Param('id') orderId: string) {
-    return this.reconcileService.queryAndSettleByOrderId(orderId);
-  }
-
-  @Post('orders/cleanup-expired')
-  cleanupExpired() {
-    return this.paymentService['orderService'].closeExpired();
-  }
-
-  @Get('anomalies')
-  anomalies() {
-    return this.reconcileService.listAnomalies();
-  }
-
   @Get('records')
   async records(
     @Query('paymentNo') paymentNo?: string,

@@ -198,11 +198,24 @@ export class WechatPayProvider {
     };
   }
 
-  async refund(): Promise<{ outRefundNo: string; refundId?: string }> {
-    throw new BadRequestException('微信退款在当前版本未启用');
+  refund(params: {
+    outTradeNo: string;
+    description: string;
+    amountCents: number;
+    clientIp: string;
+    notifyUrl: string;
+  }): Promise<{ refundId?: string }> {
+    void params;
+    return Promise.reject(new BadRequestException('微信退款在当前版本未启用'));
   }
 
-  async query(): Promise<{ status: 'PENDING' | 'PAID' }> {
-    return { status: 'PENDING' };
+  query(outTradeNo: string): Promise<{
+    status: 'PENDING' | 'PAID';
+    transactionId?: string;
+    paidAmountCents?: number;
+    paidAt?: Date;
+  }> {
+    void outTradeNo;
+    return Promise.resolve({ status: 'PENDING' });
   }
 }

@@ -9,7 +9,7 @@ import { PaymentService } from './payment.service';
 export class NotifyController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Post('api/payments/wechat/notify')
+  @Post('payments/wechat/notify')
   async wechatPayNotify(
     @Req() req: Request,
     @Body() body: unknown,
@@ -39,7 +39,7 @@ export class NotifyController {
     }
   }
 
-  @Post('api/payments/alipay/notify')
+  @Post('payment/notify/alipay')
   async alipayPayNotify(
     @Req() req: Request,
     @Body() body: Record<string, string>,
@@ -54,12 +54,8 @@ export class NotifyController {
       ]),
     );
     try {
-      await this.paymentService.handleAlipayNotifyV3({
-        headers,
-        rawBody,
-        payload: body,
-        query: req.query as Record<string, string>,
-      });
+      void req;
+      await this.paymentService.handleAlipayPayNotify(body);
       return { code: 'SUCCESS' };
     } catch (error: unknown) {
       return {
@@ -69,7 +65,7 @@ export class NotifyController {
     }
   }
 
-  @Post('api/payment/notify/wechat/refund')
+  @Post('payment/notify/wechat/refund')
   async wechatRefundNotify(
     @Req() req: Request,
     @Body() body: unknown,
@@ -99,7 +95,7 @@ export class NotifyController {
     }
   }
 
-  @Post('api/payment/notify/alipay/refund')
+  @Post('payment/notify/alipay/refund')
   async alipayRefundNotify(
     @Body() body: Record<string, string>,
   ): Promise<NotifyResultDto> {

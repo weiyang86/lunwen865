@@ -196,6 +196,36 @@ export class AlipayProvider {
     };
   }
 
+  refund(params: {
+    outTradeNo: string;
+    outRefundNo: string;
+    refundAmountCents: number;
+    reason: string;
+  }): Promise<{ refundId?: string }> {
+    void params;
+    throw new BadRequestException('支付宝退款在当前版本未启用');
+  }
+
+  query(outTradeNo: string): Promise<{
+    status: 'PENDING' | 'PAID';
+    transactionId?: string;
+    paidAmountCents?: number;
+    paidAt?: Date;
+  }> {
+    void outTradeNo;
+    return Promise.resolve({ status: 'PENDING' as const });
+  }
+
+  async verifyAndParsePayNotify(payload: Record<string, string>) {
+    const normalized = await this.verifyAndNormalizeNotify(payload);
+    return {
+      outTradeNo: normalized.providerOrderNo,
+      tradeNo: normalized.providerTradeNo,
+      paidAmountCents: normalized.amount,
+      paidAt: normalized.paidAt ?? new Date(),
+    };
+  }
+
   refund() {
     throw new BadRequestException('支付宝退款在当前版本未启用');
   }

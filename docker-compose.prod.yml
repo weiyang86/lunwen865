@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: thesis-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: thesis
+      POSTGRES_PASSWORD: thesis
+      POSTGRES_DB: thesis_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thesis -d thesis_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [app_net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: thesis-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [app_net]
+
+  api:
+    build:
+      context: .
+      dockerfile: deploy/api.Dockerfile
+    container_name: thesis-api
+    restart: always
+    env_file: .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    networks: [app_net]
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    container_name: thesis-web
+    restart: always
+    env_file: .env.prod
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    networks: [app_net]
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  app_net:

@@ -20,23 +20,7 @@ import { PaymentService } from './payment.service';
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Get('api/payments/order/:orderId')
-  paymentByOrder(
-    @CurrentUser('id') uid: string,
-    @Param('orderId') orderId: string,
-  ) {
-    return this.paymentService.getMyPaymentByOrder(uid, orderId);
-  }
-
-  @Get('api/orders/:orderId/payment-status')
-  paymentStatus(
-    @CurrentUser('id') uid: string,
-    @Param('orderId') orderId: string,
-  ) {
-    return this.paymentService.getMyOrderPaymentStatus(uid, orderId);
-  }
-
-  @Post('api/payments/create')
+  @Post('payments/create')
   createPayment(
     @CurrentUser('id') uid: string,
     @Body() dto: CreatePaymentDto,
@@ -46,7 +30,7 @@ export class PaymentController {
     return this.paymentService.createPayment(uid, dto, ip);
   }
 
-  @Post('api/payments/mock/success')
+  @Post('payments/mock/success')
   mockSuccess(
     @CurrentUser('id') uid: string,
     @Body('orderId') orderId: string,
@@ -54,12 +38,12 @@ export class PaymentController {
     return this.paymentService.mockSettle(uid, orderId, 'success');
   }
 
-  @Post('api/payments/mock/fail')
+  @Post('payments/mock/fail')
   mockFail(@CurrentUser('id') uid: string, @Body('orderId') orderId: string) {
     return this.paymentService.mockSettle(uid, orderId, 'fail');
   }
 
-  @Post('api/payment/prepay')
+  @Post('payment/prepay')
   prepay(
     @CurrentUser('id') uid: string,
     @Body() dto: PrepayDto,
@@ -69,7 +53,7 @@ export class PaymentController {
     return this.paymentService.prepay(uid, dto, ip);
   }
 
-  @Post('api/payment/sandbox/simulate-paid')
+  @Post('payment/sandbox/simulate-paid')
   simulatePaid(
     @CurrentUser('id') uid: string,
     @Body('orderId') orderId: string,

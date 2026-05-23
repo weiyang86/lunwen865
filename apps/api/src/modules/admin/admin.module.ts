@@ -6,6 +6,7 @@ import { AdminSettingsModule } from './settings/admin-settings.module';
 import { StoresModule } from './stores/stores.module';
 import { AdminTasksModule } from './tasks/admin-tasks.module';
 import { UsersModule } from './users/users.module';
+import { AdminDeploymentsModule } from './deployments/admin-deployments.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UsersModule } from './users/users.module';
     StoresModule,
     CategoriesModule,
     AdminSettingsModule,
+    AdminDeploymentsModule,
   ],
 })
 export class AdminModule {}

@@ -1,12 +1,21 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { ClientPageState } from '@/components/client/client-page-state';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { clientHttp } from '@/lib/client/api-client';
 import { formatYuanFromFen } from '@/utils/format';
+import { QRCodeCanvas } from 'qrcode.react';
 
 type ApiOrder = {
   id: string;
@@ -68,8 +77,14 @@ export default function OrdersPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [payingId, setPayingId] = useState<string | null>(null);
   const [brainCellBalance, setBrainCellBalance] = useState<number>(0);
+
+  const [payDialogOpen, setPayDialogOpen] = useState(false);
+  const [payOrderId, setPayOrderId] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [payQrValue, setPayQrValue] = useState<string | null>(null);
+  const [payStatus, setPayStatus] = useState<string | null>(null);
+  const pollRef = useRef<number | null>(null);
 
   async function refreshAll() {
     setLoading(true);
@@ -93,6 +108,89 @@ export default function OrdersPage() {
   useEffect(() => {
     void refreshAll();
   }, []);
+
+  useEffect(() => {
+    if (!payDialogOpen) {
+      if (pollRef.current) {
+        window.clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    }
+  }, [payDialogOpen]);
+
+  const currentOrder = useMemo(() => {
+    if (!payOrderId) return null;
+    return orders.find((o) => o.id === payOrderId) ?? null;
+  }, [orders, payOrderId]);
+
+  const startPolling = (orderId: string) => {
+    if (pollRef.current) window.clearInterval(pollRef.current);
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const s = await clientHttp.get<{ status: string }>(
+          `/orders/${orderId}/payment-status`,
+        );
+        setPayStatus(s.status);
+        if (s.status === 'PAID' || s.status === 'COMPLETED') {
+          toast.success('支付成功');
+          setPayDialogOpen(false);
+          await refreshAll();
+        }
+      } catch {
+        return;
+      }
+    }, 3000);
+  };
+
+  const beginPrepay = async (opts: {
+    orderId: string;
+    channel: 'WECHAT' | 'ALIPAY';
+  }) => {
+    try {
+      setPaying(true);
+      setPayQrValue(null);
+      setPayStatus('PENDING');
+
+      const res = await clientHttp.post<Record<string, unknown>>('/payment/prepay', {
+        orderId: opts.orderId,
+        channel: opts.channel,
+        method: opts.channel === 'WECHAT' ? 'WECHAT_NATIVE' : 'ALIPAY_PAGE',
+      });
+
+      const codeUrl = typeof res['codeUrl'] === 'string' ? res['codeUrl'] : null;
+      const paymentUrl =
+        typeof res['paymentUrl'] === 'string' ? res['paymentUrl'] : null;
+
+      const qr = codeUrl || paymentUrl;
+      if (!qr) throw new Error('未获取到支付二维码链接');
+      setPayQrValue(qr);
+      startPolling(opts.orderId);
+
+      if (paymentUrl) {
+        window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : '发起支付失败');
+      setPayQrValue(null);
+      setPayStatus(null);
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const simulatePaid = async (orderId: string) => {
+    try {
+      setPaying(true);
+      await clientHttp.post('/payment/sandbox/simulate-paid', { orderId });
+      toast.success('已支付（沙箱）');
+      setPayDialogOpen(false);
+      await refreshAll();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : '支付失败');
+    } finally {
+      setPaying(false);
+    }
+  };
 
   const state = loading
     ? 'loading'
@@ -185,25 +283,14 @@ export default function OrdersPage() {
                   <Button
                     onClick={() => {
                       if (!canPay) return;
-                      if (payingId) return;
-                      setPayingId(o.id);
-                      void (async () => {
-                        try {
-                          await clientHttp.post('/payment/sandbox/simulate-paid', {
-                            orderId: o.id,
-                          });
-                          toast.success('已支付（沙箱）');
-                          await refreshAll();
-                        } catch (e: unknown) {
-                          toast.error(e instanceof Error ? e.message : '支付失败');
-                        } finally {
-                          setPayingId(null);
-                        }
-                      })();
+                      setPayOrderId(o.id);
+                      setPayQrValue(null);
+                      setPayStatus(null);
+                      setPayDialogOpen(true);
                     }}
-                    disabled={!canPay || payingId === o.id}
+                    disabled={!canPay}
                   >
-                    {payingId === o.id ? '支付中...' : canPay ? '支付（沙箱）' : '已完成'}
+                    {canPay ? '去支付' : '已完成'}
                   </Button>
                 </div>
               </div>
@@ -217,6 +304,86 @@ export default function OrdersPage() {
           </div>
         ) : null}
       </section>
+
+      <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>订单支付</DialogTitle>
+            <DialogDescription>
+              {currentOrder
+                ? `订单号 ${currentOrder.orderNo} · 金额 ${formatYuanFromFen(currentOrder.amountCents)}`
+                : '请选择支付方式完成支付'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Button
+                onClick={() => {
+                  if (!payOrderId) return;
+                  void beginPrepay({ orderId: payOrderId, channel: 'WECHAT' });
+                }}
+                disabled={!payOrderId || paying}
+              >
+                微信扫码支付
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!payOrderId) return;
+                  void beginPrepay({ orderId: payOrderId, channel: 'ALIPAY' });
+                }}
+                disabled={!payOrderId || paying}
+              >
+                支付宝扫码/跳转
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!payOrderId) return;
+                  void simulatePaid(payOrderId);
+                }}
+                disabled={!payOrderId || paying}
+              >
+                沙箱一键支付
+              </Button>
+            </div>
+
+            {payQrValue ? (
+              <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[240px_1fr]">
+                <div className="flex items-center justify-center">
+                  <div className="rounded-lg border border-slate-200 bg-white p-2">
+                    <QRCodeCanvas value={payQrValue} size={220} />
+                  </div>
+                </div>
+                <div className="grid gap-2 text-sm">
+                  <div className="font-medium text-slate-900">请使用微信/支付宝扫一扫</div>
+                  <div className="text-slate-600">
+                    支付状态：{payStatus ? statusLabel(payStatus) : '—'}
+                  </div>
+                  <div className="break-all rounded-md bg-slate-50 p-2 text-xs text-slate-600">
+                    {payQrValue}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    该弹框会自动轮询订单状态；支付成功后自动刷新订单列表。
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                点击上方「微信扫码支付 / 支付宝扫码/跳转」会生成二维码并弹出扫码支付。
+                {paying ? '（发起中...）' : null}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => void refreshAll()} disabled={loading}>
+              刷新订单
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ClientPageState>
   );
 }

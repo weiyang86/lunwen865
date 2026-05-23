@@ -295,31 +295,6 @@ export class TopicService {
 
     await this.assertCooldown(taskId);
     const nextBatch = await this.getNextBatch(taskId);
-    const aiGenerationRunModel = (
-      this.prisma as unknown as {
-        aiGenerationRun: {
-          create: (args: {
-            data: Prisma.InputJsonObject | Record<string, unknown>;
-          }) => Promise<{ id: string }>;
-          update: (args: {
-            where: { id: string };
-            data: Record<string, unknown>;
-          }) => Promise<unknown>;
-        };
-      }
-    ).aiGenerationRun;
-    const run = await aiGenerationRunModel.create({
-      data: {
-        userId: task.userId,
-        taskId,
-        stageKey: 'TOPIC',
-        actionKey: 'GENERATE',
-        sceneKey: 'topic.generate',
-        status: 'RUNNING',
-        costBrainCells: 1,
-        inputSnapshot: params as unknown as Prisma.InputJsonValue,
-      },
-    });
 
     await this.prisma.task.updateMany({
       where: {
@@ -338,7 +313,21 @@ export class TopicService {
     const extracted = extractTopicKeywordsLanguage(task);
     const academicLevel = toAcademicLevel(task.educationLevel);
 
-    const run = await this.prisma.aiGenerationRun.create({
+    const aiGenerationRunModel = (
+      this.prisma as unknown as {
+        aiGenerationRun: {
+          create: (args: {
+            data: Record<string, unknown> | Prisma.InputJsonObject;
+          }) => Promise<{ id: string }>;
+          update: (args: {
+            where: { id: string };
+            data: Record<string, unknown>;
+          }) => Promise<unknown>;
+        };
+      }
+    ).aiGenerationRun;
+
+    const run = await aiGenerationRunModel.create({
       data: {
         userId: task.userId,
         taskId,
@@ -387,7 +376,7 @@ export class TopicService {
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'LLM generation failed';
-      await this.prisma.aiGenerationRun.update({
+      await aiGenerationRunModel.update({
         where: { id: run.id },
         data: { status: 'FAILED', errorMessage: message },
       });
@@ -411,7 +400,7 @@ export class TopicService {
     );
 
     if (deduped.length < 3) {
-      await this.prisma.aiGenerationRun.update({
+      await aiGenerationRunModel.update({
         where: { id: run.id },
         data: {
           status: 'FAILED',
@@ -464,13 +453,33 @@ export class TopicService {
         remark: '题目生成扣费',
         tx,
       });
-      await tx.aiGenerationRun.update({
-        where: { id: run.id },
-        data: {
-          status: 'SUCCESS',
-          outputSnapshot: { count: rows.length },
-        },
-      });
+      const aiRunTx = (
+        tx as unknown as {
+          aiGenerationRun?: {
+            update: (args: {
+              where: { id: string };
+              data: Record<string, unknown>;
+            }) => Promise<unknown>;
+          };
+        }
+      ).aiGenerationRun;
+      if (aiRunTx) {
+        await aiRunTx.update({
+          where: { id: run.id },
+          data: {
+            status: 'SUCCESS',
+            outputSnapshot: { count: rows.length },
+          },
+        });
+      } else {
+        await aiGenerationRunModel.update({
+          where: { id: run.id },
+          data: {
+            status: 'SUCCESS',
+            outputSnapshot: { count: rows.length },
+          },
+        });
+      }
       return rows;
     });
 
@@ -562,15 +571,3 @@ export class TopicService {
     };
   }
 }
-    const run = await this.prisma.aiGenerationRun.create({
-      data: {
-        userId: task.userId,
-        taskId,
-        stageKey: 'TOPIC',
-        actionKey: 'GENERATE',
-        sceneKey: 'topic.generate',
-        status: 'RUNNING',
-        costBrainCells: 1,
-        inputSnapshot: params as unknown as Prisma.InputJsonValue,
-      },
-    });
