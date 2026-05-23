@@ -16,6 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RefundDto } from './dto/refund.dto';
 import { PaymentService } from './payment.service';
+import { ReconcileService } from './reconcile.service';
 
 @Controller('admin/payment')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -24,6 +25,7 @@ export class AdminPaymentController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
+    private readonly reconcileService: ReconcileService,
   ) {}
 
   @Get('logs/:orderId')
@@ -228,5 +230,90 @@ export class AdminPaymentController {
         user: o.user.nickname ?? o.user.email ?? o.user.phone ?? o.user.id,
       })),
     };
+  }
+
+
+  @Post('orders/:id/query-payment')
+  queryPayment(@Param('id') orderId: string) {
+    return this.reconcileService.queryAndSettleByOrderId(orderId);
+  }
+
+  @Post('orders/cleanup-expired')
+  cleanupExpired() {
+    return this.paymentService['orderService'].closeExpired();
+  }
+
+  @Get('anomalies')
+  anomalies() {
+    return this.reconcileService.listAnomalies();
+  }
+
+  @Get('records')
+  async records(
+    @Query('paymentNo') paymentNo?: string,
+    @Query('orderNo') orderNo?: string,
+    @Query('providerTradeNo') providerTradeNo?: string,
+    @Query('channel') channel?: string,
+    @Query('status') status?: string,
+    @Query('page') pageRaw?: string,
+    @Query('pageSize') pageSizeRaw?: string,
+  ) {
+    const page = Math.max(1, Number(pageRaw ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Number(pageSizeRaw ?? 20)));
+    const skip = (page - 1) * pageSize;
+    const paymentRecordModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentRecord'] as {
+      findMany: (args: Record<string, unknown>) => Promise<unknown[]>;
+      count: (args: Record<string, unknown>) => Promise<number>;
+    };
+    const where: Record<string, unknown> = {};
+    if (paymentNo) where['paymentNo'] = { contains: paymentNo };
+    if (providerTradeNo)
+      where['providerTradeNo'] = { contains: providerTradeNo };
+    if (channel) where['channel'] = channel;
+    if (status) where['status'] = status;
+    if (orderNo) where['providerOrderNo'] = { contains: orderNo };
+    const [items, total] = await Promise.all([
+      paymentRecordModel.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+      }),
+      paymentRecordModel.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
+  }
+
+  @Get('callback-logs')
+  async callbackLogs(
+    @Query('channel') channel?: string,
+    @Query('processStatus') processStatus?: string,
+    @Query('page') pageRaw?: string,
+    @Query('pageSize') pageSizeRaw?: string,
+  ) {
+    const page = Math.max(1, Number(pageRaw ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Number(pageSizeRaw ?? 20)));
+    const skip = (page - 1) * pageSize;
+    const callbackLogModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentCallbackLog'] as {
+      findMany: (args: Record<string, unknown>) => Promise<unknown[]>;
+      count: (args: Record<string, unknown>) => Promise<number>;
+    };
+    const where: Record<string, unknown> = {};
+    if (channel) where['channel'] = channel;
+    if (processStatus) where['processStatus'] = processStatus;
+    const [items, total] = await Promise.all([
+      callbackLogModel.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+      }),
+      callbackLogModel.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
   }
 }

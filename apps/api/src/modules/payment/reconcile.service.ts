@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import dayjs from 'dayjs';
 import { OrderService } from '../order/order.service';
+import { PaymentCallbackService } from './payment-callback.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AlipayProvider } from './providers/alipay.provider';
 import { WechatPayProvider } from './providers/wechat-pay.provider';
@@ -16,6 +17,7 @@ export class ReconcileService {
     private readonly wechat: WechatPayProvider,
     private readonly alipay: AlipayProvider,
     private readonly orderService: OrderService,
+    private readonly callbackService: PaymentCallbackService,
   ) {}
 
   @Cron('0 */5 * * * *')
@@ -54,5 +56,53 @@ export class ReconcileService {
         );
       }
     }
+  }
+
+  async queryAndSettleByOrderId(orderId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('订单不存在');
+    const paymentRecordModel = (this.prisma as unknown as Record<string, unknown>)['paymentRecord'] as {
+      findFirst: (args: { where: Record<string, unknown>; orderBy?: Record<string, unknown> }) => Promise<Record<string, unknown> | null>;
+      updateMany: (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => Promise<unknown>;
+    };
+    const record = await paymentRecordModel.findFirst({ where: { orderId }, orderBy: { createdAt: 'desc' } });
+    if (!record) return { ok: false, reason: 'PAYMENT_RECORD_NOT_FOUND' };
+
+    const channel = String(record['channel'] ?? order.channel ?? '').toUpperCase();
+    const outTradeNo = String(record['providerOrderNo'] ?? order.outTradeNo ?? order.orderNo);
+    let normalized: { success: boolean; providerTradeNo: string; amount: number; paidAt: Date; tradeStatus: string; raw: Record<string, unknown>; channel: 'wechat'|'alipay'|'mock'; providerOrderNo: string } | null = null;
+
+    if (channel === 'WECHAT') {
+      const r = await this.wechat.query(outTradeNo);
+      if (r.status === 'PAID' && r.transactionId && r.paidAmountCents) {
+        normalized = { channel: 'wechat', providerOrderNo: outTradeNo, providerTradeNo: r.transactionId, amount: r.paidAmountCents, paidAt: r.paidAt ?? new Date(), tradeStatus: 'SUCCESS', success: true, raw: { query: r } };
+      }
+    } else if (channel === 'ALIPAY') {
+      const r = await this.alipay.query(outTradeNo);
+      if (r.status === 'PAID' && r.transactionId && r.paidAmountCents) {
+        normalized = { channel: 'alipay', providerOrderNo: outTradeNo, providerTradeNo: r.transactionId, amount: r.paidAmountCents, paidAt: r.paidAt ?? new Date(), tradeStatus: 'TRADE_SUCCESS', success: true, raw: { query: r } };
+      }
+    } else {
+      normalized = { channel: 'mock', providerOrderNo: outTradeNo, providerTradeNo: String(record['providerTradeNo'] ?? `MOCK_${Date.now()}`), amount: Number(record['amountCents'] ?? order.amountCents), paidAt: new Date(), tradeStatus: 'SUCCESS', success: true, raw: { query: 'mock' } };
+    }
+
+    if (normalized) {
+      const settled = await this.callbackService.process(normalized);
+      return { ok: true, settled };
+    }
+
+    if (order.status === 'PENDING' && order.expiresAt < new Date()) {
+      await this.prisma.order.update({ where: { id: order.id }, data: { status: 'CANCELLED', cancelledAt: new Date(), remark: 'reconcile close expired' } });
+      await paymentRecordModel.updateMany({ where: { orderId: order.id, status: 'PENDING' }, data: { status: 'CLOSED' } });
+      return { ok: true, closed: true };
+    }
+
+    return { ok: true, settled: false };
+  }
+
+  async listAnomalies() {
+    const paymentRecordModel = (this.prisma as unknown as Record<string, unknown>)['paymentRecord'] as { findMany: (args: Record<string, unknown>) => Promise<Record<string, unknown>[]> };
+    const items = await paymentRecordModel.findMany({ where: { status: { in: ['SUCCEEDED', 'PENDING'] } }, orderBy: { createdAt: 'desc' }, take: 200 });
+    return items.filter((x) => (String(x['status']) === 'SUCCEEDED' && !x['paidAt']) || String(x['status']) === 'PENDING');
   }
 }

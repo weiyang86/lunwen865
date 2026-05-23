@@ -446,3 +446,42 @@
 3. **支付宝支付上线前最少要完成 PR**：`PR-1`、`PR-2`、`PR-4`、`PR-5`、`PR-6`。
 
 4. **建议路线**：强烈建议先用 **MockPay** 打通“下单→支付→到账→扣费→审计日志”闭环，再接微信/支付宝真实通道，可显著降低联调和账务风险。
+
+
+## PR-2 实施进度（Issue #92）
+- 已补齐 `PaymentProviderAdapter` 核心方法：createPayment/handleCallback/queryPayment/closePayment。
+- 已新增 `MockPayAdapter` 并接入 `PaymentService`。
+- 已新增 `POST /api/payments/create`，并对订单归属、pending 状态、channel/method 做校验。
+- wechat/alipay 当前保持未启用策略：返回明确错误，避免误接真实支付。
+
+
+## PR-3 实施进度（Issue #93）
+- 已实现 Wechat Native/H5 发起支付，写入 PaymentRecord（channel/method/status/providerOrderNo/qrCodeUrl|payUrl/rawRequest/rawResponse）。
+- 已新增微信回调入口 `POST /api/payments/wechat/notify`，支持验签解密与结果归一化。
+- 已增加回调日志模型 `PaymentCallbackLog`（记录 rawHeaders/rawBody/rawQuery/verified/normalizedStatus/processStatus/errorMessage/receivedAt/processedAt）。
+- 明确：本 PR 不做最终脑细胞到账，到账由 PR-5 统一处理。
+
+
+## PR-4 实施进度（Issue #94）
+- 已实现 Alipay Page/Wap 发起支付，写入 PaymentRecord（channel/method/status/providerOrderNo/payUrl/rawRequest/rawResponse）。
+- 已新增支付宝异步通知入口 `POST /api/payments/alipay/notify`，支持验签与结果归一化。
+- 回调处理支持字段校验（out_trade_no/trade_no/total_amount）与金额一致性校验，不做到账。
+- 明确：本 PR 不做最终脑细胞到账，到账由 PR-5 统一处理。
+
+
+## PR-5 实施进度（Issue #95）
+- 已新增 `PaymentCallbackService` 统一处理回调到账与幂等。
+- 微信/支付宝/Mock success 已接入统一到账服务。
+- 保持不做退款与复杂财务对账；本 PR 聚焦支付到账核心 P0。
+
+
+## PR-6 实施进度（Issue #96）
+- 已交付用户端最小支付闭环页面（订单确认/支付方式/微信扫码/支付结果）。
+- 已交付后台支付记录与回调日志查询页面。
+- 目标：支持定位付款未到账、重复到账、金额不一致、回调失败。
+
+
+## PR-7 实施进度（Issue #97）
+- 已补齐主动查询与补偿入口，查询到成功后统一走 PaymentCallbackService。
+- 已补齐超时订单关闭兜底（查单后关闭 pending 超时订单）。
+- 已补齐后台异常列表与修复入口（最小实现）。
