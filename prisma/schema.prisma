@@ -412,7 +412,8 @@ model User {
   orders        Order[]
   primaryTutorOrders Order[] @relation("OrderPrimaryTutor")
   taskAdminLogs TaskAdminLog[] @relation("TaskAdminLogOperator")
-
+// 新增这一行
+  paymentRecords PaymentRecord[]
   @@index([phone])
   @@index([email])
   @@index([role, status])
