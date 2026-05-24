@@ -42,6 +42,10 @@ services:
       - .env.prod
     environment:
       PORT: "3001"
+      DATABASE_URL: "postgresql://thesis:thesis@postgres:5432/thesis_db?schema=public"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,25 +57,27 @@ services:
       - app_net
 
   web:
-  build:
-    context: .
-    dockerfile: deploy/web.Dockerfile
-    args:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+      args:
+        API_BASE_URL: "http://api:3001"
+        NEXT_PUBLIC_API_BASE_URL: "/api"
+    container_name: thesis-web
+    restart: always
+    env_file:
+      - .env.prod
+    environment:
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
       API_BASE_URL: "http://api:3001"
-  container_name: thesis-web
-  restart: always
-  env_file:
-    - .env.prod
-  environment:
-    PORT: "3000"
-    HOSTNAME: "0.0.0.0"
-    API_BASE_URL: "http://api:3001"
-  depends_on:
-    - api
-  ports:
-    - "3000:3000"
-  networks:
-    - app_net
+      NEXT_PUBLIC_API_BASE_URL: "/api"
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    networks:
+      - app_net
 
 volumes:
   postgres_data:
