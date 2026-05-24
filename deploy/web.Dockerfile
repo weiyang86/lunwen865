@@ -15,6 +15,9 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 
+ARG API_BASE_URL
+ENV API_BASE_URL=$API_BASE_URL
+
 COPY . .
 
 RUN pnpm --filter web build
