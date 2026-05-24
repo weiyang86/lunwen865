@@ -62,7 +62,6 @@ services:
       dockerfile: deploy/web.Dockerfile
       args:
         API_BASE_URL: "http://api:3001"
-        NEXT_PUBLIC_API_BASE_URL: "/api"
     container_name: thesis-web
     restart: always
     env_file:
