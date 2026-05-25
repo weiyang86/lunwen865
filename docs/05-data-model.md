@@ -10,6 +10,7 @@
 - Payment/PaymentLog/Refund
 - Product/Category/Store
 - TopicCandidate/OpeningReport/Outline/WritingSession
+- TopicCandidateRevision（题目候选版本历史）
 - Reference
 - ExportTask
 - Prompt
@@ -60,3 +61,6 @@
 ### 补充（2026-05-20）
 - 新增 `AiGenerationRun`：用于记录 AI 生成执行与扣费关联。
 - `QuotaLog` 新增追踪字段：`relatedTaskId`、`relatedStageKey`、`relatedGenerationRunId`、`idempotencyKey`、`balanceBefore`。
+
+### 补充（2026-05-25）
+- 新增 `TopicCandidateRevision`：用于记录题目候选的版本历史（AI 生成、自定义选定、导师意见更改、手动更改）。

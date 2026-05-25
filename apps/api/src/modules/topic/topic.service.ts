@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { QuotaType, TaskStatus as PrismaTaskStatus } from '@prisma/client';
 import type { Prisma, Task, TopicCandidate } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -21,6 +26,8 @@ import type { EstimatedDifficulty } from './interfaces/llm-topic-output.interfac
 import type { TopicCandidateView } from './interfaces/topic-candidate.interface';
 import { buildTopicGenerationPrompt } from './prompts/topic-generation.prompt';
 import { TOPIC_GENERATION_ZOD_SCHEMA } from './prompts/topic-generation.schema';
+import type { CustomSelectTopicDto } from './dto/custom-select-topic.dto';
+import type { EditTopicCandidateDto } from './dto/edit-topic-candidate.dto';
 
 type AcademicLevel = 'UNDERGRADUATE' | 'MASTER' | 'DOCTOR';
 
@@ -30,6 +37,16 @@ interface TopicCandidateMetaV1 {
   keywords?: string[];
   estimatedDifficulty?: EstimatedDifficulty;
 }
+
+export type TopicCandidateRevisionView = {
+  id: string;
+  candidateId: string;
+  type: 'AI_GENERATED' | 'CUSTOM_SELECT' | 'ADVISOR_EDIT' | 'MANUAL_EDIT';
+  note: string | null;
+  beforeTitle: string | null;
+  afterTitle: string;
+  createdAt: Date;
+};
 
 function toAcademicLevel(educationLevel: string): AcademicLevel {
   if (educationLevel.includes('博士')) return 'DOCTOR';
@@ -235,12 +252,199 @@ export class TopicService {
       return selected;
     });
 
-    await this.taskService.onStageCompleted(taskId, GenerationStage.TOPIC);
-    await this.taskService.advanceStage(taskId, GenerationStage.OPENING);
     await this.taskService.recalculateProgress(taskId);
+    if (!task.currentStage || task.currentStage === 'TOPIC') {
+      await this.taskService.onStageCompleted(taskId, GenerationStage.TOPIC);
+      await this.taskService.advanceStage(taskId, GenerationStage.OPENING);
+      await this.taskService.recalculateProgress(taskId);
+    }
 
     this.logger.log(`题目已选定 taskId=${taskId} title=${updated.title}`);
     return this.toView(updated);
+  }
+
+  async customSelectTopic(
+    taskId: string,
+    userId: string,
+    dto: CustomSelectTopicDto,
+  ): Promise<TopicCandidateView> {
+    const task = await this.taskService.findById(taskId);
+    this.assertCanCustomSelectTopic(task);
+
+    const nextBatch = await this.getNextBatch(taskId);
+    const title = normalizeTitle(dto.title);
+    if (!title) throw new BadRequestException('题目不能为空');
+
+    const note = dto.note?.trim() ? dto.note.trim() : null;
+    const meta: TopicCandidateMetaV1 = {
+      generationBatch: nextBatch,
+      rationale: note ?? undefined,
+      keywords: [],
+    };
+
+    const type =
+      dto.type === 'MENTOR'
+        ? 'ADVISOR_EDIT'
+        : dto.type === 'SELF'
+          ? 'MANUAL_EDIT'
+          : 'CUSTOM_SELECT';
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      await tx.topicCandidate.updateMany({
+        where: { taskId },
+        data: { isSelected: false },
+      });
+
+      const candidate = await tx.topicCandidate.create({
+        data: {
+          task: { connect: { id: taskId } },
+          title,
+          description: buildDescription(meta),
+          isSelected: true,
+        },
+      });
+
+      await (
+        tx as unknown as {
+          topicCandidateRevision: {
+            create: (args: unknown) => Promise<unknown>;
+          };
+        }
+      ).topicCandidateRevision.create({
+        data: {
+          candidateId: candidate.id,
+          type,
+          note,
+          beforeTitle: null,
+          afterTitle: title,
+        },
+      });
+
+      await tx.task.update({
+        where: { id: taskId },
+        data: { title },
+      });
+
+      return candidate;
+    });
+
+    await this.taskService.recalculateProgress(taskId);
+    if (!task.currentStage || task.currentStage === 'TOPIC') {
+      await this.taskService.onStageCompleted(taskId, GenerationStage.TOPIC);
+      await this.taskService.advanceStage(
+        taskId,
+        GenerationStage.OPENING,
+        userId,
+      );
+      await this.taskService.recalculateProgress(taskId);
+    }
+
+    return this.toView(created);
+  }
+
+  async editCandidate(
+    taskId: string,
+    candidateId: string,
+    userId: string,
+    dto: EditTopicCandidateDto,
+  ): Promise<TopicCandidateView> {
+    await this.taskService.findById(taskId);
+
+    const candidate = await this.prisma.topicCandidate.findUnique({
+      where: { id: candidateId },
+    });
+    if (!candidate || candidate.taskId !== taskId) {
+      throw new TopicNotFoundException(candidateId);
+    }
+
+    const afterTitle = normalizeTitle(dto.title);
+    if (!afterTitle) throw new BadRequestException('题目不能为空');
+
+    const note = dto.note?.trim() ? dto.note.trim() : null;
+    const type = dto.type === 'MENTOR' ? 'ADVISOR_EDIT' : 'MANUAL_EDIT';
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.topicCandidate.update({
+        where: { id: candidateId },
+        data: { title: afterTitle },
+      });
+
+      await (
+        tx as unknown as {
+          topicCandidateRevision: {
+            create: (args: unknown) => Promise<unknown>;
+          };
+        }
+      ).topicCandidateRevision.create({
+        data: {
+          candidateId,
+          type,
+          note,
+          beforeTitle: candidate.title,
+          afterTitle,
+        },
+      });
+
+      if (row.isSelected) {
+        await tx.task.update({
+          where: { id: taskId },
+          data: { title: afterTitle },
+        });
+      }
+
+      return row;
+    });
+
+    await this.taskService.recalculateProgress(taskId);
+    this.logger.log(
+      `题目候选已更改 taskId=${taskId} candidateId=${candidateId} userId=${userId}`,
+    );
+    return this.toView(updated);
+  }
+
+  async listCandidateRevisions(
+    taskId: string,
+    candidateId: string,
+  ): Promise<TopicCandidateRevisionView[]> {
+    await this.taskService.findById(taskId);
+    const candidate = await this.prisma.topicCandidate.findUnique({
+      where: { id: candidateId },
+      select: { id: true, taskId: true },
+    });
+    if (!candidate || candidate.taskId !== taskId) {
+      throw new TopicNotFoundException(candidateId);
+    }
+
+    const revisions = await (
+      this.prisma as unknown as {
+        topicCandidateRevision: {
+          findMany: (args: unknown) => Promise<
+            Array<{
+              id: string;
+              candidateId: string;
+              type: TopicCandidateRevisionView['type'];
+              note: string | null;
+              beforeTitle: string | null;
+              afterTitle: string;
+              createdAt: Date;
+            }>
+          >;
+        };
+      }
+    ).topicCandidateRevision.findMany({
+      where: { candidateId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return revisions.map((r) => ({
+      id: r.id,
+      candidateId: r.candidateId,
+      type: r.type,
+      note: r.note ?? null,
+      beforeTitle: r.beforeTitle ?? null,
+      afterTitle: r.afterTitle,
+      createdAt: r.createdAt,
+    }));
   }
 
   /**
@@ -439,7 +643,23 @@ export class TopicService {
     const created = await this.prisma.$transaction(async (tx) => {
       const rows: TopicCandidate[] = [];
       for (const data of createInputs) {
-        rows.push(await tx.topicCandidate.create({ data }));
+        const candidate = await tx.topicCandidate.create({ data });
+        await (
+          tx as unknown as {
+            topicCandidateRevision: {
+              create: (args: unknown) => Promise<unknown>;
+            };
+          }
+        ).topicCandidateRevision.create({
+          data: {
+            candidateId: candidate.id,
+            type: 'AI_GENERATED',
+            note: null,
+            beforeTitle: null,
+            afterTitle: candidate.title,
+          },
+        });
+        rows.push(candidate);
       }
       await this.quotaService.consume({
         userId: task.userId,
@@ -519,9 +739,25 @@ export class TopicService {
   }
 
   private assertCanSelectTopic(task: Task): void {
-    if (task.currentStage && task.currentStage !== 'TOPIC') {
+    if (
+      task.status === 'CANCELLED' ||
+      task.status === 'DONE' ||
+      task.status === 'FAILED'
+    ) {
       throw new InvalidTaskStageException(
-        `Cannot select topic when task stage is ${task.currentStage}`,
+        `不能在状态 ${task.status} 下选定题目`,
+      );
+    }
+  }
+
+  private assertCanCustomSelectTopic(task: Task): void {
+    if (
+      task.status === 'CANCELLED' ||
+      task.status === 'DONE' ||
+      task.status === 'FAILED'
+    ) {
+      throw new InvalidTaskStageException(
+        `不能在状态 ${task.status} 下自定义题目`,
       );
     }
   }

@@ -22,6 +22,12 @@
 - `POST /api/orders`
 - `GET /api/orders/me`
 - `GET /api/tasks/:id`
+- Topic（选题）
+  - `POST /api/tasks/:taskId/topics/generate`
+  - `POST /api/tasks/:taskId/topics/regenerate`
+  - `POST /api/tasks/:taskId/topics/custom-select`（题目已确定，直接选定）
+  - `PATCH /api/tasks/:taskId/topics/:candidateId`（更改候选题目，写入版本历史）
+  - `GET /api/tasks/:taskId/topics/:candidateId/revisions`（查询版本历史）
 
 ### B 端（机构）
 - `GET /api/agency/me`

@@ -1,7 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { TaskService } from '../task/task.service';
+import { CustomSelectTopicDto } from './dto/custom-select-topic.dto';
+import { EditTopicCandidateDto } from './dto/edit-topic-candidate.dto';
 import { GenerateTopicDto } from './dto/generate-topic.dto';
 import { RegenerateTopicDto } from './dto/regenerate-topic.dto';
 import { TopicService } from './topic.service';
@@ -66,6 +76,17 @@ export class TopicController {
     return this.topicService.findCandidateById(candidateId);
   }
 
+  @Post('custom-select')
+  @ApiOperation({ summary: '自定义题目并直接选定（题目已确定场景）' })
+  async customSelect(
+    @CurrentUser('id') userId: string,
+    @Param('taskId') taskId: string,
+    @Body() dto: CustomSelectTopicDto,
+  ) {
+    await this.taskService.assertTaskOwnership(taskId, userId);
+    return this.topicService.customSelectTopic(taskId, userId, dto);
+  }
+
   @Post(':candidateId/select')
   @ApiOperation({ summary: '选定题目' })
   async select(
@@ -75,6 +96,29 @@ export class TopicController {
   ) {
     await this.taskService.assertTaskOwnership(taskId, userId);
     return this.topicService.selectTopic(taskId, candidateId);
+  }
+
+  @Patch(':candidateId')
+  @ApiOperation({ summary: '更改某个候选题目（并记录版本历史）' })
+  async editCandidate(
+    @CurrentUser('id') userId: string,
+    @Param('taskId') taskId: string,
+    @Param('candidateId') candidateId: string,
+    @Body() dto: EditTopicCandidateDto,
+  ) {
+    await this.taskService.assertTaskOwnership(taskId, userId);
+    return this.topicService.editCandidate(taskId, candidateId, userId, dto);
+  }
+
+  @Get(':candidateId/revisions')
+  @ApiOperation({ summary: '查询候选题目的版本历史' })
+  async listRevisions(
+    @CurrentUser('id') userId: string,
+    @Param('taskId') taskId: string,
+    @Param('candidateId') candidateId: string,
+  ) {
+    await this.taskService.assertTaskOwnership(taskId, userId);
+    return this.topicService.listCandidateRevisions(taskId, candidateId);
   }
 
   @Post('unselect')

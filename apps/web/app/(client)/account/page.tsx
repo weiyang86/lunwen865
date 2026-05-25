@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
 import { clientAuth, type ClientUser } from '@/lib/client/auth';
 import { getApiErrorMessage } from '@/lib/client/api-error';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type SafeUser = {
   id: string;
@@ -304,298 +305,329 @@ export default function AccountPage() {
         </button>
       </header>
 
-      <form
-        onSubmit={onSaveProfile}
-        className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2"
-      >
-        <h2 className="md:col-span-2 text-lg font-medium">个人信息</h2>
-
-        <div className="text-sm">
-          <div className="text-slate-500">用户 ID</div>
-          <div className="mt-1 break-all font-mono text-xs">{user.id}</div>
-        </div>
-
-        <div className="text-sm">
-          <div className="text-slate-500">角色</div>
-          <div className="mt-1">{user.role || 'USER'}</div>
-        </div>
-
-        <div className="text-sm">
-          <div className="text-slate-500">邮箱</div>
-          <div className="mt-1">{user.email || '-'}</div>
-        </div>
-
-        <div className="text-sm">
-          <div className="text-slate-500">手机号</div>
-          <div className="mt-1">{user.phone || '-'}</div>
-        </div>
-
-        <label className="text-sm">
-          昵称（选填）
-          <input
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            disabled={!canEdit || saving}
-            maxLength={20}
-          />
-        </label>
-
-        <label className="text-sm">
-          真实姓名（选填）
-          <input
-            value={realName}
-            onChange={(e) => setRealName(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            disabled={!canEdit || saving}
-            maxLength={20}
-          />
-        </label>
-
-        <label className="text-sm">
-          学校（选填）
-          <input
-            value={school}
-            onChange={(e) => setSchool(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            disabled={!canEdit || saving}
-            maxLength={50}
-          />
-        </label>
-
-        <label className="text-sm">
-          专业（选填）
-          <input
-            value={major}
-            onChange={(e) => setMajor(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            disabled={!canEdit || saving}
-            maxLength={50}
-          />
-        </label>
-
-        <label className="text-sm">
-          学历层次（选填）
-          <select
-            value={educationLevel ?? 'UNDERGRADUATE'}
-            onChange={(e) =>
-              setEducationLevel(e.target.value as SafeUser['educationLevel'])
-            }
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            disabled={!canEdit || saving}
-          >
-            {EDUCATION_LEVEL_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="text-sm">
-          年级（选填）
-          <input
-            value={grade}
-            onChange={(e) => setGrade(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            disabled={!canEdit || saving}
-            maxLength={50}
-          />
-        </label>
-
-        {saveError ? (
-          <p className="md:col-span-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            {saveError}
-          </p>
-        ) : null}
-        {saveSuccess ? (
-          <p className="md:col-span-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-            {saveSuccess}
-          </p>
-        ) : null}
-
-        <div className="md:col-span-2">
-          <button
-            type="submit"
-            disabled={!canEdit || saving}
-            className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
-          >
-            {saving ? '保存中...' : '保存'}
-          </button>
-        </div>
-      </form>
-
-      <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2">
-        <h2 className="md:col-span-2 text-lg font-medium">配额信息</h2>
-
-        <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-          <div className="text-slate-500">脑细胞余额</div>
-          <div className="mt-1 text-lg font-semibold">{balances?.BRAIN_CELL ?? 0}</div>
-        </div>
-
-        <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-          <div className="text-slate-500">论文生成次数</div>
-          <div className="mt-1 text-lg font-semibold">
-            {balances?.PAPER_GENERATION ?? 0}
-          </div>
-        </div>
-
-        <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-          <div className="text-slate-500">润色次数</div>
-          <div className="mt-1 text-lg font-semibold">{balances?.POLISH ?? 0}</div>
-        </div>
-
-        <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-          <div className="text-slate-500">导出次数</div>
-          <div className="mt-1 text-lg font-semibold">{balances?.EXPORT ?? 0}</div>
-        </div>
-
-        <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-          <div className="text-slate-500">AI 对话次数</div>
-          <div className="mt-1 text-lg font-semibold">{balances?.AI_CHAT ?? 0}</div>
-        </div>
-
-        <div className="md:col-span-2 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-          <div className="text-slate-500">字数额度</div>
-          <div className="mt-1 flex flex-wrap gap-4">
-            <span>总量：{wordQuota?.total ?? 0}</span>
-            <span>已用：{wordQuota?.used ?? 0}</span>
-            <span>剩余：{wordQuota?.remaining ?? 0}</span>
-          </div>
-        </div>
-
-        <div className="md:col-span-2 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="text-slate-500">脑细胞兑换服务次数</div>
-              <div className="mt-1 text-slate-700">
-                兑换后将消耗 <span className="font-semibold">{exchangeCost}</span> 脑细胞
-              </div>
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="text-sm">
-                <div className="text-slate-500">兑换类型</div>
-                <select
-                  value={exchangeType}
-                  onChange={(e) =>
-                    setExchangeType(e.target.value as ExchangeTargetType)
-                  }
-                  className="mt-1 w-40 rounded border border-slate-300 bg-white px-3 py-2"
-                  disabled={exchanging}
-                >
-                  <option value="PAPER_GENERATION">论文生成</option>
-                  <option value="POLISH">润色</option>
-                  <option value="EXPORT">导出</option>
-                  <option value="AI_CHAT">AI 对话</option>
-                </select>
-              </label>
-              <label className="text-sm">
-                <div className="text-slate-500">数量</div>
-                <input
-                  type="number"
-                  min={1}
-                  value={exchangeAmount}
-                  onChange={(e) => setExchangeAmount(Number(e.target.value))}
-                  className="mt-1 w-28 rounded border border-slate-300 bg-white px-3 py-2"
-                  disabled={exchanging}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => void onExchange()}
-                disabled={exchanging}
-                className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
-              >
-                {exchanging ? '兑换中...' : '兑换'}
-              </button>
-            </div>
-          </div>
-          <div className="mt-2 text-xs text-slate-500">
-            兑换比例：论文生成 1 次 = {exchangeRates?.paperGeneration ?? 0} 脑细胞；润色 1 次
-            = {exchangeRates?.polish ?? 0} 脑细胞；导出 1 次 = {exchangeRates?.export ?? 0}{' '}
-            脑细胞；AI 对话 1 次 = {exchangeRates?.aiChat ?? 0} 脑细胞
-          </div>
-          {exchangeError ? (
-            <div className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-              {exchangeError}
-            </div>
+      <Tabs defaultValue="profile" className="space-y-4">
+        <TabsList variant="line" className="w-full justify-start border-b bg-transparent px-0 py-0">
+          <TabsTrigger value="profile" className="rounded-none px-3 py-2">
+            个人信息
+          </TabsTrigger>
+          <TabsTrigger value="quota" className="rounded-none px-3 py-2">
+            配额信息
+          </TabsTrigger>
+          {canGrant ? (
+            <TabsTrigger value="adminQuota" className="rounded-none px-3 py-2">
+              配额调整
+            </TabsTrigger>
           ) : null}
-          {exchangeSuccess ? (
-            <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              {exchangeSuccess}
+        </TabsList>
+
+        <TabsContent value="profile">
+          <form
+            onSubmit={onSaveProfile}
+            className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2"
+          >
+            <div className="md:col-span-2 grid gap-1">
+              <div className="text-lg font-medium">个人信息</div>
+              <div className="text-sm text-slate-600">建议先完善昵称、学校、专业、学历等信息。</div>
             </div>
-          ) : null}
-        </div>
 
-        <div className="md:col-span-2 text-sm text-slate-600">
-          购买获得脑细胞，服务次数可在上方使用脑细胞兑换；如需测试可联系管理员发放。
-          <Link href="/products" className="ml-2 underline underline-offset-4">
-            前往购买
-          </Link>
-        </div>
-      </section>
+            <div className="text-sm">
+              <div className="text-slate-500">用户 ID</div>
+              <div className="mt-1 break-all font-mono text-xs">{user.id}</div>
+            </div>
 
-      {canGrant ? (
-        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-          <h2 className="text-lg font-medium">配额调整（管理员）</h2>
-          <div className="grid gap-3 md:grid-cols-3">
+            <div className="text-sm">
+              <div className="text-slate-500">角色</div>
+              <div className="mt-1">{user.role || 'USER'}</div>
+            </div>
+
+            <div className="text-sm">
+              <div className="text-slate-500">邮箱</div>
+              <div className="mt-1">{user.email || '-'}</div>
+            </div>
+
+            <div className="text-sm">
+              <div className="text-slate-500">手机号</div>
+              <div className="mt-1">{user.phone || '-'}</div>
+            </div>
+
             <label className="text-sm">
-              类型
-              <select
-                value={grantType}
-                onChange={(e) => setGrantType(e.target.value as keyof QuotaBalances)}
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                disabled={granting}
-              >
-                <option value="BRAIN_CELL">脑细胞</option>
-                <option value="PAPER_GENERATION">论文生成</option>
-                <option value="POLISH">润色</option>
-                <option value="EXPORT">导出</option>
-                <option value="AI_CHAT">AI 对话</option>
-              </select>
-            </label>
-            <label className="text-sm">
-              数量
+              昵称（选填）
               <input
-                type="number"
-                min={1}
-                value={grantAmount}
-                onChange={(e) => setGrantAmount(Number(e.target.value))}
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
                 className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                disabled={granting}
+                disabled={!canEdit || saving}
+                maxLength={20}
               />
             </label>
-            <div className="flex items-end gap-2">
-              <button
-                type="button"
-                onClick={() => void onGrant('grant')}
-                disabled={granting}
-                className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+
+            <label className="text-sm">
+              真实姓名（选填）
+              <input
+                value={realName}
+                onChange={(e) => setRealName(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                disabled={!canEdit || saving}
+                maxLength={20}
+              />
+            </label>
+
+            <label className="text-sm">
+              学校（选填）
+              <input
+                value={school}
+                onChange={(e) => setSchool(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                disabled={!canEdit || saving}
+                maxLength={50}
+              />
+            </label>
+
+            <label className="text-sm">
+              专业（选填）
+              <input
+                value={major}
+                onChange={(e) => setMajor(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                disabled={!canEdit || saving}
+                maxLength={50}
+              />
+            </label>
+
+            <label className="text-sm">
+              学历层次（选填）
+              <select
+                value={educationLevel ?? 'UNDERGRADUATE'}
+                onChange={(e) =>
+                  setEducationLevel(e.target.value as SafeUser['educationLevel'])
+                }
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                disabled={!canEdit || saving}
               >
-                发放
-              </button>
+                {EDUCATION_LEVEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm">
+              年级（选填）
+              <input
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                disabled={!canEdit || saving}
+                maxLength={50}
+              />
+            </label>
+
+            {saveError ? (
+              <p className="md:col-span-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                {saveError}
+              </p>
+            ) : null}
+            {saveSuccess ? (
+              <p className="md:col-span-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                {saveSuccess}
+              </p>
+            ) : null}
+
+            <div className="md:col-span-2">
               <button
-                type="button"
-                onClick={() => void onGrant('deduct')}
-                disabled={granting}
-                className="rounded border border-slate-300 bg-white px-4 py-2 text-sm disabled:opacity-60"
+                type="submit"
+                disabled={!canEdit || saving}
+                className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
               >
-                扣减
+                {saving ? '保存中...' : '保存'}
               </button>
             </div>
-          </div>
-          {grantError ? (
-            <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-              {grantError}
+          </form>
+        </TabsContent>
+
+        <TabsContent value="quota">
+          <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2">
+            <div className="md:col-span-2 grid gap-1">
+              <div className="text-lg font-medium">配额信息</div>
+              <div className="text-sm text-slate-600">查看余额，并按需进行脑细胞兑换。</div>
             </div>
-          ) : null}
-          {grantSuccess ? (
-            <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              {grantSuccess}
+
+            <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="text-slate-500">脑细胞余额</div>
+              <div className="mt-1 text-lg font-semibold">{balances?.BRAIN_CELL ?? 0}</div>
             </div>
-          ) : null}
-        </section>
-      ) : null}
+
+            <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="text-slate-500">论文生成次数</div>
+              <div className="mt-1 text-lg font-semibold">
+                {balances?.PAPER_GENERATION ?? 0}
+              </div>
+            </div>
+
+            <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="text-slate-500">润色次数</div>
+              <div className="mt-1 text-lg font-semibold">{balances?.POLISH ?? 0}</div>
+            </div>
+
+            <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="text-slate-500">导出次数</div>
+              <div className="mt-1 text-lg font-semibold">{balances?.EXPORT ?? 0}</div>
+            </div>
+
+            <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="text-slate-500">AI 对话次数</div>
+              <div className="mt-1 text-lg font-semibold">{balances?.AI_CHAT ?? 0}</div>
+            </div>
+
+            <div className="md:col-span-2 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="text-slate-500">字数额度</div>
+              <div className="mt-1 flex flex-wrap gap-4">
+                <span>总量：{wordQuota?.total ?? 0}</span>
+                <span>已用：{wordQuota?.used ?? 0}</span>
+                <span>剩余：{wordQuota?.remaining ?? 0}</span>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-slate-500">脑细胞兑换服务次数</div>
+                  <div className="mt-1 text-slate-700">
+                    兑换后将消耗 <span className="font-semibold">{exchangeCost}</span> 脑细胞
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="text-sm">
+                    <div className="text-slate-500">兑换类型</div>
+                    <select
+                      value={exchangeType}
+                      onChange={(e) =>
+                        setExchangeType(e.target.value as ExchangeTargetType)
+                      }
+                      className="mt-1 w-40 rounded border border-slate-300 bg-white px-3 py-2"
+                      disabled={exchanging}
+                    >
+                      <option value="PAPER_GENERATION">论文生成</option>
+                      <option value="POLISH">润色</option>
+                      <option value="EXPORT">导出</option>
+                      <option value="AI_CHAT">AI 对话</option>
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    <div className="text-slate-500">数量</div>
+                    <input
+                      type="number"
+                      min={1}
+                      value={exchangeAmount}
+                      onChange={(e) => setExchangeAmount(Number(e.target.value))}
+                      className="mt-1 w-28 rounded border border-slate-300 bg-white px-3 py-2"
+                      disabled={exchanging}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void onExchange()}
+                    disabled={exchanging}
+                    className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+                  >
+                    {exchanging ? '兑换中...' : '兑换'}
+                  </button>
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                兑换比例：论文生成 1 次 = {exchangeRates?.paperGeneration ?? 0} 脑细胞；润色 1 次
+                = {exchangeRates?.polish ?? 0} 脑细胞；导出 1 次 = {exchangeRates?.export ?? 0}{' '}
+                脑细胞；AI 对话 1 次 = {exchangeRates?.aiChat ?? 0} 脑细胞
+              </div>
+              {exchangeError ? (
+                <div className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {exchangeError}
+                </div>
+              ) : null}
+              {exchangeSuccess ? (
+                <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  {exchangeSuccess}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="md:col-span-2 text-sm text-slate-600">
+              购买获得脑细胞，服务次数可在上方使用脑细胞兑换；如需测试可联系管理员发放。
+              <Link href="/products" className="ml-2 underline underline-offset-4">
+                前往购买
+              </Link>
+            </div>
+          </section>
+        </TabsContent>
+
+        {canGrant ? (
+          <TabsContent value="adminQuota">
+            <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="grid gap-1">
+                <div className="text-lg font-medium">配额调整（管理员）</div>
+                <div className="text-sm text-slate-600">对当前用户进行发放或扣减。</div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="text-sm">
+                  类型
+                  <select
+                    value={grantType}
+                    onChange={(e) => setGrantType(e.target.value as keyof QuotaBalances)}
+                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    disabled={granting}
+                  >
+                    <option value="BRAIN_CELL">脑细胞</option>
+                    <option value="PAPER_GENERATION">论文生成</option>
+                    <option value="POLISH">润色</option>
+                    <option value="EXPORT">导出</option>
+                    <option value="AI_CHAT">AI 对话</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  数量
+                  <input
+                    type="number"
+                    min={1}
+                    value={grantAmount}
+                    onChange={(e) => setGrantAmount(Number(e.target.value))}
+                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    disabled={granting}
+                  />
+                </label>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void onGrant('grant')}
+                    disabled={granting}
+                    className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+                  >
+                    发放
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onGrant('deduct')}
+                    disabled={granting}
+                    className="rounded border border-slate-300 bg-white px-4 py-2 text-sm disabled:opacity-60"
+                  >
+                    扣减
+                  </button>
+                </div>
+              </div>
+              {grantError ? (
+                <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {grantError}
+                </div>
+              ) : null}
+              {grantSuccess ? (
+                <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  {grantSuccess}
+                </div>
+              ) : null}
+            </section>
+          </TabsContent>
+        ) : null}
+      </Tabs>
     </section>
   );
 }

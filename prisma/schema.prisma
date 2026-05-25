@@ -1167,11 +1167,38 @@ model TopicCandidate {
   isSelected  Boolean @default(false)
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  revisions TopicCandidateRevision[]
 
   createdAt DateTime @default(now())
 
   @@index([taskId])
   @@index([isSelected])
+}
+
+enum TopicCandidateRevisionType {
+  AI_GENERATED
+  CUSTOM_SELECT
+  ADVISOR_EDIT
+  MANUAL_EDIT
+}
+
+model TopicCandidateRevision {
+  id String @id @default(cuid())
+
+  candidateId String
+  candidate   TopicCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  type TopicCandidateRevisionType
+  note String? @db.Text
+
+  beforeTitle String? @db.Text
+  afterTitle  String  @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([candidateId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 //////////////////////////////////////////////////////

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { ChevronDownIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -136,7 +137,7 @@ export function ClientShell({ children }: { children: ReactNode }) {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 text-sm hover:bg-slate-50"
+                    className="group inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 text-sm shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 data-[state=open]:border-slate-300 data-[state=open]:bg-slate-50"
                   >
                     <Avatar size="sm">
                       <AvatarImage src="" alt="" />
@@ -145,6 +146,7 @@ export function ClientShell({ children }: { children: ReactNode }) {
                     <span className="max-w-28 truncate text-slate-700 md:max-w-40">
                       {userLabel}
                     </span>
+                    <ChevronDownIcon className="size-4 text-slate-500 transition group-data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52">
