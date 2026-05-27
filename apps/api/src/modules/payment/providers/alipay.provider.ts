@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import AlipaySdk from 'alipay-sdk';
+import { existsSync, readFileSync } from 'node:fs';
 import { SettingsService } from '../../settings/settings.service';
 
 type AlipayExecResult = string | Record<string, unknown>;
@@ -80,17 +81,34 @@ export class AlipayProvider {
     const key = [a.appId, a.gateway, 'alipay'].join('|');
     if (this.client && this.clientKey === key) return this.client;
 
+    const privateKey = this.loadKeyContent(a.privateKeyPath, '支付宝应用私钥');
+    const publicKey = this.loadKeyContent(a.publicKeyPath, '支付宝公钥');
+
     const AlipayCtor = AlipaySdk as unknown as new (
       options: Record<string, unknown>,
     ) => AlipayClient;
     this.client = new AlipayCtor({
       appId: a.appId,
-      privateKey: a.privateKeyPath,
-      alipayPublicKey: a.publicKeyPath,
+      privateKey,
+      alipayPublicKey: publicKey,
       gateway: a.gateway,
     });
     this.clientKey = key;
     return this.client;
+  }
+
+  private loadKeyContent(value: string, label: string): string {
+    const raw = String(value ?? '').trim();
+    if (!raw) {
+      throw new BadRequestException(`${label}未配置`);
+    }
+    if (raw.includes('BEGIN') && raw.includes('KEY')) {
+      return raw;
+    }
+    if (!existsSync(raw)) {
+      throw new BadRequestException(`${label}文件不可读: ${raw}`);
+    }
+    return readFileSync(raw, 'utf8');
   }
 
   async pagePay(params: {
@@ -212,7 +230,40 @@ export class AlipayProvider {
     paidAmountCents?: number;
     paidAt?: Date;
   }> {
-    void outTradeNo;
-    return Promise.resolve({ status: 'PENDING' as const });
+    return this.queryTrade(outTradeNo);
+  }
+
+  private async queryTrade(outTradeNo: string): Promise<{
+    status: 'PENDING' | 'PAID';
+    transactionId?: string;
+    paidAmountCents?: number;
+    paidAt?: Date;
+  }> {
+    if (await this.isSandbox()) {
+      return { status: 'PENDING' as const };
+    }
+    const client = await this.getClient();
+    const rsp = await client.exec('alipay.trade.query', {
+      bizContent: { out_trade_no: outTradeNo },
+    });
+    const response =
+      typeof rsp === 'string' ? ({ raw: rsp } as Record<string, unknown>) : rsp;
+    const root = response['alipay_trade_query_response'];
+    const data =
+      root && typeof root === 'object'
+        ? (root as Record<string, unknown>)
+        : (response as Record<string, unknown>);
+    const status = String(data['trade_status'] ?? '');
+    if (status === 'TRADE_SUCCESS' || status === 'TRADE_FINISHED') {
+      return {
+        status: 'PAID',
+        transactionId: String(data['trade_no'] ?? ''),
+        paidAmountCents: this.yuanToCents(String(data['total_amount'] ?? '0')),
+        paidAt: data['send_pay_date']
+          ? new Date(String(data['send_pay_date']))
+          : undefined,
+      };
+    }
+    return { status: 'PENDING' as const };
   }
 }
