@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { readFileSync } from 'node:fs';
 import WxPay from 'wechatpay-node-v3';
 import { SettingsService } from '../../settings/settings.service';
 
@@ -48,6 +49,7 @@ type WxPayClient = {
   }) => Promise<WxPayTransactionsResponse>;
   verifySign: (headers: Record<string, string>, body: string) => boolean;
   decipher_gcm: (resource: unknown) => WxPayDecipheredResource;
+  [key: string]: unknown;
 };
 
 @Injectable()
@@ -65,8 +67,30 @@ export class WechatPayProvider {
   private async assertWechatConfigReady() {
     const cfg = await this.settings.getPaymentSettings();
     const w = cfg.wechat;
-    if (!w.appid || !w.mchid || !w.serialNo || !w.apiV3Key || !w.notifyUrl) {
+    if (
+      !w.appid ||
+      !w.mchid ||
+      !w.serialNo ||
+      !w.apiV3Key ||
+      !w.notifyUrl ||
+      !w.privateKeyPath
+    ) {
       throw new BadRequestException('微信支付未配置完整，请检查环境变量');
+    }
+  }
+
+  private loadSecretContent(raw: string, label: string): string {
+    const value = String(raw ?? '').trim();
+    if (!value) {
+      throw new BadRequestException(`微信支付配置缺失：${label}`);
+    }
+    if (value.includes('-----BEGIN')) {
+      return value;
+    }
+    try {
+      return readFileSync(value, 'utf8');
+    } catch {
+      throw new BadRequestException(`微信支付密钥文件不可读：${label}`);
     }
   }
 
@@ -79,7 +103,10 @@ export class WechatPayProvider {
     );
     if (this.client && this.clientKey === key) return this.client;
 
-    const privateKey = w.privateKeyPath || '';
+    const privateKey = this.loadSecretContent(
+      w.privateKeyPath,
+      'privateKeyPath',
+    );
     const WxPayCtor = WxPay as unknown as new (
       options: Record<string, unknown>,
     ) => WxPayClient;
@@ -207,8 +234,7 @@ export class WechatPayProvider {
     totalAmountCents: number;
     notifyUrl: string;
   }): Promise<{ refundId?: string }> {
-    void params;
-    return Promise.reject(new BadRequestException('微信退款在当前版本未启用'));
+    return this.applyRefund(params);
   }
 
   query(outTradeNo: string): Promise<{
@@ -217,7 +243,86 @@ export class WechatPayProvider {
     paidAmountCents?: number;
     paidAt?: Date;
   }> {
-    void outTradeNo;
-    return Promise.resolve({ status: 'PENDING' });
+    return this.queryTrade(outTradeNo);
+  }
+
+  private async queryTrade(outTradeNo: string): Promise<{
+    status: 'PENDING' | 'PAID';
+    transactionId?: string;
+    paidAmountCents?: number;
+    paidAt?: Date;
+  }> {
+    if (await this.isSandbox()) {
+      return { status: 'PENDING' as const };
+    }
+    const client = (await this.getClient()) as unknown as Record<string, unknown>;
+    const fn =
+      client['queryTransactionByOutTradeNo'] ??
+      client['transactions_out_trade_no'] ??
+      client['transactionQueryByOutTradeNo'];
+    if (typeof fn !== 'function') {
+      return { status: 'PENDING' as const };
+    }
+    const rsp = await (
+      fn as (params: Record<string, unknown>) => Promise<Record<string, unknown>>
+    )({ out_trade_no: outTradeNo });
+    const tradeState = String(rsp['trade_state'] ?? '');
+    if (tradeState === 'SUCCESS') {
+      const amountRaw =
+        rsp['amount'] && typeof rsp['amount'] === 'object'
+          ? (rsp['amount'] as Record<string, unknown>)['total']
+          : undefined;
+      return {
+        status: 'PAID',
+        transactionId: String(rsp['transaction_id'] ?? ''),
+        paidAmountCents: Number(amountRaw ?? 0),
+        paidAt: rsp['success_time']
+          ? new Date(String(rsp['success_time']))
+          : undefined,
+      };
+    }
+    return { status: 'PENDING' as const };
+  }
+
+  private async applyRefund(params: {
+    outTradeNo: string;
+    transactionId?: string;
+    outRefundNo: string;
+    reason: string;
+    refundAmountCents: number;
+    totalAmountCents: number;
+    notifyUrl: string;
+  }): Promise<{ refundId?: string }> {
+    if (await this.isSandbox()) {
+      return { refundId: `WX_REFUND_${params.outRefundNo}` };
+    }
+    const client = (await this.getClient()) as unknown as Record<string, unknown>;
+    const fn =
+      client['refund'] ??
+      client['refunds'] ??
+      client['transactions_refunds'] ??
+      client['refundByOutTradeNo'];
+    if (typeof fn !== 'function') {
+      throw new BadRequestException('微信退款能力不可用：SDK 未暴露退款方法');
+    }
+    const payload: Record<string, unknown> = {
+      out_trade_no: params.outTradeNo,
+      out_refund_no: params.outRefundNo,
+      reason: params.reason,
+      notify_url: params.notifyUrl,
+      amount: {
+        refund: params.refundAmountCents,
+        total: params.totalAmountCents,
+        currency: 'CNY',
+      },
+    };
+    if (params.transactionId) {
+      payload['transaction_id'] = params.transactionId;
+    }
+    const rsp = await (
+      fn as (p: Record<string, unknown>) => Promise<Record<string, unknown>>
+    )(payload);
+    const refundId = rsp['refund_id'];
+    return { refundId: typeof refundId === 'string' ? refundId : undefined };
   }
 }
