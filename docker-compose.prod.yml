@@ -46,6 +46,8 @@ services:
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ""
+    volumes:
+    - ./secrets:/app/secrets:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,7 +58,7 @@ services:
     networks:
       - app_net
 
-  web:
+    web:
     build:
       context: .
       dockerfile: deploy/web.Dockerfile
