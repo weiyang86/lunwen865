@@ -73,6 +73,6 @@
 
 ### Payment PR-2（Issue #92）
 - 新增 `POST /api/payments/create`，支持 channel: `mock|wechat|alipay`，method: `mock|native|h5|page|wap`。
-- 当前仅 `mock` 可用；`wechat/alipay` 返回“当前通道未配置或未启用”。
+- Issue #108 后：`wechat/alipay` 在配置完整时可发起真实预支付；`mock` 仍仅用于开发调试。
 - 支付金额以后端订单 `totalAmount/amountCents` 为准，不信任前端。
 - 新增 mock 驱动接口：`POST /api/payments/mock/success`、`POST /api/payments/mock/fail`（仅 development）。
