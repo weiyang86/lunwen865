@@ -58,3 +58,8 @@
 1. `wechat-pay.provider.refund()` 已支持真实退款调用（生产），按 `out_refund_no + amount(refund/total)` 发起退款；sandbox 返回模拟 refundId。
 2. `alipay.provider.refund()` 已支持 `alipay.trade.refund` 调用，使用 `out_request_no` 作为幂等退款请求号；sandbox 返回模拟 refundId。
 3. `PaymentService.createRefund()` 继续统一驱动两通道退款申请，并保留 `REFUND_APPLY/REFUND_NOTIFY` 日志链路用于审计。
+
+## 生产微信 Native 二维码返回规则
+1. 仅 `PAYMENT_MODE=mock` 时允许返回 `weixin://wxpay/mock?...`。
+2. `PAYMENT_MODE=production` 下，`nativePrepay` 必须走真实微信下单并返回真实 `code_url`（如 `weixin://wxpay/bizpayurl?pr=...`）。
+3. production 模式下禁止自动降级 mock；配置缺失或微信接口调用失败时，直接返回明确错误。

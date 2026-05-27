@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import WxPay from 'wechatpay-node-v3';
 import { SettingsService } from '../../settings/settings.service';
@@ -54,12 +54,16 @@ type WxPayClient = {
 
 @Injectable()
 export class WechatPayProvider {
+  private readonly logger = new Logger(WechatPayProvider.name);
   private client: WxPayClient | null = null;
   private clientKey: string | null = null;
 
   constructor(private readonly settings: SettingsService) {}
 
   private async isSandbox(): Promise<boolean> {
+    const mode = String(process.env.PAYMENT_MODE ?? '').trim().toLowerCase();
+    if (mode === 'production') return false;
+    if (mode === 'mock') return true;
     const cfg = await this.settings.getPaymentSettings();
     return cfg.sandbox === true;
   }
@@ -75,6 +79,9 @@ export class WechatPayProvider {
       !w.notifyUrl ||
       !w.privateKeyPath
     ) {
+      this.logger.error(
+        '[wechat] 配置不完整，拒绝下单（production 不允许降级 mock）',
+      );
       throw new BadRequestException('微信支付未配置完整，请检查环境变量');
     }
   }
@@ -129,23 +136,39 @@ export class WechatPayProvider {
     notifyUrl: string;
   }): Promise<WechatNativePrepayResult> {
     if (await this.isSandbox()) {
+      this.logger.warn('[wechat] nativePrepay 使用 mock 模式返回二维码');
       const raw = {
         code_url: `weixin://wxpay/mock?out_trade_no=${params.outTradeNo}`,
       };
       return { codeUrl: String(raw.code_url), rawResponse: raw };
     }
-    const client = await this.getClient();
-    const result = await client.transactions_native({
-      description: params.description,
-      out_trade_no: params.outTradeNo,
-      notify_url: params.notifyUrl,
-      amount: { total: params.amountCents },
-      scene_info: { payer_client_ip: params.clientIp },
-    });
-    const codeUrl = result.code_url ?? result.codeUrl;
-    if (!codeUrl)
-      throw new BadRequestException('微信 Native 下单失败：未返回 code_url');
-    return { codeUrl: String(codeUrl), rawResponse: result };
+    this.logger.log('[wechat] nativePrepay 发起真实下单请求');
+    try {
+      const client = await this.getClient();
+      const result = await client.transactions_native({
+        description: params.description,
+        out_trade_no: params.outTradeNo,
+        notify_url: params.notifyUrl,
+        amount: { total: params.amountCents },
+        scene_info: { payer_client_ip: params.clientIp },
+      });
+      const codeUrl = result.code_url ?? result.codeUrl;
+      if (!codeUrl) {
+        throw new BadRequestException('微信 Native 下单失败：未返回 code_url');
+      }
+      if (String(codeUrl).includes('wxpay/mock')) {
+        throw new BadRequestException('微信 Native 下单失败：返回了 mock 二维码');
+      }
+      this.logger.log('[wechat] nativePrepay 真实下单成功');
+      return { codeUrl: String(codeUrl), rawResponse: result };
+    } catch (error) {
+      this.logger.error(
+        `[wechat] nativePrepay 调用失败: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new BadRequestException(
+        `微信 Native 下单失败：${error instanceof Error ? error.message : '未知错误'}`,
+      );
+    }
   }
 
   async h5Prepay(params: {

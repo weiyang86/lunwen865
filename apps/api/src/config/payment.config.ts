@@ -14,7 +14,7 @@ export default registerAs('payment', () => ({
   wechat: {
     appid: pickEnv('WECHAT_PAY_APP_ID'),
     mchid: pickEnv('WECHAT_PAY_MCH_ID'),
-    serialNo: pickEnv('WECHAT_PAY_CERT_SERIAL_NO'),
+    serialNo: pickEnv('WECHAT_PAY_CERT_SERIAL_NO', 'WECHAT_PAY_SERIAL_NO'),
     privateKeyPath: pickEnv('WECHAT_PAY_PRIVATE_KEY_PATH', 'WECHAT_PAY_PRIVATE_KEY'),
     apiV3Key: pickEnv('WECHAT_PAY_API_V3_KEY'),
     publicKeyPath: pickEnv('WECHAT_PAY_PUBLIC_KEY_PATH', 'WECHAT_PAY_PUBLIC_KEY'),
