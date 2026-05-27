@@ -230,7 +230,40 @@ export class AlipayProvider {
     paidAmountCents?: number;
     paidAt?: Date;
   }> {
-    void outTradeNo;
-    return Promise.resolve({ status: 'PENDING' as const });
+    return this.queryTrade(outTradeNo);
+  }
+
+  private async queryTrade(outTradeNo: string): Promise<{
+    status: 'PENDING' | 'PAID';
+    transactionId?: string;
+    paidAmountCents?: number;
+    paidAt?: Date;
+  }> {
+    if (await this.isSandbox()) {
+      return { status: 'PENDING' as const };
+    }
+    const client = await this.getClient();
+    const rsp = await client.exec('alipay.trade.query', {
+      bizContent: { out_trade_no: outTradeNo },
+    });
+    const response =
+      typeof rsp === 'string' ? ({ raw: rsp } as Record<string, unknown>) : rsp;
+    const root = response['alipay_trade_query_response'];
+    const data =
+      root && typeof root === 'object'
+        ? (root as Record<string, unknown>)
+        : (response as Record<string, unknown>);
+    const status = String(data['trade_status'] ?? '');
+    if (status === 'TRADE_SUCCESS' || status === 'TRADE_FINISHED') {
+      return {
+        status: 'PAID',
+        transactionId: String(data['trade_no'] ?? ''),
+        paidAmountCents: this.yuanToCents(String(data['total_amount'] ?? '0')),
+        paidAt: data['send_pay_date']
+          ? new Date(String(data['send_pay_date']))
+          : undefined,
+      };
+    }
+    return { status: 'PENDING' as const };
   }
 }

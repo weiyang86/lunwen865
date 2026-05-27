@@ -48,3 +48,8 @@
 1. `/payments/checkout` 补充了缺失订单号、请求失败、提交中状态展示，避免静默失败。
 2. `/payments/wechat-qrcode` 使用二维码组件渲染链接，并补充 loading/error/手动刷新与结果页跳转入口。
 3. `/payments/result` 增加支付状态轮询与状态文案，支持从待支付自动刷新到成功结果。
+
+## Issue #115 补充（支付查单与对账补偿）
+1. `wechat-pay.provider.query()` 增加真实查单实现（生产环境按 outTradeNo 向 SDK 查单，成功态返回交易号/金额/支付时间）。
+2. `alipay.provider.query()` 增加 `alipay.trade.query` 调用，解析 `TRADE_SUCCESS/TRADE_FINISHED` 为已支付结果。
+3. `reconcile` 会复用 provider 查单结果进行漏单补偿，未支付保持 `PENDING`，避免误结算。

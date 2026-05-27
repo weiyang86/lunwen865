@@ -49,6 +49,7 @@ type WxPayClient = {
   }) => Promise<WxPayTransactionsResponse>;
   verifySign: (headers: Record<string, string>, body: string) => boolean;
   decipher_gcm: (resource: unknown) => WxPayDecipheredResource;
+  [key: string]: unknown;
 };
 
 @Injectable()
@@ -243,7 +244,44 @@ export class WechatPayProvider {
     paidAmountCents?: number;
     paidAt?: Date;
   }> {
-    void outTradeNo;
-    return Promise.resolve({ status: 'PENDING' });
+    return this.queryTrade(outTradeNo);
+  }
+
+  private async queryTrade(outTradeNo: string): Promise<{
+    status: 'PENDING' | 'PAID';
+    transactionId?: string;
+    paidAmountCents?: number;
+    paidAt?: Date;
+  }> {
+    if (await this.isSandbox()) {
+      return { status: 'PENDING' as const };
+    }
+    const client = (await this.getClient()) as unknown as Record<string, unknown>;
+    const fn =
+      client['queryTransactionByOutTradeNo'] ??
+      client['transactions_out_trade_no'] ??
+      client['transactionQueryByOutTradeNo'];
+    if (typeof fn !== 'function') {
+      return { status: 'PENDING' as const };
+    }
+    const rsp = await (
+      fn as (params: Record<string, unknown>) => Promise<Record<string, unknown>>
+    )({ out_trade_no: outTradeNo });
+    const tradeState = String(rsp['trade_state'] ?? '');
+    if (tradeState === 'SUCCESS') {
+      const amountRaw =
+        rsp['amount'] && typeof rsp['amount'] === 'object'
+          ? (rsp['amount'] as Record<string, unknown>)['total']
+          : undefined;
+      return {
+        status: 'PAID',
+        transactionId: String(rsp['transaction_id'] ?? ''),
+        paidAmountCents: Number(amountRaw ?? 0),
+        paidAt: rsp['success_time']
+          ? new Date(String(rsp['success_time']))
+          : undefined,
+      };
+    }
+    return { status: 'PENDING' as const };
   }
 }
