@@ -52,6 +52,16 @@ type WxPayClient = {
   [key: string]: unknown;
 };
 
+type WechatRuntimeConfig = {
+  appid: string;
+  mchid: string;
+  serialNo: string;
+  apiV3Key: string;
+  privateKeyRaw: string;
+  publicKeyRaw: string;
+  publicKeyId: string;
+};
+
 @Injectable()
 export class WechatPayProvider {
   private readonly logger = new Logger(WechatPayProvider.name);
@@ -69,20 +79,58 @@ export class WechatPayProvider {
   }
 
   private async assertWechatConfigReady() {
-    const cfg = await this.settings.getPaymentSettings();
-    const w = cfg.wechat;
+    const w = await this.getWechatRuntimeConfig();
     if (
       !w.appid ||
       !w.mchid ||
       !w.serialNo ||
       !w.apiV3Key ||
-      !w.notifyUrl ||
-      !w.privateKeyPath
+      !w.privateKeyRaw
     ) {
       this.logger.error(
         '[wechat] 配置不完整，拒绝下单（production 不允许降级 mock）',
       );
       throw new BadRequestException('微信支付未配置完整，请检查环境变量');
+    }
+    if (!(await this.isSandbox()) && !w.publicKeyRaw) {
+      throw new BadRequestException(
+        '缺少微信支付公钥：请配置 WECHAT_PAY_PUBLIC_KEY_PATH 或 WECHAT_PAY_PUBLIC_KEY',
+      );
+    }
+  }
+
+  private async getWechatRuntimeConfig(): Promise<WechatRuntimeConfig> {
+    const cfg = await this.settings.getPaymentSettings();
+    const w = cfg.wechat;
+    return {
+      appid: w.appid,
+      mchid: w.mchid,
+      serialNo: w.serialNo,
+      apiV3Key: w.apiV3Key,
+      privateKeyRaw: w.privateKeyPath,
+      publicKeyRaw: String(
+        process.env.WECHAT_PAY_PUBLIC_KEY_PATH ??
+          process.env.WECHAT_PAY_PUBLIC_KEY ??
+          w.publicKeyPath ??
+          '',
+      ),
+      publicKeyId: String(process.env.WECHAT_PAY_PUBLIC_KEY_ID ?? '').trim(),
+    };
+  }
+
+  private loadSecretContent(raw: string, label: string): string {
+    const value = String(raw ?? '').trim();
+    if (!value) {
+      throw new BadRequestException(`微信支付配置缺失：${label}`);
+    }
+    const normalized = value.replace(/\\n/g, '\n');
+    if (normalized.includes('-----BEGIN')) {
+      return normalized;
+    }
+    try {
+      return readFileSync(value, 'utf8');
+    } catch {
+      throw new BadRequestException(`微信支付密钥文件不可读：${label}`);
     }
   }
 
@@ -103,17 +151,19 @@ export class WechatPayProvider {
 
   private async getClient(): Promise<WxPayClient> {
     await this.assertWechatConfigReady();
-    const cfg = await this.settings.getPaymentSettings();
-    const w = cfg.wechat;
-    const key = [w.appid, w.mchid, w.serialNo, w.privateKeyPath, 'wechat'].join(
-      '|',
-    );
+    const w = await this.getWechatRuntimeConfig();
+    const key = [w.appid, w.mchid, w.serialNo, w.privateKeyRaw, w.publicKeyRaw, w.publicKeyId, 'wechat'].join('|');
     if (this.client && this.clientKey === key) return this.client;
 
-    const privateKey = this.loadSecretContent(
-      w.privateKeyPath,
-      'privateKeyPath',
-    );
+    const privateKey = this.loadSecretContent(w.privateKeyRaw, 'privateKeyPath');
+    const publicKey = w.publicKeyRaw
+      ? this.loadSecretContent(w.publicKeyRaw, 'publicKeyPath')
+      : '';
+    if (!(await this.isSandbox()) && !publicKey) {
+      throw new BadRequestException(
+        '缺少微信支付公钥：请配置 WECHAT_PAY_PUBLIC_KEY_PATH 或 WECHAT_PAY_PUBLIC_KEY',
+      );
+    }
     const WxPayCtor = WxPay as unknown as new (
       options: Record<string, unknown>,
     ) => WxPayClient;
@@ -123,6 +173,8 @@ export class WechatPayProvider {
       serial_no: w.serialNo,
       privateKey,
       key: w.apiV3Key,
+      publicKey: publicKey || undefined,
+      publicKeyId: w.publicKeyId || undefined,
     });
     this.clientKey = key;
     return this.client;

@@ -63,3 +63,7 @@
 1. 仅 `PAYMENT_MODE=mock` 时允许返回 `weixin://wxpay/mock?...`。
 2. `PAYMENT_MODE=production` 下，`nativePrepay` 必须走真实微信下单并返回真实 `code_url`（如 `weixin://wxpay/bizpayurl?pr=...`）。
 3. production 模式下禁止自动降级 mock；配置缺失或微信接口调用失败时，直接返回明确错误。
+4. 微信支付公钥支持两种配置方式：
+   - `WECHAT_PAY_PUBLIC_KEY_PATH`：公钥文件路径（推荐）；
+   - `WECHAT_PAY_PUBLIC_KEY`：直接传 PEM 内容（支持 `\\n` 自动转真实换行）。
+5. 可选配置 `WECHAT_PAY_PUBLIC_KEY_ID`；当 production 缺少公钥时会明确报错，不会回退 mock。
