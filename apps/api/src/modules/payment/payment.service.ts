@@ -229,7 +229,11 @@ export class PaymentService {
           notifyUrl,
           returnUrl: paymentSettings.alipay.returnUrl,
         });
-        payload = { payUrl: rsp.paymentUrl, rawResponse: rsp.rawResponse };
+        payload = {
+          payUrl: rsp.paymentUrl,
+          paymentUrl: rsp.paymentUrl,
+          rawResponse: rsp.rawResponse,
+        };
       } else {
         method = PaymentMethod.ALIPAY_WAP;
         const rsp = await this.alipay.wapPay({
@@ -239,7 +243,11 @@ export class PaymentService {
           notifyUrl,
           returnUrl: paymentSettings.alipay.returnUrl,
         });
-        payload = { payUrl: rsp.paymentUrl, rawResponse: rsp.rawResponse };
+        payload = {
+          payUrl: rsp.paymentUrl,
+          paymentUrl: rsp.paymentUrl,
+          rawResponse: rsp.rawResponse,
+        };
       }
     }
 

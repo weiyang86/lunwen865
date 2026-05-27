@@ -37,3 +37,9 @@
    - 证书内容（兼容）
    - 文件路径（推荐，配合 `/app/secrets` 挂载）
 3. 当文件不可读时，接口会返回明确配置错误，避免静默失败。
+
+## Issue #112 补充（支付宝 page/wap 预下单）
+1. `alipay.provider` 生产下会对 `privateKeyPath/publicKeyPath` 执行“内容或路径”双模式加载：
+   - 若为 PEM 文本，直接使用；
+   - 若为文件路径，则读取文件内容后初始化 SDK（推荐 secrets 挂载路径）。
+2. `POST /payments/create` 在 `channel=alipay` 时统一返回 `payUrl`，并补充 `paymentUrl` 别名字段，兼容已有前端跳转逻辑。
