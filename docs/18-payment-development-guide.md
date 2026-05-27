@@ -53,3 +53,8 @@
 1. `wechat-pay.provider.query()` 增加真实查单实现（生产环境按 outTradeNo 向 SDK 查单，成功态返回交易号/金额/支付时间）。
 2. `alipay.provider.query()` 增加 `alipay.trade.query` 调用，解析 `TRADE_SUCCESS/TRADE_FINISHED` 为已支付结果。
 3. `reconcile` 会复用 provider 查单结果进行漏单补偿，未支付保持 `PENDING`，避免误结算。
+
+## Issue #116 补充（微信/支付宝退款）
+1. `wechat-pay.provider.refund()` 已支持真实退款调用（生产），按 `out_refund_no + amount(refund/total)` 发起退款；sandbox 返回模拟 refundId。
+2. `alipay.provider.refund()` 已支持 `alipay.trade.refund` 调用，使用 `out_request_no` 作为幂等退款请求号；sandbox 返回模拟 refundId。
+3. `PaymentService.createRefund()` 继续统一驱动两通道退款申请，并保留 `REFUND_APPLY/REFUND_NOTIFY` 日志链路用于审计。

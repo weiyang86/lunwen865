@@ -234,8 +234,7 @@ export class WechatPayProvider {
     totalAmountCents: number;
     notifyUrl: string;
   }): Promise<{ refundId?: string }> {
-    void params;
-    return Promise.reject(new BadRequestException('微信退款在当前版本未启用'));
+    return this.applyRefund(params);
   }
 
   query(outTradeNo: string): Promise<{
@@ -283,5 +282,47 @@ export class WechatPayProvider {
       };
     }
     return { status: 'PENDING' as const };
+  }
+
+  private async applyRefund(params: {
+    outTradeNo: string;
+    transactionId?: string;
+    outRefundNo: string;
+    reason: string;
+    refundAmountCents: number;
+    totalAmountCents: number;
+    notifyUrl: string;
+  }): Promise<{ refundId?: string }> {
+    if (await this.isSandbox()) {
+      return { refundId: `WX_REFUND_${params.outRefundNo}` };
+    }
+    const client = (await this.getClient()) as unknown as Record<string, unknown>;
+    const fn =
+      client['refund'] ??
+      client['refunds'] ??
+      client['transactions_refunds'] ??
+      client['refundByOutTradeNo'];
+    if (typeof fn !== 'function') {
+      throw new BadRequestException('微信退款能力不可用：SDK 未暴露退款方法');
+    }
+    const payload: Record<string, unknown> = {
+      out_trade_no: params.outTradeNo,
+      out_refund_no: params.outRefundNo,
+      reason: params.reason,
+      notify_url: params.notifyUrl,
+      amount: {
+        refund: params.refundAmountCents,
+        total: params.totalAmountCents,
+        currency: 'CNY',
+      },
+    };
+    if (params.transactionId) {
+      payload['transaction_id'] = params.transactionId;
+    }
+    const rsp = await (
+      fn as (p: Record<string, unknown>) => Promise<Record<string, unknown>>
+    )(payload);
+    const refundId = rsp['refund_id'];
+    return { refundId: typeof refundId === 'string' ? refundId : undefined };
   }
 }

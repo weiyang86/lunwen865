@@ -220,8 +220,7 @@ export class AlipayProvider {
     refundAmountCents: number;
     reason: string;
   }): Promise<{ refundId?: string }> {
-    void params;
-    throw new BadRequestException('支付宝退款在当前版本未启用');
+    return this.applyRefund(params);
   }
 
   query(outTradeNo: string): Promise<{
@@ -265,5 +264,34 @@ export class AlipayProvider {
       };
     }
     return { status: 'PENDING' as const };
+  }
+
+  private async applyRefund(params: {
+    outTradeNo: string;
+    outRefundNo: string;
+    refundAmountCents: number;
+    reason: string;
+  }): Promise<{ refundId?: string }> {
+    if (await this.isSandbox()) {
+      return { refundId: `ALI_REFUND_${params.outRefundNo}` };
+    }
+    const client = await this.getClient();
+    const rsp = await client.exec('alipay.trade.refund', {
+      bizContent: {
+        out_trade_no: params.outTradeNo,
+        refund_amount: this.centsToYuan(params.refundAmountCents),
+        out_request_no: params.outRefundNo,
+        refund_reason: params.reason,
+      },
+    });
+    const response =
+      typeof rsp === 'string' ? ({ raw: rsp } as Record<string, unknown>) : rsp;
+    const root = response['alipay_trade_refund_response'];
+    const data =
+      root && typeof root === 'object'
+        ? (root as Record<string, unknown>)
+        : (response as Record<string, unknown>);
+    const tradeNo = data['trade_no'];
+    return { refundId: typeof tradeNo === 'string' ? tradeNo : undefined };
   }
 }
