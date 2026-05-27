@@ -280,7 +280,7 @@ describe('OrderService', () => {
       .mockResolvedValueOnce({
         id: 'o1',
         userId: 'u1',
-        status: OrderStatus.COMPLETED,
+        status: OrderStatus.PAID,
         amountCents: 100,
         paidAmountCents: 100,
         productSnapshot: {
@@ -329,7 +329,7 @@ describe('OrderService', () => {
       .mockResolvedValueOnce({
         id: 'o1',
         userId: 'u1',
-        status: OrderStatus.COMPLETED,
+        status: OrderStatus.PAID,
         amountCents: 100,
         paidAmountCents: 101,
         productSnapshot: {},
