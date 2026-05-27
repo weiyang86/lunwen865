@@ -43,3 +43,8 @@
    - 若为 PEM 文本，直接使用；
    - 若为文件路径，则读取文件内容后初始化 SDK（推荐 secrets 挂载路径）。
 2. `POST /payments/create` 在 `channel=alipay` 时统一返回 `payUrl`，并补充 `paymentUrl` 别名字段，兼容已有前端跳转逻辑。
+
+## Issue #114 补充（C 端支付页体验）
+1. `/payments/checkout` 补充了缺失订单号、请求失败、提交中状态展示，避免静默失败。
+2. `/payments/wechat-qrcode` 使用二维码组件渲染链接，并补充 loading/error/手动刷新与结果页跳转入口。
+3. `/payments/result` 增加支付状态轮询与状态文案，支持从待支付自动刷新到成功结果。
