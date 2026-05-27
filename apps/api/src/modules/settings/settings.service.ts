@@ -13,6 +13,8 @@ type PaymentSdkSettings = {
     serialNo: string;
     privateKeyPath: string;
     apiV3Key: string;
+    publicKeyPath: string;
+    platformCertPath: string;
   };
   alipay: {
     notifyUrl: string;
@@ -140,6 +142,14 @@ export class SettingsService {
           '',
         ),
         apiV3Key: this.config.get<string>('payment.wechat.apiV3Key', ''),
+        publicKeyPath: this.config.get<string>(
+          'payment.wechat.publicKeyPath',
+          '',
+        ),
+        platformCertPath: this.config.get<string>(
+          'payment.wechat.platformCertPath',
+          '',
+        ),
       },
       alipay: {
         notifyUrl: this.config.get<string>('payment.alipay.notifyUrl', ''),
@@ -178,6 +188,11 @@ export class SettingsService {
         privateKeyPath:
           asString(wechat['privateKeyPath']) ?? defaults.wechat.privateKeyPath,
         apiV3Key: asString(wechat['apiV3Key']) ?? defaults.wechat.apiV3Key,
+        publicKeyPath:
+          asString(wechat['publicKeyPath']) ?? defaults.wechat.publicKeyPath,
+        platformCertPath:
+          asString(wechat['platformCertPath']) ??
+          defaults.wechat.platformCertPath,
       },
       alipay: {
         notifyUrl: asString(alipay['notifyUrl']) ?? defaults.alipay.notifyUrl,
