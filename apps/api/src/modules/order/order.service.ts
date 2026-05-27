@@ -209,9 +209,8 @@ export class OrderService {
       const updated = await tx.order.update({
         where: { id: order.id },
         data: {
-          status: OrderStatus.COMPLETED,
+          status: OrderStatus.PAID,
           paidAt: params.paidAt,
-          completedAt: params.paidAt,
           paidAmountCents: params.paidAmountCents,
           transactionId: params.transactionId,
           method: params.method,
@@ -275,5 +274,21 @@ export class OrderService {
     });
     this.logger.log(`[OrderCleanup] 关闭过期订单 ${expired.length} 条`);
     return expired.length;
+  }
+
+  async getPaymentStatus(userId: string, id: string) {
+    const order = await this.findOne(userId, id);
+    return {
+      orderId: order.id,
+      orderNo: order.orderNo,
+      status: order.status,
+      paidAt: order.paidAt,
+      paidAmountCents: order.paidAmountCents,
+      channel: order.channel,
+      method: order.method,
+      outTradeNo: order.outTradeNo,
+      transactionId: order.transactionId,
+      expiresAt: order.expiresAt,
+    };
   }
 }

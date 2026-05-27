@@ -45,6 +45,11 @@ export class OrderController {
     return this.orderService.findOne(uid, id);
   }
 
+  @Get(':id/payment-status')
+  getPaymentStatus(@CurrentUser('id') uid: string, @Param('id') id: string) {
+    return this.orderService.getPaymentStatus(uid, id);
+  }
+
   @Post(':id/cancel')
   cancel(@CurrentUser('id') uid: string, @Param('id') id: string) {
     return this.orderService.cancel(uid, id);

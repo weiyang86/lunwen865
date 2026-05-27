@@ -73,6 +73,14 @@
 
 ### Payment PR-2（Issue #92）
 - 新增 `POST /api/payments/create`，支持 channel: `mock|wechat|alipay`，method: `mock|native|h5|page|wap`。
-- 当前仅 `mock` 可用；`wechat/alipay` 返回“当前通道未配置或未启用”。
+- Issue #108 后：`wechat/alipay` 在配置完整时可发起真实预支付；`mock` 仍仅用于开发调试。
 - 支付金额以后端订单 `totalAmount/amountCents` 为准，不信任前端。
 - 新增 mock 驱动接口：`POST /api/payments/mock/success`、`POST /api/payments/mock/fail`（仅 development）。
+
+### Payment PR-3（Issue #109）
+- 新增 `GET /api/orders/:id/payment-status`，用于支付结果页/轮询页查询订单支付状态。
+- 支付成功后订单状态先更新为 `PAID`，不再直接更新为 `COMPLETED`；履约完成后再进入 `COMPLETED`。
+
+### Payment PR-4（Issue #111）
+- `POST /api/payments/wechat/notify`：微信支付回调按「验签 -> 解密 -> 金额校验 -> 结算」处理。
+- 结算成功后会调用订单 `markPaid`，并写入 `PaymentLog.NOTIFY` 与回调审计日志。
