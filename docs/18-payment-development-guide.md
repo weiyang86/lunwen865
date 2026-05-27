@@ -10,6 +10,12 @@
   - 支付宝：`ALIPAY_PRIVATE_KEY_PATH` 优先，回退 `ALIPAY_PRIVATE_KEY`。
   - 公钥与平台证书同理支持 `*_PATH` 优先回退旧变量。
 
+- `apps/api/src/modules/payment/payment.service.ts`
+  - `POST /payments/create` 已支持真实 `wechat/alipay` 通道下单：
+    - wechat: `native` / `h5`
+    - alipay: `page` / `wap`
+  - 创建 `PaymentRecord` 后会写回 `channel/method/providerOrderNo/payUrl|qrCodeUrl/rawResponse`。
+
 ## 变量优先级
 
 ### 微信
