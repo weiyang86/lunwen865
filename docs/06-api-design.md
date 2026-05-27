@@ -84,3 +84,7 @@
 ### Payment PR-4（Issue #111）
 - `POST /api/payments/wechat/notify`：微信支付回调按「验签 -> 解密 -> 金额校验 -> 结算」处理。
 - 结算成功后会调用订单 `markPaid`，并写入 `PaymentLog.NOTIFY` 与回调审计日志。
+
+### Payment PR-5（Issue #113）
+- `POST /api/payment/notify/alipay`：支付宝异步通知按「验签 -> 状态判断 -> 金额校验 -> 结算」处理。
+- 对非成功状态、金额不一致、订单不存在等分支写入 `PaymentCallbackLog`，结算成功写入 `PaymentLog.NOTIFY` 并调用订单 `markPaid`。
