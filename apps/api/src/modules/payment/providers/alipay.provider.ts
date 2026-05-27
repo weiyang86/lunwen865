@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import AlipaySdk from 'alipay-sdk';
+import { existsSync, readFileSync } from 'node:fs';
 import { SettingsService } from '../../settings/settings.service';
 
 type AlipayExecResult = string | Record<string, unknown>;
@@ -80,17 +81,34 @@ export class AlipayProvider {
     const key = [a.appId, a.gateway, 'alipay'].join('|');
     if (this.client && this.clientKey === key) return this.client;
 
+    const privateKey = this.loadKeyContent(a.privateKeyPath, '支付宝应用私钥');
+    const publicKey = this.loadKeyContent(a.publicKeyPath, '支付宝公钥');
+
     const AlipayCtor = AlipaySdk as unknown as new (
       options: Record<string, unknown>,
     ) => AlipayClient;
     this.client = new AlipayCtor({
       appId: a.appId,
-      privateKey: a.privateKeyPath,
-      alipayPublicKey: a.publicKeyPath,
+      privateKey,
+      alipayPublicKey: publicKey,
       gateway: a.gateway,
     });
     this.clientKey = key;
     return this.client;
+  }
+
+  private loadKeyContent(value: string, label: string): string {
+    const raw = String(value ?? '').trim();
+    if (!raw) {
+      throw new BadRequestException(`${label}未配置`);
+    }
+    if (raw.includes('BEGIN') && raw.includes('KEY')) {
+      return raw;
+    }
+    if (!existsSync(raw)) {
+      throw new BadRequestException(`${label}文件不可读: ${raw}`);
+    }
+    return readFileSync(raw, 'utf8');
   }
 
   async pagePay(params: {
