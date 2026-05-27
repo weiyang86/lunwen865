@@ -40,7 +40,16 @@ describe('ReconcileService', () => {
     const markPaidMock = jest.fn(() => Promise.resolve({ alreadyPaid: false }));
     const orderService = { markPaid: markPaidMock } as unknown as OrderService;
 
-    const service = new ReconcileService(prisma, wechat, alipay, orderService);
+    const callbackService = {
+      process: jest.fn(() => Promise.resolve({ processed: true })),
+    } as never;
+    const service = new ReconcileService(
+      prisma,
+      wechat,
+      alipay,
+      orderService,
+      callbackService,
+    );
     await service.reconcilePending();
 
     expect(queryMock).toHaveBeenCalledWith('PAY_1');
