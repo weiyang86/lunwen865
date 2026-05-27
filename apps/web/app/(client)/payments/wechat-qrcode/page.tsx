@@ -1,10 +1,95 @@
 'use client';
-import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { QRCodeCanvas } from 'qrcode.react';
+
+import { Button } from '@/components/ui/button';
 import { clientHttp } from '@/lib/client/api-client';
 
-export default function WechatQrPage(){
-  const sp=useSearchParams(); const orderId=sp?.get('orderId')||''; const qr=sp?.get('qr')||''; const [status,setStatus]=useState('PENDING');
-  useEffect(()=>{const t=setInterval(async()=>{ const s:any=await clientHttp.get(`/orders/${orderId}/payment-status`); setStatus(s.status); if(['PAID','COMPLETED'].includes(s.status)){window.location.href=`/payments/result?orderId=${orderId}`;} },3000); return ()=>clearInterval(t);},[orderId]);
-  return <div className='p-6 space-y-2'><h1 className='text-xl font-semibold'>微信扫码支付</h1><div>订单: {orderId}</div><div>状态: {status}</div><div className='break-all text-xs'>{qr}</div></div>
+type PaymentStatusResp = {
+  status: string;
+  paidAt?: string | null;
+  orderNo?: string;
+};
+
+export default function WechatQrPage() {
+  const sp = useSearchParams();
+  const router = useRouter();
+  const orderId = sp?.get('orderId') || '';
+  const qr = sp?.get('qr') || '';
+
+  const [status, setStatus] = useState<string>('PENDING');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  const canPoll = useMemo(() => Boolean(orderId), [orderId]);
+  const qrValue = useMemo(() => decodeURIComponent(qr || ''), [qr]);
+
+  const pollOnce = async () => {
+    if (!canPoll) return;
+    try {
+      const s = await clientHttp.get<PaymentStatusResp>(`/orders/${orderId}/payment-status`);
+      setStatus(s.status);
+      setError(null);
+      if (s.status === 'PAID' || s.status === 'COMPLETED') {
+        router.replace(`/payments/result?orderId=${encodeURIComponent(orderId)}`);
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '查询支付状态失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!canPoll) {
+      setLoading(false);
+      return;
+    }
+    void pollOnce();
+    timerRef.current = window.setInterval(() => {
+      void pollOnce();
+    }, 3000);
+    return () => {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [canPoll, orderId]);
+
+  return (
+    <div className="mx-auto max-w-xl space-y-4 p-6">
+      <h1 className="text-xl font-semibold">扫码支付</h1>
+      <div className="rounded-md border bg-slate-50 p-3 text-sm text-slate-600">订单号：{orderId || '未提供'}</div>
+
+      {!qrValue ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
+          未获取到二维码链接，请返回订单页重新发起支付。
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3 rounded-lg border p-4">
+          <QRCodeCanvas value={qrValue} size={220} includeMargin />
+          <div className="text-xs text-slate-500 break-all">{qrValue}</div>
+        </div>
+      )}
+
+      <div className="rounded-md border p-3 text-sm">
+        状态：{loading ? '查询中...' : status}
+      </div>
+
+      {error ? <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}
+
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={() => void pollOnce()} disabled={!canPoll}>
+          立即刷新状态
+        </Button>
+        <Button variant="secondary" onClick={() => router.push(`/payments/result?orderId=${encodeURIComponent(orderId)}`)}>
+          去支付结果页
+        </Button>
+      </div>
+    </div>
+  );
 }
