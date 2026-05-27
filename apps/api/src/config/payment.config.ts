@@ -1,25 +1,38 @@
 import { registerAs } from '@nestjs/config';
 
+function pickEnv(...keys: string[]): string {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
 export default registerAs('payment', () => ({
   wechat: {
-    appid: process.env.WECHAT_PAY_APP_ID ?? '',
-    mchid: process.env.WECHAT_PAY_MCH_ID ?? '',
-    serialNo: process.env.WECHAT_PAY_CERT_SERIAL_NO ?? '',
-    privateKeyPath: process.env.WECHAT_PAY_PRIVATE_KEY ?? '',
-    apiV3Key: process.env.WECHAT_PAY_API_V3_KEY ?? '',
-    publicKey: process.env.WECHAT_PAY_PUBLIC_KEY ?? '',
-    platformCert: process.env.WECHAT_PAY_PLATFORM_CERT ?? '',
-    notifyUrl: process.env.WECHAT_PAY_NOTIFY_URL ?? '',
+    appid: pickEnv('WECHAT_PAY_APP_ID'),
+    mchid: pickEnv('WECHAT_PAY_MCH_ID'),
+    serialNo: pickEnv('WECHAT_PAY_CERT_SERIAL_NO'),
+    privateKeyPath: pickEnv('WECHAT_PAY_PRIVATE_KEY_PATH', 'WECHAT_PAY_PRIVATE_KEY'),
+    apiV3Key: pickEnv('WECHAT_PAY_API_V3_KEY'),
+    publicKeyPath: pickEnv('WECHAT_PAY_PUBLIC_KEY_PATH', 'WECHAT_PAY_PUBLIC_KEY'),
+    platformCertPath: pickEnv(
+      'WECHAT_PAY_PLATFORM_CERT_PATH',
+      'WECHAT_PAY_PLATFORM_CERT',
+    ),
+    notifyUrl: pickEnv('WECHAT_PAY_NOTIFY_URL'),
   },
   alipay: {
-    appId: process.env.ALIPAY_APP_ID ?? '',
-    privateKeyPath: process.env.ALIPAY_PRIVATE_KEY ?? '',
-    publicKeyPath: process.env.ALIPAY_PUBLIC_KEY ?? '',
+    appId: pickEnv('ALIPAY_APP_ID'),
+    privateKeyPath: pickEnv('ALIPAY_PRIVATE_KEY_PATH', 'ALIPAY_PRIVATE_KEY'),
+    publicKeyPath: pickEnv('ALIPAY_PUBLIC_KEY_PATH', 'ALIPAY_PUBLIC_KEY'),
     gateway:
-      process.env.ALIPAY_GATEWAY ?? 'https://openapi.alipay.com/gateway.do',
-    notifyUrl: process.env.ALIPAY_NOTIFY_URL ?? '',
-    returnUrl: process.env.ALIPAY_RETURN_URL ?? '',
-    sellerId: process.env.ALIPAY_SELLER_ID ?? '',
+      pickEnv('ALIPAY_GATEWAY') || 'https://openapi.alipay.com/gateway.do',
+    notifyUrl: pickEnv('ALIPAY_NOTIFY_URL'),
+    returnUrl: pickEnv('ALIPAY_RETURN_URL'),
+    sellerId: pickEnv('ALIPAY_SELLER_ID'),
   },
   orderExpireMinutes: Number(process.env.ORDER_EXPIRE_MINUTES ?? 30),
   sandbox: (process.env.PAYMENT_SANDBOX ?? 'true') === 'true',
