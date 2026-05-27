@@ -134,6 +134,21 @@ export class WechatPayProvider {
     }
   }
 
+  private loadSecretContent(raw: string, label: string): string {
+    const value = String(raw ?? '').trim();
+    if (!value) {
+      throw new BadRequestException(`微信支付配置缺失：${label}`);
+    }
+    if (value.includes('-----BEGIN')) {
+      return value;
+    }
+    try {
+      return readFileSync(value, 'utf8');
+    } catch {
+      throw new BadRequestException(`微信支付密钥文件不可读：${label}`);
+    }
+  }
+
   private async getClient(): Promise<WxPayClient> {
     await this.assertWechatConfigReady();
     const w = await this.getWechatRuntimeConfig();
