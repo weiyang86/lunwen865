@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import WxPay from 'wechatpay-node-v3';
 import { SettingsService } from '../../settings/settings.service';
 
@@ -127,26 +127,10 @@ export class WechatPayProvider {
     if (normalized.includes('-----BEGIN')) {
       return normalized;
     }
-    try {
-      return readFileSync(value, 'utf8');
-    } catch {
+    if (!existsSync(value)) {
       throw new BadRequestException(`微信支付密钥文件不可读：${label}`);
     }
-  }
-
-  private loadSecretContent(raw: string, label: string): string {
-    const value = String(raw ?? '').trim();
-    if (!value) {
-      throw new BadRequestException(`微信支付配置缺失：${label}`);
-    }
-    if (value.includes('-----BEGIN')) {
-      return value;
-    }
-    try {
-      return readFileSync(value, 'utf8');
-    } catch {
-      throw new BadRequestException(`微信支付密钥文件不可读：${label}`);
-    }
+    return readFileSync(value, 'utf8');
   }
 
   private async getClient(): Promise<WxPayClient> {
