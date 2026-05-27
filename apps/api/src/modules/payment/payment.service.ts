@@ -526,6 +526,43 @@ export class PaymentService {
           },
         });
         processStatus = 'UPDATED';
+
+        if (normalized.success) {
+          const order = await this.prisma.order.findUnique({
+            where: { id: String(payment['orderId']) },
+          });
+          if (!order) {
+            processStatus = 'ORDER_NOT_FOUND';
+            errorMessage = '订单不存在';
+          } else {
+            const settleMethod =
+              order.method === PaymentMethod.WECHAT_H5
+                ? PaymentMethod.WECHAT_H5
+                : PaymentMethod.WECHAT_NATIVE;
+            await this.orderService.markPaid({
+              orderId: order.id,
+              transactionId: normalized.providerTradeNo,
+              paidAmountCents: normalized.amount,
+              method: settleMethod,
+              channel: PaymentChannel.WECHAT,
+              paidAt: normalized.paidAt ?? now,
+            });
+            await this.prisma.paymentLog.create({
+              data: {
+                orderId: order.id,
+                type: PaymentLogType.NOTIFY,
+                channel: PaymentChannel.WECHAT,
+                success: true,
+                request: {
+                  headers: params.headers,
+                  rawBody: params.rawBody,
+                  query: params.query,
+                } as unknown as Prisma.InputJsonValue,
+              },
+            });
+            processStatus = 'SETTLED';
+          }
+        }
       }
 
       await callbackLogModel.create({

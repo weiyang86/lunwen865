@@ -80,3 +80,7 @@
 ### Payment PR-3（Issue #109）
 - 新增 `GET /api/orders/:id/payment-status`，用于支付结果页/轮询页查询订单支付状态。
 - 支付成功后订单状态先更新为 `PAID`，不再直接更新为 `COMPLETED`；履约完成后再进入 `COMPLETED`。
+
+### Payment PR-4（Issue #111）
+- `POST /api/payments/wechat/notify`：微信支付回调按「验签 -> 解密 -> 金额校验 -> 结算」处理。
+- 结算成功后会调用订单 `markPaid`，并写入 `PaymentLog.NOTIFY` 与回调审计日志。
