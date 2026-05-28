@@ -133,6 +133,148 @@ export class WechatPayProvider {
     return readFileSync(value, 'utf8');
   }
 
+  private safeJson(value: unknown): string {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      try {
+        return String(value);
+      } catch {
+        return '[unserializable]';
+      }
+    }
+  }
+
+  private parseWechatResponse(response: unknown): unknown {
+    if (!response) return response;
+    if (typeof response === 'string') {
+      const s = response.trim();
+      if (!s) return response;
+      try {
+        return JSON.parse(s) as unknown;
+      } catch {
+        return response;
+      }
+    }
+    if (typeof response !== 'object') return response;
+    const obj = response as Record<string, unknown>;
+    const copy: Record<string, unknown> = { ...obj };
+    for (const key of ['data', 'body', 'result'] as const) {
+      const v = obj[key];
+      if (typeof v === 'string') {
+        try {
+          copy[key] = JSON.parse(v) as unknown;
+        } catch {
+          copy[key] = v;
+        }
+      } else {
+        copy[key] = v;
+      }
+    }
+    return copy;
+  }
+
+  private extractWechatCodeUrl(response: unknown): string | undefined {
+    const parsed = this.parseWechatResponse(response);
+    if (!parsed || typeof parsed !== 'object') return undefined;
+    const obj = parsed as Record<string, unknown>;
+    const direct = obj['code_url'] ?? obj['codeUrl'];
+    if (typeof direct === 'string' && direct.trim()) return direct.trim();
+    for (const containerKey of ['data', 'body', 'result'] as const) {
+      const container = obj[containerKey];
+      if (!container || typeof container !== 'object') continue;
+      const nested = container as Record<string, unknown>;
+      const value = nested['code_url'] ?? nested['codeUrl'];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+    return undefined;
+  }
+
+  private summarizeWechatResponse(response: unknown): Record<string, unknown> {
+    const parsed = this.parseWechatResponse(response);
+
+    const redactKey = (key: string): boolean => {
+      const k = key.toLowerCase();
+      return (
+        k.includes('private') ||
+        k.includes('public') ||
+        k.includes('secret') ||
+        k.includes('apikey') ||
+        k.includes('api_v3') ||
+        k.includes('apiv3') ||
+        k.includes('key') ||
+        k.includes('pem') ||
+        k.includes('certificate') ||
+        k.includes('cert')
+      );
+    };
+
+    const sanitize = (value: unknown, depth: number, keyHint?: string): unknown => {
+      if (depth > 3) return '[truncated]';
+      if (keyHint && redactKey(keyHint)) return '[redacted]';
+      if (value == null) return value;
+      if (typeof value === 'string') {
+        const s = value;
+        if (s.includes('-----BEGIN') && s.includes('-----END')) return '[redacted_pem]';
+        if (s.length > 300) return `${s.slice(0, 120)}...[truncated]`;
+        return s;
+      }
+      if (typeof value === 'number' || typeof value === 'boolean') return value;
+      if (Array.isArray(value)) return value.slice(0, 20).map((v) => sanitize(v, depth + 1));
+      if (typeof value === 'object') {
+        const obj = value as Record<string, unknown>;
+        const out: Record<string, unknown> = {};
+        const keys = Object.keys(obj).slice(0, 30);
+        for (const k of keys) {
+          out[k] = sanitize(obj[k], depth + 1, k);
+        }
+        return out;
+      }
+      try {
+        return String(value);
+      } catch {
+        return '[unknown]';
+      }
+    };
+
+    const summary: Record<string, unknown> = {};
+    if (parsed && typeof parsed === 'object') {
+      const obj = parsed as Record<string, unknown>;
+      summary.status = obj['status'];
+      summary.statusCode = obj['statusCode'];
+      summary.code = obj['code'];
+      summary.message = obj['message'];
+      summary.detail = obj['detail'];
+      summary.data = sanitize(obj['data'], 0, 'data');
+      summary.body = sanitize(obj['body'], 0, 'body');
+      summary.result = sanitize(obj['result'], 0, 'result');
+
+      const headersRaw = obj['headers'];
+      if (headersRaw && typeof headersRaw === 'object' && !Array.isArray(headersRaw)) {
+        const headers = headersRaw as Record<string, unknown>;
+        const allow = new Set([
+          'request-id',
+          'x-request-id',
+          'wechatpay-serial',
+          'wechatpay-request-id',
+          'wechatpay-nonce',
+          'wechatpay-signature',
+          'wechatpay-timestamp',
+        ]);
+        const filtered: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(headers)) {
+          const key = k.toLowerCase();
+          if (!allow.has(key)) continue;
+          filtered[k] = sanitize(v, 0, k);
+        }
+        summary.headers = filtered;
+      }
+    } else {
+      summary.raw = sanitize(parsed, 0);
+    }
+    return summary;
+  }
+
   private async getClient(): Promise<WxPayClient> {
     await this.assertWechatConfigReady();
     const w = await this.getWechatRuntimeConfig();
@@ -188,21 +330,36 @@ export class WechatPayProvider {
         amount: { total: params.amountCents },
         scene_info: { payer_client_ip: params.clientIp },
       });
-      const codeUrl = result.code_url ?? result.codeUrl;
+      const codeUrl = this.extractWechatCodeUrl(result);
       if (!codeUrl) {
+        const summary = this.summarizeWechatResponse(result);
+        this.logger.error(
+          `[wechat] nativePrepay 未返回 code_url summary=${this.safeJson(summary)}`,
+        );
+        const code =
+          typeof summary.code === 'string' ? summary.code.trim() : '';
+        const message =
+          typeof summary.message === 'string' ? summary.message.trim() : '';
+        const merged = [code, message].filter(Boolean).join(' ');
+        if (merged) {
+          throw new BadRequestException(`微信 Native 下单失败：${merged}`);
+        }
         throw new BadRequestException('微信 Native 下单失败：未返回 code_url');
       }
-      if (String(codeUrl).includes('wxpay/mock')) {
-        throw new BadRequestException('微信 Native 下单失败：返回了 mock 二维码');
+      if (String(codeUrl).includes('wxpay/mock') || String(codeUrl).includes('weixin://wxpay/mock')) {
+        throw new BadRequestException(
+          '微信 Native 下单失败：返回了 mock 二维码',
+        );
       }
       this.logger.log('[wechat] nativePrepay 真实下单成功');
       return { codeUrl: String(codeUrl), rawResponse: result };
-    } catch (error) {
+    } catch (error: unknown) {
+      if (error instanceof BadRequestException) throw error;
       this.logger.error(
         `[wechat] nativePrepay 调用失败: ${error instanceof Error ? error.message : String(error)}`,
       );
       throw new BadRequestException(
-        `微信 Native 下单失败：${error instanceof Error ? error.message : '未知错误'}`,
+        `微信 Native 下单失败：${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
