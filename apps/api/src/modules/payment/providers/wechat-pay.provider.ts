@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { existsSync, readFileSync } from 'node:fs';
+import { createSign, randomBytes } from 'node:crypto';
 import { inspect } from 'node:util';
 import WxPay from 'wechatpay-node-v3';
 import { SettingsService } from '../../settings/settings.service';
@@ -590,6 +591,134 @@ export class WechatPayProvider {
     return this.client;
   }
 
+  private async directNativePrepay(params: {
+    outTradeNo: string;
+    description: string;
+    amountCents: number;
+    clientIp: string;
+    notifyUrl: string;
+  }): Promise<WechatNativePrepayResult> {
+    await this.assertWechatConfigReady();
+    if (await this.isSandbox()) {
+      this.logger.warn('[wechat] directNativePrepay 跳过：sandbox/mock 模式');
+      const raw = {
+        code_url: `weixin://wxpay/mock?out_trade_no=${params.outTradeNo}`,
+      };
+      return { codeUrl: String(raw.code_url), rawResponse: raw };
+    }
+
+    const runtime = await this.getWechatRuntimeConfig();
+    const serialNo = String(process.env.WECHAT_PAY_CERT_SERIAL_NO ?? '').trim();
+    const privateKeyRaw = String(
+      process.env.WECHAT_PAY_PRIVATE_KEY_PATH ??
+        process.env.WECHAT_PAY_PRIVATE_KEY ??
+        '',
+    );
+    if (!serialNo) {
+      throw new BadRequestException('微信支付配置缺失：WECHAT_PAY_CERT_SERIAL_NO');
+    }
+    if (!privateKeyRaw) {
+      throw new BadRequestException(
+        '微信支付配置缺失：WECHAT_PAY_PRIVATE_KEY_PATH 或 WECHAT_PAY_PRIVATE_KEY',
+      );
+    }
+
+    const privateKey = this.loadSecretContent(privateKeyRaw, 'WECHAT_PAY_PRIVATE_KEY');
+    const urlPath = '/v3/pay/transactions/native';
+    const payload = {
+      appid: runtime.appid,
+      mchid: runtime.mchid,
+      description: params.description,
+      out_trade_no: params.outTradeNo,
+      notify_url: params.notifyUrl,
+      amount: { total: params.amountCents, currency: 'CNY' as const },
+    };
+    const body = JSON.stringify(payload);
+
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = randomBytes(16).toString('hex');
+    const signMessage = `POST\n${urlPath}\n${timestamp}\n${nonce}\n${body}\n`;
+    const signature = createSign('RSA-SHA256')
+      .update(signMessage)
+      .sign(privateKey, 'base64');
+
+    const authorization = `WECHATPAY2-SHA256-RSA2048 mchid="${runtime.mchid}",nonce_str="${nonce}",timestamp="${timestamp}",serial_no="${serialNo}",signature="${signature}"`;
+
+    const rsp = await fetch(`https://api.mch.weixin.qq.com${urlPath}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: authorization,
+      },
+      body,
+    });
+
+    const requestId = rsp.headers.get('request-id');
+    const wechatpaySerial = rsp.headers.get('wechatpay-serial');
+    const contentType = rsp.headers.get('content-type');
+    const date = rsp.headers.get('date');
+
+    const text = await rsp.text();
+    let parsed: unknown = text;
+    try {
+      parsed = text && text.trim() ? (JSON.parse(text) as unknown) : text;
+    } catch {
+      parsed = text;
+    }
+
+    const normalized = await this.normalizeWechatResponse({
+      status: rsp.status,
+      statusCode: rsp.status,
+      headers: {
+        'request-id': requestId ?? undefined,
+        'wechatpay-serial': wechatpaySerial ?? undefined,
+        'content-type': contentType ?? undefined,
+        date: date ?? undefined,
+      },
+      body: parsed,
+      data: parsed,
+      text,
+    });
+
+    const summary = this.summarizeWechatResponse(normalized);
+    const code = typeof summary.code === 'string' ? summary.code.trim() : '';
+    const message =
+      typeof summary.message === 'string' ? summary.message.trim() : '';
+    const detail =
+      typeof summary.detail === 'string' ? summary.detail.trim() : '';
+
+    this.logger.log(
+      `[wechat] directNativePrepay rsp status=${rsp.status} request-id=${requestId ?? ''} wechatpay-serial=${wechatpaySerial ?? ''} code=${code} message=${message} detail=${detail}`,
+    );
+    this.logger.debug(
+      `[wechat] directNativePrepay rsp inspect=${inspect(summary, { depth: 8, showHidden: true })}`,
+    );
+
+    const codeUrl = this.extractWechatCodeUrl(normalized);
+    if (codeUrl) {
+      if (
+        String(codeUrl).includes('wxpay/mock') ||
+        String(codeUrl).includes('weixin://wxpay/mock')
+      ) {
+        throw new BadRequestException('微信 Native 下单失败：返回了 mock 二维码');
+      }
+      return { codeUrl: String(codeUrl), rawResponse: normalized };
+    }
+
+    if (code && message) {
+      throw new BadRequestException(`微信 Native 下单失败：${code} - ${message}`);
+    }
+    if (rsp.status === 403) {
+      throw new BadRequestException(
+        '微信 Native 下单失败：HTTP 403，微信未返回可解析错误体',
+      );
+    }
+    throw new BadRequestException(
+      `微信 Native 下单失败：HTTP ${rsp.status}，微信未返回错误体`,
+    );
+  }
+
   async nativePrepay(params: {
     outTradeNo: string;
     description: string;
@@ -606,16 +735,9 @@ export class WechatPayProvider {
     }
     this.logger.log('[wechat] nativePrepay 发起真实下单请求');
     try {
-      const client = await this.getClient();
-      const result = await client.transactions_native({
-        description: params.description,
-        out_trade_no: params.outTradeNo,
-        notify_url: params.notifyUrl,
-        amount: { total: params.amountCents },
-        scene_info: { payer_client_ip: params.clientIp },
-      });
-      const normalized = await this.normalizeWechatResponse(result);
-      const codeUrl = this.extractWechatCodeUrl(normalized);
+      const result = await this.directNativePrepay(params);
+      const normalized = await this.normalizeWechatResponse(result.rawResponse);
+      const codeUrl = this.extractWechatCodeUrl(normalized) ?? result.codeUrl;
       if (!codeUrl) {
         const summary = this.summarizeWechatResponse(normalized);
         this.logger.error(`[wechat] nativePrepay 未返回 code_url summary=${this.safeJson(summary)}`);
