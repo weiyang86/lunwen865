@@ -171,6 +171,24 @@ export class WechatPayProvider {
         copy[key] = v;
       }
     }
+    const rsp = obj['response'];
+    if (rsp && typeof rsp === 'object' && !Array.isArray(rsp)) {
+      const rspObj = rsp as Record<string, unknown>;
+      const rspCopy: Record<string, unknown> = { ...rspObj };
+      for (const key of ['data', 'body', 'result'] as const) {
+        const v = rspObj[key];
+        if (typeof v === 'string') {
+          try {
+            rspCopy[key] = JSON.parse(v) as unknown;
+          } catch {
+            rspCopy[key] = v;
+          }
+        } else {
+          rspCopy[key] = v;
+        }
+      }
+      copy['response'] = rspCopy;
+    }
     return copy;
   }
 
@@ -237,37 +255,88 @@ export class WechatPayProvider {
       }
     };
 
+    const pickFrom = (obj: Record<string, unknown>, key: string): unknown => {
+      if (key in obj) return obj[key];
+      return undefined;
+    };
+
+    const pickString = (...values: unknown[]): string | undefined => {
+      for (const v of values) {
+        if (typeof v === 'string' && v.trim()) return v.trim();
+        if (typeof v === 'number') return String(v);
+      }
+      return undefined;
+    };
+
+    const pickObj = (...values: unknown[]): Record<string, unknown> | undefined => {
+      for (const v of values) {
+        if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+      }
+      return undefined;
+    };
+
     const summary: Record<string, unknown> = {};
     if (parsed && typeof parsed === 'object') {
       const obj = parsed as Record<string, unknown>;
-      summary.status = obj['status'];
-      summary.statusCode = obj['statusCode'];
-      summary.code = obj['code'];
-      summary.message = obj['message'];
-      summary.detail = obj['detail'];
-      summary.data = sanitize(obj['data'], 0, 'data');
-      summary.body = sanitize(obj['body'], 0, 'body');
-      summary.result = sanitize(obj['result'], 0, 'result');
+      const rspObj = pickObj(obj['response']);
+      const root = rspObj ?? obj;
 
-      const headersRaw = obj['headers'];
-      if (headersRaw && typeof headersRaw === 'object' && !Array.isArray(headersRaw)) {
-        const headers = headersRaw as Record<string, unknown>;
+      const rootData = pickFrom(root, 'data');
+      const rootBody = pickFrom(root, 'body');
+      const rootResult = pickFrom(root, 'result');
+
+      const dataObj = pickObj(rootData, rootBody, rootResult);
+      const nestedCode = dataObj ? pickFrom(dataObj, 'code') : undefined;
+      const nestedMessage = dataObj ? pickFrom(dataObj, 'message') : undefined;
+      const nestedDetail = dataObj ? pickFrom(dataObj, 'detail') : undefined;
+
+      summary.status = pickString(root['status'], root['statusCode']);
+      summary.statusCode = pickString(root['statusCode'], root['status']);
+      summary.code = pickString(root['code'], nestedCode);
+      summary.message = pickString(root['message'], nestedMessage);
+      summary.detail = pickString(root['detail'], nestedDetail);
+      summary.data = sanitize(rootData ?? obj['data'], 0, 'data');
+      summary.body = sanitize(rootBody ?? obj['body'], 0, 'body');
+      summary.result = sanitize(rootResult ?? obj['result'], 0, 'result');
+
+      const headersRaw = pickObj(root['headers'], obj['headers']);
+      if (headersRaw) {
         const allow = new Set([
           'request-id',
           'x-request-id',
           'wechatpay-serial',
           'wechatpay-request-id',
-          'wechatpay-nonce',
-          'wechatpay-signature',
-          'wechatpay-timestamp',
         ]);
         const filtered: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(headers)) {
+        for (const [k, v] of Object.entries(headersRaw)) {
           const key = k.toLowerCase();
           if (!allow.has(key)) continue;
+          if (key === 'authorization') continue;
           filtered[k] = sanitize(v, 0, k);
         }
         summary.headers = filtered;
+      }
+
+      summary.error = sanitize(
+        {
+          code: pickString(obj['code'], root['code'], nestedCode),
+          message: pickString(obj['message'], root['message'], nestedMessage),
+          detail: pickString(obj['detail'], root['detail'], nestedDetail),
+        },
+        0,
+        'error',
+      );
+
+      if (process.env.NODE_ENV !== 'production') {
+        const stack =
+          typeof obj['stack'] === 'string'
+            ? obj['stack']
+            : typeof (rspObj as Record<string, unknown> | undefined)?.['stack'] === 'string'
+              ? (rspObj as Record<string, unknown>)['stack']
+              : undefined;
+        if (typeof stack === 'string' && stack.trim()) {
+          summary.stack = sanitize(stack, 0, 'stack');
+        }
       }
     } else {
       summary.raw = sanitize(parsed, 0);
@@ -340,10 +409,9 @@ export class WechatPayProvider {
           typeof summary.code === 'string' ? summary.code.trim() : '';
         const message =
           typeof summary.message === 'string' ? summary.message.trim() : '';
-        const merged = [code, message].filter(Boolean).join(' ');
-        if (merged) {
-          throw new BadRequestException(`微信 Native 下单失败：${merged}`);
-        }
+        const merged =
+          code && message ? `${code} - ${message}` : (code || message);
+        if (merged) throw new BadRequestException(`微信 Native 下单失败：${merged}`);
         throw new BadRequestException('微信 Native 下单失败：未返回 code_url');
       }
       if (String(codeUrl).includes('wxpay/mock') || String(codeUrl).includes('weixin://wxpay/mock')) {
@@ -354,10 +422,23 @@ export class WechatPayProvider {
       this.logger.log('[wechat] nativePrepay 真实下单成功');
       return { codeUrl: String(codeUrl), rawResponse: result };
     } catch (error: unknown) {
+      const errSummary = this.summarizeWechatResponse(error);
+      this.logger.error(
+        `[wechat] nativePrepay 调用失败 summary=${this.safeJson(errSummary)}`,
+      );
+      const code =
+        typeof errSummary.code === 'string' ? errSummary.code.trim() : '';
+      const message =
+        typeof errSummary.message === 'string' ? errSummary.message.trim() : '';
       if (error instanceof BadRequestException) throw error;
       this.logger.error(
         `[wechat] nativePrepay 调用失败: ${error instanceof Error ? error.message : String(error)}`,
       );
+      const merged =
+        code && message ? `${code} - ${message}` : (code || message);
+      if (merged) {
+        throw new BadRequestException(`微信 Native 下单失败：${merged}`);
+      }
       throw new BadRequestException(
         `微信 Native 下单失败：${error instanceof Error ? error.message : String(error)}`,
       );
