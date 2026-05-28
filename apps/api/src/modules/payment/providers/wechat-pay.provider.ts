@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { existsSync, readFileSync } from 'node:fs';
+import { inspect } from 'node:util';
 import WxPay from 'wechatpay-node-v3';
 import { SettingsService } from '../../settings/settings.service';
 
@@ -135,14 +136,6 @@ export class WechatPayProvider {
 
   private safeJson(value: unknown): string {
     try {
-      if (
-        value &&
-        typeof value === 'object' &&
-        (value instanceof Error ||
-          typeof (value as Record<string, unknown>)['message'] === 'string')
-      ) {
-        return JSON.stringify(this.summarizeWechatError(value));
-      }
       return JSON.stringify(value);
     } catch {
       try {
@@ -200,6 +193,150 @@ export class WechatPayProvider {
     return copy;
   }
 
+  private sanitizeWechatDebugObject(input: unknown): unknown {
+    const allowHeaderKeys = new Set([
+      'request-id',
+      'wechatpay-serial',
+      'content-type',
+      'date',
+    ]);
+
+    const isSensitiveKey = (rawKey: string): boolean => {
+      const k = rawKey.toLowerCase();
+      if (k === 'authorization') return true;
+      if (k.includes('wechat_pay_api_v3_key')) return true;
+      if (k.includes('privatekey')) return true;
+      if (k.includes('publickey')) return true;
+      if (k.includes('apiclient_key')) return true;
+      if (k.includes('pem')) return true;
+      if (k.includes('signature')) return true;
+      if (k.includes('sign')) return true;
+      return false;
+    };
+
+    const parseMaybeJson = (value: unknown): unknown => {
+      if (typeof value !== 'string') return value;
+      const s = value.trim();
+      if (!s) return value;
+      if (!(s.startsWith('{') || s.startsWith('['))) return value;
+      try {
+        return JSON.parse(s) as unknown;
+      } catch {
+        return value;
+      }
+    };
+
+    const sanitize = (
+      value: unknown,
+      depth: number,
+      keyHint?: string,
+    ): unknown => {
+      if (depth > 8) return '[truncated]';
+      if (keyHint && isSensitiveKey(keyHint)) return '[redacted]';
+      if (value == null) return value;
+
+      if (typeof value === 'string') {
+        const s = value;
+        if (s.includes('-----BEGIN') && s.includes('-----END'))
+          return '[redacted_pem]';
+        if (s.length > 2000) return `${s.slice(0, 400)}...[truncated]`;
+        return parseMaybeJson(s);
+      }
+      if (typeof value === 'number' || typeof value === 'boolean') return value;
+      if (Array.isArray(value)) return value.slice(0, 50).map((v) => sanitize(v, depth + 1));
+
+      if (typeof value === 'object') {
+        const obj = value as Record<string, unknown>;
+
+        if (keyHint && keyHint.toLowerCase() === 'headers') {
+          const filtered: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(obj)) {
+            const lk = k.toLowerCase();
+            if (!allowHeaderKeys.has(lk)) continue;
+            if (isSensitiveKey(k)) continue;
+            filtered[k] = sanitize(v, depth + 1, k);
+          }
+          return filtered;
+        }
+
+        const out: Record<string, unknown> = {};
+        const names = Object.getOwnPropertyNames(obj);
+        const symbols = Object.getOwnPropertySymbols(obj);
+        out.__ownPropertyNames = names.slice(0, 80);
+        out.__ownPropertySymbols = symbols.slice(0, 40).map((s) => s.toString());
+
+        const prioritized = new Set([
+          'status',
+          'statusCode',
+          'code',
+          'message',
+          'detail',
+          'data',
+          'body',
+          'text',
+          'error',
+          'response',
+          'headers',
+          'rawData',
+          '_data',
+          '_body',
+        ]);
+
+        const keys: Array<string | symbol> = [
+          ...names,
+          ...symbols,
+        ];
+        const sortedKeys = keys.sort((a, b) => {
+          const ak = typeof a === 'string' ? a : a.toString();
+          const bk = typeof b === 'string' ? b : b.toString();
+          const ap = prioritized.has(ak) ? 0 : 1;
+          const bp = prioritized.has(bk) ? 0 : 1;
+          if (ap !== bp) return ap - bp;
+          return ak.localeCompare(bk);
+        });
+
+        for (const k of sortedKeys.slice(0, 80)) {
+          const key = typeof k === 'string' ? k : k.toString();
+          if (isSensitiveKey(key)) {
+            out[key] = '[redacted]';
+            continue;
+          }
+          try {
+            const v =
+              typeof k === 'string'
+                ? (obj as Record<string, unknown>)[k]
+                : (obj as unknown as Record<symbol, unknown>)[k as symbol];
+            out[key] = sanitize(v, depth + 1, key);
+          } catch {
+            out[key] = '[unreadable]';
+          }
+        }
+
+        if (value instanceof Error) {
+          const err = value as Error & Record<string, unknown>;
+          out.name = err.name;
+          out.message = err.message;
+          out.code = typeof err.code === 'string' ? err.code : undefined;
+          out.status = err.status;
+          out.statusCode = err.statusCode;
+          if (process.env.NODE_ENV !== 'production' && typeof err.stack === 'string') {
+            out.stack = err.stack.split('\n').slice(0, 25).join('\n');
+          }
+        }
+
+        return out;
+      }
+
+      try {
+        return String(value);
+      } catch {
+        return '[unknown]';
+      }
+    };
+
+    return sanitize(input, 0);
+  }
+
   private extractWechatCodeUrl(response: unknown): string | undefined {
     const parsed = this.parseWechatResponse(response);
     if (!parsed || typeof parsed !== 'object') return undefined;
@@ -217,282 +354,67 @@ export class WechatPayProvider {
   }
 
   private summarizeWechatResponse(response: unknown): Record<string, unknown> {
-    const parsed = this.parseWechatResponse(response);
-
-    const redactKey = (key: string): boolean => {
-      const k = key.toLowerCase();
-      return (
-        k.includes('private') ||
-        k.includes('public') ||
-        k.includes('secret') ||
-        k.includes('apikey') ||
-        k.includes('api_v3') ||
-        k.includes('apiv3') ||
-        k.includes('key') ||
-        k.includes('pem') ||
-        k.includes('certificate') ||
-        k.includes('cert')
-      );
-    };
-
-    const sanitize = (value: unknown, depth: number, keyHint?: string): unknown => {
-      if (depth > 3) return '[truncated]';
-      if (keyHint && redactKey(keyHint)) return '[redacted]';
-      if (value == null) return value;
-      if (typeof value === 'string') {
-        const s = value;
-        if (s.includes('-----BEGIN') && s.includes('-----END')) return '[redacted_pem]';
-        if (s.length > 300) return `${s.slice(0, 120)}...[truncated]`;
-        return s;
-      }
-      if (typeof value === 'number' || typeof value === 'boolean') return value;
-      if (Array.isArray(value)) return value.slice(0, 20).map((v) => sanitize(v, depth + 1));
-      if (typeof value === 'object') {
-        const obj = value as Record<string, unknown>;
-        const out: Record<string, unknown> = {};
-        const keys = Object.getOwnPropertyNames(obj).slice(0, 30);
-        for (const k of keys) {
-          out[k] = sanitize(obj[k], depth + 1, k);
-        }
-        return out;
-      }
-      try {
-        return String(value);
-      } catch {
-        return '[unknown]';
-      }
-    };
-
-    const pickFrom = (obj: Record<string, unknown>, key: string): unknown => {
-      if (key in obj) return obj[key];
-      return undefined;
-    };
-
-    const pickString = (...values: unknown[]): string | undefined => {
-      for (const v of values) {
-        if (typeof v === 'string' && v.trim()) return v.trim();
-        if (typeof v === 'number') return String(v);
-      }
-      return undefined;
-    };
-
-    const pickObj = (...values: unknown[]): Record<string, unknown> | undefined => {
-      for (const v of values) {
-        if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
-      }
-      return undefined;
-    };
-
-    const summary: Record<string, unknown> = {};
-    if (parsed && typeof parsed === 'object') {
-      const obj = parsed as Record<string, unknown>;
-      const rspObj = pickObj(obj['response']);
-      const root = rspObj ?? obj;
-
-      const rootData = pickFrom(root, 'data');
-      const rootBody = pickFrom(root, 'body');
-      const rootResult = pickFrom(root, 'result');
-      const rootText = pickFrom(root, 'text');
-
-      const dataObj = pickObj(rootData, rootBody, rootResult, rootText);
-      const nestedCode = dataObj ? pickFrom(dataObj, 'code') : undefined;
-      const nestedMessage = dataObj ? pickFrom(dataObj, 'message') : undefined;
-      const nestedDetail = dataObj ? pickFrom(dataObj, 'detail') : undefined;
-
-      summary.status = pickString(root['status'], root['statusCode']);
-      summary.statusCode = pickString(root['statusCode'], root['status']);
-      summary.code = pickString(root['code'], nestedCode);
-      summary.message = pickString(root['message'], nestedMessage);
-      summary.detail = pickString(root['detail'], nestedDetail);
-      summary.data = sanitize(rootData ?? obj['data'], 0, 'data');
-      summary.body = sanitize(rootBody ?? obj['body'], 0, 'body');
-      summary.result = sanitize(rootResult ?? obj['result'], 0, 'result');
-      summary.text = sanitize(rootText ?? obj['text'], 0, 'text');
-
-      const headersRaw = pickObj(root['headers'], obj['headers']);
-      if (headersRaw) {
-        const allow = new Set([
-          'request-id',
-          'wechatpay-serial',
-          'content-type',
-        ]);
-        const filtered: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(headersRaw)) {
-          const key = k.toLowerCase();
-          if (!allow.has(key)) continue;
-          if (key === 'authorization') continue;
-          filtered[k] = sanitize(v, 0, k);
-        }
-        summary.headers = filtered;
-      }
-
-      summary.error = sanitize(
-        {
-          code: pickString(obj['code'], root['code'], nestedCode),
-          message: pickString(obj['message'], root['message'], nestedMessage),
-          detail: pickString(obj['detail'], root['detail'], nestedDetail),
-        },
-        0,
-        'error',
-      );
-
-      if (process.env.NODE_ENV !== 'production') {
-        const stack =
-          typeof obj['stack'] === 'string'
-            ? obj['stack']
-            : typeof (rspObj as Record<string, unknown> | undefined)?.['stack'] === 'string'
-              ? (rspObj as Record<string, unknown>)['stack']
-              : undefined;
-        if (typeof stack === 'string' && stack.trim()) {
-          summary.stack = sanitize(stack, 0, 'stack');
-        }
-      }
-    } else {
-      summary.raw = sanitize(parsed, 0);
-    }
-    return summary;
+    return this.sanitizeWechatDebugObject(this.parseWechatResponse(response)) as Record<
+      string,
+      unknown
+    >;
   }
 
   private summarizeWechatError(error: unknown): Record<string, unknown> {
-    const redactKey = (key: string): boolean => {
-      const k = key.toLowerCase();
-      return (
-        k.includes('private') ||
-        k.includes('public') ||
-        k.includes('secret') ||
-        k.includes('apikey') ||
-        k.includes('api_v3') ||
-        k.includes('apiv3') ||
-        k.includes('pem') ||
-        k.includes('certificate') ||
-        k.includes('cert')
-      );
-    };
+    const ownNames =
+      error && typeof error === 'object'
+        ? Object.getOwnPropertyNames(error as object)
+        : [];
+    const ownSymbols =
+      error && typeof error === 'object'
+        ? Object.getOwnPropertySymbols(error as object).map((s) => s.toString())
+        : [];
 
-    const sanitize = (value: unknown, depth: number, keyHint?: string): unknown => {
-      if (depth > 3) return '[truncated]';
-      if (keyHint && redactKey(keyHint)) return '[redacted]';
-      if (value == null) return value;
-      if (typeof value === 'string') {
-        const s = value;
-        if (s.includes('-----BEGIN') && s.includes('-----END')) return '[redacted_pem]';
-        if (s.length > 300) return `${s.slice(0, 120)}...[truncated]`;
-        return s;
-      }
-      if (typeof value === 'number' || typeof value === 'boolean') return value;
-      if (Array.isArray(value)) return value.slice(0, 20).map((v) => sanitize(v, depth + 1));
-      if (typeof value === 'object') {
-        const obj = value as Record<string, unknown>;
-        const out: Record<string, unknown> = {};
-        const keys = Object.getOwnPropertyNames(obj).slice(0, 30);
-        for (const k of keys) {
-          if (k.toLowerCase() === 'authorization') continue;
-          out[k] = sanitize(obj[k], depth + 1, k);
-        }
-        return out;
-      }
-      try {
-        return String(value);
-      } catch {
-        return '[unknown]';
-      }
-    };
+    const errObj =
+      error && typeof error === 'object' && !Array.isArray(error)
+        ? (error as Record<string, unknown>)
+        : null;
 
-    const pickObj = (value: unknown): Record<string, unknown> | undefined => {
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        return value as Record<string, unknown>;
-      }
-      return undefined;
-    };
-
-    const parseMaybeJson = (value: unknown): unknown => {
-      const parsed = this.parseWechatResponse(value);
-      return parsed;
-    };
-
-    if (!error) return { error: null };
-    if (typeof error === 'string') return { message: error };
-    if (typeof error !== 'object') return { message: String(error) };
-
-    const errObj = error as Record<string, unknown>;
-    const own = Object.getOwnPropertyNames(error as object);
-
-    const base: Record<string, unknown> = {
-      ownPropertyNames: own,
-      name: typeof (error as { name?: unknown }).name === 'string' ? (error as { name: string }).name : undefined,
+    const response = errObj && errObj['response'] ? errObj['response'] : null;
+    const base = this.sanitizeWechatDebugObject({
+      ownPropertyNames: ownNames,
+      ownPropertySymbols: ownSymbols,
+      name: errObj && typeof errObj['name'] === 'string' ? errObj['name'] : undefined,
       message:
-        typeof (error as { message?: unknown }).message === 'string'
-          ? (error as { message: string }).message
-          : typeof errObj['message'] === 'string'
-            ? (errObj['message'] as string)
+        error instanceof Error
+          ? error.message
+          : errObj && typeof errObj['message'] === 'string'
+            ? errObj['message']
             : undefined,
-      code: typeof errObj['code'] === 'string' ? errObj['code'] : undefined,
-      status: typeof errObj['status'] === 'number' || typeof errObj['status'] === 'string' ? errObj['status'] : undefined,
-      statusCode:
-        typeof errObj['statusCode'] === 'number' || typeof errObj['statusCode'] === 'string'
-          ? errObj['statusCode']
+      code: errObj ? errObj['code'] : undefined,
+      status: errObj ? errObj['status'] : undefined,
+      statusCode: errObj ? errObj['statusCode'] : undefined,
+      data: errObj ? errObj['data'] : undefined,
+      body: errObj ? errObj['body'] : undefined,
+      headers: errObj ? errObj['headers'] : undefined,
+      response: response,
+      responseStatus:
+        response && typeof response === 'object'
+          ? (response as Record<string, unknown>)['status'] ??
+            (response as Record<string, unknown>)['statusCode']
           : undefined,
-      data: sanitize(parseMaybeJson(errObj['data']), 0, 'data'),
-      body: sanitize(parseMaybeJson(errObj['body']), 0, 'body'),
-      headers: undefined as unknown,
-      response: undefined as unknown,
-    };
+      responseData:
+        response && typeof response === 'object'
+          ? (response as Record<string, unknown>)['data']
+          : undefined,
+      responseBody:
+        response && typeof response === 'object'
+          ? (response as Record<string, unknown>)['body']
+          : undefined,
+      responseText:
+        response && typeof response === 'object'
+          ? (response as Record<string, unknown>)['text']
+          : undefined,
+    });
 
-    const allowHeaders = new Set(['request-id', 'wechatpay-serial', 'content-type']);
-    const headersObj = pickObj(errObj['headers']);
-    if (headersObj) {
-      const filtered: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(headersObj)) {
-        const key = k.toLowerCase();
-        if (!allowHeaders.has(key)) continue;
-        if (key === 'authorization') continue;
-        filtered[k] = sanitize(v, 0, k);
-      }
-      base.headers = filtered;
-    }
-
-    const responseObj = pickObj(errObj['response']);
-    if (responseObj) {
-      const rsp = responseObj;
-      const rspHeaders = pickObj(rsp['headers']);
-      const filteredHeaders: Record<string, unknown> = {};
-      if (rspHeaders) {
-        for (const [k, v] of Object.entries(rspHeaders)) {
-          const key = k.toLowerCase();
-          if (!allowHeaders.has(key)) continue;
-          if (key === 'authorization') continue;
-          filteredHeaders[k] = sanitize(v, 0, k);
-        }
-      }
-      base.response = sanitize(
-        {
-          status: rsp['status'] ?? rsp['statusCode'],
-          statusCode: rsp['statusCode'] ?? rsp['status'],
-          headers: filteredHeaders,
-          data: parseMaybeJson(rsp['data']),
-          body: parseMaybeJson(rsp['body']),
-          text: parseMaybeJson(rsp['text']),
-        },
-        0,
-        'response',
-      );
-    }
-
-    if (process.env.NODE_ENV !== 'production') {
-      const stack =
-        typeof (error as { stack?: unknown }).stack === 'string'
-          ? (error as { stack: string }).stack
-          : typeof errObj['stack'] === 'string'
-            ? (errObj['stack'] as string)
-            : undefined;
-      if (typeof stack === 'string' && stack.trim()) {
-        base.stack = sanitize(stack, 0, 'stack');
-      }
-    }
-
-    const details = this.summarizeWechatResponse(error);
-    base.wechat = details;
-    return base;
+    return base && typeof base === 'object'
+      ? (base as Record<string, unknown>)
+      : { error: String(base) };
   }
 
   private async getClient(): Promise<WxPayClient> {
@@ -553,19 +475,17 @@ export class WechatPayProvider {
       const codeUrl = this.extractWechatCodeUrl(result);
       if (!codeUrl) {
         const summary = this.summarizeWechatResponse(result);
+        this.logger.error(`[wechat] nativePrepay 未返回 code_url summary=${this.safeJson(summary)}`);
         this.logger.error(
-          `[wechat] nativePrepay 未返回 code_url summary=${this.safeJson(summary)}`,
+          `[wechat] nativePrepay 未返回 code_url inspect=${inspect(summary, { depth: 8, showHidden: true })}`,
         );
         const httpStatus = Number(summary.statusCode ?? summary.status ?? NaN);
-        const code =
-          typeof summary.code === 'string' ? summary.code.trim() : '';
-        const message =
-          typeof summary.message === 'string' ? summary.message.trim() : '';
+        const code = typeof summary.code === 'string' ? summary.code.trim() : '';
+        const message = typeof summary.message === 'string' ? summary.message.trim() : '';
         const merged =
           code && message ? `${code} - ${message}` : (code || message);
-        if (Number.isFinite(httpStatus) && httpStatus === 403) {
-          const detail = merged ? ` - ${merged}` : '';
-          throw new BadRequestException(`微信 Native 下单失败：HTTP 403${detail}`);
+        if (Number.isFinite(httpStatus) && httpStatus === 403 && merged) {
+          throw new BadRequestException(`微信 Native 下单失败：${merged}`);
         }
         if (Number.isFinite(httpStatus) && httpStatus >= 400 && httpStatus < 600) {
           const detail = merged ? ` - ${merged}` : '';
@@ -574,6 +494,11 @@ export class WechatPayProvider {
           );
         }
         if (merged) throw new BadRequestException(`微信 Native 下单失败：${merged}`);
+        if (Number.isFinite(httpStatus) && httpStatus === 403) {
+          throw new BadRequestException(
+            '微信 Native 下单失败：HTTP 403，微信 SDK 未暴露响应体，请检查 Native 支付权限、AppID 与商户号绑定、商户证书序列号和私钥是否匹配。',
+          );
+        }
         throw new BadRequestException('微信 Native 下单失败：未返回 code_url');
       }
       if (String(codeUrl).includes('wxpay/mock') || String(codeUrl).includes('weixin://wxpay/mock')) {
@@ -585,8 +510,9 @@ export class WechatPayProvider {
       return { codeUrl: String(codeUrl), rawResponse: result };
     } catch (error: unknown) {
       const errSummary = this.summarizeWechatError(error);
+      this.logger.error(`[wechat] nativePrepay 调用失败 summary=${this.safeJson(errSummary)}`);
       this.logger.error(
-        `[wechat] nativePrepay 调用失败 summary=${this.safeJson(errSummary)}`,
+        `[wechat] nativePrepay 调用失败 inspect=${inspect(errSummary, { depth: 8, showHidden: true })}`,
       );
       if (error instanceof BadRequestException) throw error;
 
@@ -624,17 +550,17 @@ export class WechatPayProvider {
           '',
       ).trim();
       const merged = code && message ? `${code} - ${message}` : (code || message);
-      if (Number.isFinite(httpStatus) && httpStatus === 403) {
-        const detail = merged ? ` - ${merged}` : '';
-        throw new BadRequestException(`微信 Native 下单失败：HTTP 403${detail}`);
+      if (merged) {
+        throw new BadRequestException(`微信 Native 下单失败：${merged}`);
       }
-      if (Number.isFinite(httpStatus) && httpStatus >= 400 && httpStatus < 600) {
-        const detail = merged ? ` - ${merged}` : '';
+      if (Number.isFinite(httpStatus) && httpStatus === 403) {
         throw new BadRequestException(
-          `微信 Native 下单失败：HTTP ${httpStatus}${detail}`,
+          '微信 Native 下单失败：HTTP 403，微信 SDK 未暴露响应体，请检查 Native 支付权限、AppID 与商户号绑定、商户证书序列号和私钥是否匹配。',
         );
       }
-      if (merged) throw new BadRequestException(`微信 Native 下单失败：${merged}`);
+      if (Number.isFinite(httpStatus) && httpStatus >= 400 && httpStatus < 600) {
+        throw new BadRequestException(`微信 Native 下单失败：HTTP ${httpStatus}`);
+      }
       throw new BadRequestException(
         `微信 Native 下单失败：${error instanceof Error ? error.message : String(error)}`,
       );
