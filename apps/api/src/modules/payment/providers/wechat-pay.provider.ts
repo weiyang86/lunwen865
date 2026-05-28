@@ -337,6 +337,148 @@ export class WechatPayProvider {
     return sanitize(input, 0);
   }
 
+  private async normalizeWechatResponse(response: unknown): Promise<Record<string, unknown>> {
+    const allowHeaderKeys = new Set([
+      'request-id',
+      'wechatpay-serial',
+      'content-type',
+      'date',
+    ]);
+
+    const pickHeaders = (headers: unknown): Record<string, unknown> => {
+      const out: Record<string, unknown> = {};
+      if (!headers) return out;
+
+      const getFrom = (key: string): unknown => {
+        if (headers && typeof headers === 'object') {
+          const h = headers as Record<string, unknown>;
+          const direct = h[key] ?? h[key.toLowerCase()] ?? h[key.toUpperCase()];
+          if (direct != null) return direct;
+          const get = (h as unknown as { get?: (k: string) => unknown }).get;
+          if (typeof get === 'function') {
+            return get.call(headers, key) ?? get.call(headers, key.toLowerCase());
+          }
+        }
+        return undefined;
+      };
+
+      for (const key of allowHeaderKeys) {
+        const v = getFrom(key);
+        if (typeof v === 'string' && v.trim()) out[key] = v.trim();
+      }
+      return out;
+    };
+
+    const normalizeBodyFromText = (text: string): { body: unknown; data?: unknown; code?: unknown; message?: unknown; detail?: unknown } => {
+      const trimmed = text.trim();
+      if (!trimmed) return { body: '' };
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        const obj = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+        const data = obj ? (obj['data'] ?? obj['body'] ?? obj['result']) : undefined;
+        const dataObj = data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
+        const code = (obj ? (obj['code'] ?? dataObj?.['code']) : undefined);
+        const message = (obj ? (obj['message'] ?? dataObj?.['message']) : undefined);
+        const detail = (obj ? (obj['detail'] ?? dataObj?.['detail']) : undefined);
+        return { body: parsed, data, code, message, detail };
+      } catch {
+        return { body: trimmed };
+      }
+    };
+
+    const normalizePlainObject = (obj: Record<string, unknown>): Record<string, unknown> => {
+      const parsed = this.parseWechatResponse(obj);
+      const o = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : obj;
+      const root = (o['response'] && typeof o['response'] === 'object' && !Array.isArray(o['response']))
+        ? (o['response'] as Record<string, unknown>)
+        : o;
+
+      const status = root['status'] ?? root['statusCode'] ?? o['status'] ?? o['statusCode'];
+      const headers = pickHeaders(root['headers'] ?? o['headers']);
+      const body = root['body'] ?? root['data'] ?? root['result'] ?? root['text'] ?? o['body'] ?? o['data'] ?? o['result'] ?? o['text'];
+      const bodyObj = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+      const code = o['code'] ?? root['code'] ?? bodyObj?.['code'];
+      const message = o['message'] ?? root['message'] ?? bodyObj?.['message'];
+      const detail = o['detail'] ?? root['detail'] ?? bodyObj?.['detail'];
+
+      return {
+        status,
+        statusCode: status,
+        headers,
+        body,
+        data: o['data'] ?? root['data'] ?? bodyObj?.['data'],
+        code,
+        message,
+        detail,
+        result: o['result'] ?? root['result'],
+      };
+    };
+
+    if (typeof response === 'string') {
+      const parsed = this.parseWechatResponse(response);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return normalizePlainObject(parsed as Record<string, unknown>);
+      }
+      return { body: parsed };
+    }
+
+    if (response && typeof response === 'object' && !Array.isArray(response)) {
+      const rsp = response as Record<string, unknown>;
+
+      const hasStatus = typeof rsp['status'] === 'number' || typeof rsp['statusCode'] === 'number';
+      const hasText = typeof (rsp as unknown as { text?: unknown }).text === 'function';
+      const hasJson = typeof (rsp as unknown as { json?: unknown }).json === 'function';
+      if (hasStatus && (hasText || hasJson)) {
+        const status = (rsp['status'] ?? rsp['statusCode']) as unknown;
+        const headers = pickHeaders(rsp['headers']);
+
+        const cloner = (rsp as unknown as { clone?: () => unknown }).clone;
+        const target = typeof cloner === 'function' ? cloner.call(response) : response;
+
+        let text: string | null = null;
+        const textFn = (target as unknown as { text?: () => Promise<unknown> }).text;
+        if (typeof textFn === 'function') {
+          try {
+            const t = await textFn.call(target);
+            text = typeof t === 'string' ? t : this.safeJson(t);
+          } catch {
+            text = null;
+          }
+        }
+        if (text == null) {
+          const jsonFn = (target as unknown as { json?: () => Promise<unknown> }).json;
+          if (typeof jsonFn === 'function') {
+            try {
+              const j = await jsonFn.call(target);
+              const normalized = normalizePlainObject({ status, statusCode: status, headers, body: j, data: j } as Record<string, unknown>);
+              return normalized;
+            } catch {
+              return { status, statusCode: status, headers, body: null };
+            }
+          }
+          return { status, statusCode: status, headers, body: null };
+        }
+
+        const normalizedBody = normalizeBodyFromText(text);
+        return {
+          status,
+          statusCode: status,
+          headers,
+          body: normalizedBody.body,
+          data: normalizedBody.data,
+          code: normalizedBody.code,
+          message: normalizedBody.message,
+          detail: normalizedBody.detail,
+          text: text,
+        };
+      }
+
+      return normalizePlainObject(rsp);
+    }
+
+    return { body: response };
+  }
+
   private extractWechatCodeUrl(response: unknown): string | undefined {
     const parsed = this.parseWechatResponse(response);
     if (!parsed || typeof parsed !== 'object') return undefined;
@@ -472,9 +614,10 @@ export class WechatPayProvider {
         amount: { total: params.amountCents },
         scene_info: { payer_client_ip: params.clientIp },
       });
-      const codeUrl = this.extractWechatCodeUrl(result);
+      const normalized = await this.normalizeWechatResponse(result);
+      const codeUrl = this.extractWechatCodeUrl(normalized);
       if (!codeUrl) {
-        const summary = this.summarizeWechatResponse(result);
+        const summary = this.summarizeWechatResponse(normalized);
         this.logger.error(`[wechat] nativePrepay 未返回 code_url summary=${this.safeJson(summary)}`);
         this.logger.error(
           `[wechat] nativePrepay 未返回 code_url inspect=${inspect(summary, { depth: 8, showHidden: true })}`,
@@ -496,7 +639,7 @@ export class WechatPayProvider {
         if (merged) throw new BadRequestException(`微信 Native 下单失败：${merged}`);
         if (Number.isFinite(httpStatus) && httpStatus === 403) {
           throw new BadRequestException(
-            '微信 Native 下单失败：HTTP 403，微信 SDK 未暴露响应体，请检查 Native 支付权限、AppID 与商户号绑定、商户证书序列号和私钥是否匹配。',
+            '微信 Native 下单失败：HTTP 403，微信未返回可解析错误体',
           );
         }
         throw new BadRequestException('微信 Native 下单失败：未返回 code_url');
