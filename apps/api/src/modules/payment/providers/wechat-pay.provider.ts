@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { existsSync, readFileSync } from 'node:fs';
-import { createSign, randomBytes } from 'node:crypto';
+import {
+  createDecipheriv,
+  createSign,
+  createVerify,
+  randomBytes,
+} from 'node:crypto';
 import { inspect } from 'node:util';
 import WxPay from 'wechatpay-node-v3';
 import { SettingsService } from '../../settings/settings.service';
@@ -133,6 +138,84 @@ export class WechatPayProvider {
       throw new BadRequestException(`微信支付密钥文件不可读：${label}`);
     }
     return readFileSync(value, 'utf8');
+  }
+
+  private verifyWechatPayNotifySignature(params: {
+    headers: Record<string, string>;
+    rawBody: string;
+    platformPublicKey: string;
+  }): boolean {
+    const headersLower: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params.headers ?? {})) {
+      headersLower[String(k).toLowerCase()] = String(v);
+    }
+
+    const timestamp = headersLower['wechatpay-timestamp'] ?? '';
+    const nonce = headersLower['wechatpay-nonce'] ?? '';
+    const signatureBase64 = headersLower['wechatpay-signature'] ?? '';
+    if (!timestamp || !nonce || !signatureBase64) return false;
+
+    const message = `${timestamp}\n${nonce}\n${params.rawBody}\n`;
+    const verifier = createVerify('RSA-SHA256');
+    verifier.update(message);
+    try {
+      return verifier.verify(
+        params.platformPublicKey,
+        Buffer.from(signatureBase64, 'base64'),
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private decryptWechatPayNotifyResource(params: {
+    resource: unknown;
+    apiV3Key: string;
+  }): Record<string, unknown> {
+    if (!params.resource || typeof params.resource !== 'object') {
+      throw new BadRequestException('微信回调报文不完整：resource 缺失');
+    }
+    const r = params.resource as Record<string, unknown>;
+    const ciphertext = typeof r['ciphertext'] === 'string' ? r['ciphertext'] : '';
+    const nonce = typeof r['nonce'] === 'string' ? r['nonce'] : '';
+    const associatedData =
+      typeof r['associated_data'] === 'string' ? r['associated_data'] : '';
+    if (!ciphertext || !nonce) {
+      throw new BadRequestException('微信回调报文不完整：ciphertext/nonce 缺失');
+    }
+
+    const apiV3Key = String(params.apiV3Key ?? '').trim();
+    if (!apiV3Key || apiV3Key.length !== 32) {
+      throw new BadRequestException('微信支付配置缺失：APIv3 Key（32 位）');
+    }
+
+    const buf = Buffer.from(ciphertext, 'base64');
+    if (buf.length <= 16) {
+      throw new BadRequestException('微信回调报文解密失败：ciphertext 长度异常');
+    }
+    const authTag = buf.subarray(buf.length - 16);
+    const data = buf.subarray(0, buf.length - 16);
+
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      Buffer.from(apiV3Key, 'utf8'),
+      Buffer.from(nonce, 'utf8'),
+    );
+    if (associatedData) {
+      decipher.setAAD(Buffer.from(associatedData, 'utf8'));
+    }
+    decipher.setAuthTag(authTag);
+    const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
+    const text = decrypted.toString('utf8');
+    try {
+      const obj = JSON.parse(text) as unknown;
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        return obj as Record<string, unknown>;
+      }
+      throw new Error('not_object');
+    } catch {
+      throw new BadRequestException('微信回调报文解密失败：明文非 JSON 对象');
+    }
   }
 
   private safeJson(value: unknown): string {
@@ -866,11 +949,20 @@ export class WechatPayProvider {
     headers: Record<string, string>,
     rawBody: string,
   ): Promise<WechatNotifyNormalizedResult> {
-    const client = await this.getClient();
-    const verified = client.verifySign(headers, rawBody);
+    await this.assertWechatConfigReady();
+    const w = await this.getWechatRuntimeConfig();
+    const platformPublicKey = this.loadSecretContent(w.publicKeyRaw, 'publicKeyPath');
+    const verified = this.verifyWechatPayNotifySignature({
+      headers,
+      rawBody,
+      platformPublicKey,
+    });
     if (!verified) throw new BadRequestException('微信回调验签失败');
     const body = JSON.parse(rawBody) as Record<string, unknown>;
-    const resource = client.decipher_gcm(body['resource']);
+    const resource = this.decryptWechatPayNotifyResource({
+      resource: body['resource'],
+      apiV3Key: w.apiV3Key,
+    }) as WxPayDecipheredResource;
     const tradeState = String(resource.trade_state ?? 'UNKNOWN');
     const paidAt = resource.success_time
       ? new Date(resource.success_time)
@@ -1034,37 +1126,6 @@ export class WechatPayProvider {
   }> {
     if (await this.isSandbox()) {
       return { status: 'PENDING' as const };
-    }
-    const client = (await this.getClient()) as unknown as Record<string, unknown>;
-    const fn =
-      client['queryTransactionByOutTradeNo'] ??
-      client['transactions_out_trade_no'] ??
-      client['transactionQueryByOutTradeNo'];
-    if (typeof fn === 'function') {
-      try {
-        const rsp = await (
-          fn as (params: Record<string, unknown>) => Promise<Record<string, unknown>>
-        )({ out_trade_no: outTradeNo });
-        const tradeState = String(rsp['trade_state'] ?? '');
-        if (tradeState) {
-          if (tradeState === 'SUCCESS') {
-            const amountRaw =
-              rsp['amount'] && typeof rsp['amount'] === 'object'
-                ? (rsp['amount'] as Record<string, unknown>)['total']
-                : undefined;
-            return {
-              status: 'PAID',
-              transactionId: String(rsp['transaction_id'] ?? ''),
-              paidAmountCents: Number(amountRaw ?? 0),
-              paidAt: rsp['success_time']
-                ? new Date(String(rsp['success_time']))
-                : undefined,
-            };
-          }
-          return { status: 'PENDING' as const };
-        }
-      } catch {
-      }
     }
     return this.directQueryTrade(outTradeNo);
   }
