@@ -129,11 +129,18 @@ export default function OrdersPage() {
   }, [orders, payOrderId]);
 
   const handlePaidSuccess = async (status: string) => {
-    toast.success('支付成功，正在跳转个人中心');
+    const brainCells = currentOrder
+      ? calcBrainCellsFromSnapshot(currentOrder.productSnapshot)
+      : 0;
+    if (brainCells > 0) {
+      toast.success(`支付成功并获得脑细胞 ${brainCells} 颗`);
+    } else {
+      toast.success('支付成功');
+    }
     setPayStatus(status);
     setPayDialogOpen(false);
     await refreshAll();
-    router.push('/account');
+    router.replace('/account');
   };
 
   const queryPaymentStatusOnce = async (orderId: string) => {
@@ -153,7 +160,9 @@ export default function OrdersPage() {
           }
           await handlePaidSuccess(s.status);
         }
-      } catch {
+      } catch (e: unknown) {
+        const msg = getApiErrorMessage(e, '查询支付状态失败，请稍后再试');
+        setPayHint(msg);
         return;
       }
     }, 3000);
@@ -401,6 +410,30 @@ export default function OrdersPage() {
                   <div className="text-xs text-slate-500">
                     该弹框会自动轮询订单状态；支付成功后自动刷新订单列表。
                   </div>
+                  <Button
+                    variant="secondary"
+                    onClick={async () => {
+                      if (!payOrderId) return;
+                      try {
+                        const s = await queryPaymentStatusOnce(payOrderId);
+                        setPayStatus(s.status);
+                        if (s.status === 'PAID' || s.status === 'COMPLETED') {
+                          if (pollRef.current) {
+                            window.clearInterval(pollRef.current);
+                            pollRef.current = null;
+                          }
+                          await handlePaidSuccess(s.status);
+                          return;
+                        }
+                        setPayHint('尚未检测到支付成功，如已支付请稍后再点一次。');
+                      } catch (e: unknown) {
+                        setPayHint(getApiErrorMessage(e, '查询支付状态失败，请稍后再试'));
+                      }
+                    }}
+                    disabled={!payOrderId}
+                  >
+                    我已完成支付
+                  </Button>
                   {payHint ? (
                     <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
                       {payHint}

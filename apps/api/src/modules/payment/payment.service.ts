@@ -460,7 +460,6 @@ export class PaymentService {
           });
         }
       } catch {
-        // ignore reconcile error
       }
     }
 

@@ -930,6 +930,102 @@ export class WechatPayProvider {
     return this.queryTrade(outTradeNo);
   }
 
+  private async directQueryTrade(outTradeNo: string): Promise<{
+    status: 'PENDING' | 'PAID';
+    transactionId?: string;
+    paidAmountCents?: number;
+    paidAt?: Date;
+  }> {
+    await this.assertWechatConfigReady();
+    if (await this.isSandbox()) {
+      return { status: 'PENDING' as const };
+    }
+
+    const runtime = await this.getWechatRuntimeConfig();
+    const serialNo = String(process.env.WECHAT_PAY_CERT_SERIAL_NO ?? '').trim();
+    const privateKeyRaw = String(
+      process.env.WECHAT_PAY_PRIVATE_KEY_PATH ??
+        process.env.WECHAT_PAY_PRIVATE_KEY ??
+        '',
+    );
+    if (!serialNo || !privateKeyRaw) {
+      return { status: 'PENDING' as const };
+    }
+    const privateKey = this.loadSecretContent(privateKeyRaw, 'WECHAT_PAY_PRIVATE_KEY');
+
+    const pathWithQuery = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(outTradeNo)}?mchid=${encodeURIComponent(runtime.mchid)}`;
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = randomBytes(16).toString('hex');
+    const signMessage = `GET\n${pathWithQuery}\n${timestamp}\n${nonce}\n\n`;
+    const signature = createSign('RSA-SHA256')
+      .update(signMessage)
+      .sign(privateKey, 'base64');
+    const authorization = `WECHATPAY2-SHA256-RSA2048 mchid="${runtime.mchid}",nonce_str="${nonce}",timestamp="${timestamp}",serial_no="${serialNo}",signature="${signature}"`;
+
+    const rsp = await fetch(`https://api.mch.weixin.qq.com${pathWithQuery}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: authorization,
+      },
+    });
+
+    const text = await rsp.text();
+    let parsed: unknown = text;
+    try {
+      parsed = text && text.trim() ? (JSON.parse(text) as unknown) : text;
+    } catch {
+      parsed = text;
+    }
+
+    const normalized = await this.normalizeWechatResponse({
+      status: rsp.status,
+      statusCode: rsp.status,
+      headers: {
+        'request-id': rsp.headers.get('request-id') ?? undefined,
+        'wechatpay-serial': rsp.headers.get('wechatpay-serial') ?? undefined,
+        'content-type': rsp.headers.get('content-type') ?? undefined,
+        date: rsp.headers.get('date') ?? undefined,
+      },
+      body: parsed,
+      data: parsed,
+      text,
+    });
+
+    if (!rsp.ok) {
+      const summary = this.summarizeWechatResponse(normalized);
+      this.logger.warn(
+        `[wechat] directQueryTrade http=${rsp.status} summary=${this.safeJson(summary)}`,
+      );
+      return { status: 'PENDING' as const };
+    }
+
+    const body =
+      normalized && typeof normalized === 'object'
+        ? (normalized.body as unknown)
+        : undefined;
+    const bodyObj =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : null;
+    const tradeState = String(bodyObj?.['trade_state'] ?? '');
+    if (tradeState !== 'SUCCESS') {
+      return { status: 'PENDING' as const };
+    }
+
+    const amountRaw =
+      bodyObj?.['amount'] && typeof bodyObj['amount'] === 'object'
+        ? (bodyObj['amount'] as Record<string, unknown>)['total']
+        : undefined;
+    const successTime = bodyObj?.['success_time'];
+    return {
+      status: 'PAID',
+      transactionId: typeof bodyObj?.['transaction_id'] === 'string' ? bodyObj['transaction_id'] : undefined,
+      paidAmountCents: Number(amountRaw ?? 0),
+      paidAt: successTime ? new Date(String(successTime)) : undefined,
+    };
+  }
+
   private async queryTrade(outTradeNo: string): Promise<{
     status: 'PENDING' | 'PAID';
     transactionId?: string;
@@ -944,28 +1040,33 @@ export class WechatPayProvider {
       client['queryTransactionByOutTradeNo'] ??
       client['transactions_out_trade_no'] ??
       client['transactionQueryByOutTradeNo'];
-    if (typeof fn !== 'function') {
-      return { status: 'PENDING' as const };
+    if (typeof fn === 'function') {
+      try {
+        const rsp = await (
+          fn as (params: Record<string, unknown>) => Promise<Record<string, unknown>>
+        )({ out_trade_no: outTradeNo });
+        const tradeState = String(rsp['trade_state'] ?? '');
+        if (tradeState) {
+          if (tradeState === 'SUCCESS') {
+            const amountRaw =
+              rsp['amount'] && typeof rsp['amount'] === 'object'
+                ? (rsp['amount'] as Record<string, unknown>)['total']
+                : undefined;
+            return {
+              status: 'PAID',
+              transactionId: String(rsp['transaction_id'] ?? ''),
+              paidAmountCents: Number(amountRaw ?? 0),
+              paidAt: rsp['success_time']
+                ? new Date(String(rsp['success_time']))
+                : undefined,
+            };
+          }
+          return { status: 'PENDING' as const };
+        }
+      } catch {
+      }
     }
-    const rsp = await (
-      fn as (params: Record<string, unknown>) => Promise<Record<string, unknown>>
-    )({ out_trade_no: outTradeNo });
-    const tradeState = String(rsp['trade_state'] ?? '');
-    if (tradeState === 'SUCCESS') {
-      const amountRaw =
-        rsp['amount'] && typeof rsp['amount'] === 'object'
-          ? (rsp['amount'] as Record<string, unknown>)['total']
-          : undefined;
-      return {
-        status: 'PAID',
-        transactionId: String(rsp['transaction_id'] ?? ''),
-        paidAmountCents: Number(amountRaw ?? 0),
-        paidAt: rsp['success_time']
-          ? new Date(String(rsp['success_time']))
-          : undefined,
-      };
-    }
-    return { status: 'PENDING' as const };
+    return this.directQueryTrade(outTradeNo);
   }
 
   private async applyRefund(params: {

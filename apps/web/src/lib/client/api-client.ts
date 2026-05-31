@@ -20,7 +20,12 @@ clientApi.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 clientApi.interceptors.response.use(
   (r) => r,
   (error: AxiosError<unknown>) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const url = typeof error.config?.url === 'string' ? error.config.url : '';
+    const ignoreAuthClear =
+      url.includes('/payment/orders/') || url.includes('/orders/') && url.includes('/payment-status');
+
+    if (status === 401 && !ignoreAuthClear) {
       clientAuth.clearToken();
       if (
         typeof window !== 'undefined' &&
