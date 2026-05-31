@@ -424,6 +424,65 @@ export class PaymentService {
     };
   }
 
+  async getOrderPaymentStatus(userId: string, orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+    if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
+
+    if (
+      (order.status === OrderStatus.PENDING ||
+        order.status === OrderStatus.PENDING_PAYMENT) &&
+      order.channel === PaymentChannel.WECHAT &&
+      order.method === PaymentMethod.WECHAT_NATIVE &&
+      order.outTradeNo &&
+      !(await this.isSandbox())
+    ) {
+      try {
+        const q = await this.wechat.query(order.outTradeNo);
+        if (q.status === 'PAID') {
+          const transactionId =
+            q.transactionId && q.transactionId.trim()
+              ? q.transactionId.trim()
+              : `WX_${order.outTradeNo}`;
+          const paidAmountCents =
+            typeof q.paidAmountCents === 'number' && Number.isFinite(q.paidAmountCents)
+              ? q.paidAmountCents
+              : order.amountCents;
+          await this.orderService.markPaid({
+            orderId: order.id,
+            transactionId,
+            paidAmountCents,
+            method: PaymentMethod.WECHAT_NATIVE,
+            channel: PaymentChannel.WECHAT,
+            paidAt: q.paidAt ?? new Date(),
+          });
+        }
+      } catch {
+        // ignore reconcile error
+      }
+    }
+
+    const latest = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!latest) throw new NotFoundException('订单不存在');
+
+    return {
+      orderId: latest.id,
+      orderNo: latest.orderNo,
+      status: latest.status,
+      paidAt: latest.paidAt,
+      paidAmountCents: latest.paidAmountCents,
+      channel: latest.channel,
+      method: latest.method,
+      outTradeNo: latest.outTradeNo,
+      transactionId: latest.transactionId,
+      expiresAt: latest.expiresAt,
+    };
+  }
+
   async simulatePaid(
     userId: string,
     orderId: string,

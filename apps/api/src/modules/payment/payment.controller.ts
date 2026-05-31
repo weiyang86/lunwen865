@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { PaymentChannel, PaymentMethod } from '@prisma/client';
 import type { Request } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -54,5 +54,13 @@ export class PaymentController {
       channel: PaymentChannel.WECHAT,
       method: PaymentMethod.WECHAT_NATIVE,
     });
+  }
+
+  @Get('payment/orders/:orderId/status')
+  getOrderPaymentStatus(
+    @CurrentUser('id') uid: string,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.paymentService.getOrderPaymentStatus(uid, orderId);
   }
 }

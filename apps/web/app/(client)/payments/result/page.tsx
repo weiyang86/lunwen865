@@ -1,10 +1,11 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { clientHttp } from '@/lib/client/api-client';
+import { getApiErrorMessage } from '@/lib/client/api-error';
 
 type PaymentStatusResp = {
   status: string;
@@ -43,26 +44,29 @@ export default function PaymentResultPage() {
     [data],
   );
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!orderId) {
       setError('缺少订单号，请返回订单页查看支付状态。');
       setLoading(false);
       return;
     }
     try {
-      const s = await clientHttp.get<PaymentStatusResp>(`/orders/${orderId}/payment-status`);
+      const s = await clientHttp.get<PaymentStatusResp>(`/payment/orders/${orderId}/status`);
       setData(s);
       setError(null);
+      if (s.status === 'PAID' || s.status === 'COMPLETED') {
+        router.replace('/account');
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : '查询支付状态失败');
+      setError(getApiErrorMessage(e, '查询支付状态失败'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [orderId, router]);
 
   useEffect(() => {
     void refresh();
-  }, [orderId]);
+  }, [refresh]);
 
   useEffect(() => {
     if (!orderId || !shouldPoll) return;
@@ -75,7 +79,7 @@ export default function PaymentResultPage() {
         timerRef.current = null;
       }
     };
-  }, [orderId, shouldPoll]);
+  }, [orderId, refresh, shouldPoll]);
 
   return (
     <div className="mx-auto max-w-xl space-y-4 p-6">

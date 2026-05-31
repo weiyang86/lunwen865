@@ -1,11 +1,12 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 
 import { Button } from '@/components/ui/button';
 import { clientHttp } from '@/lib/client/api-client';
+import { getApiErrorMessage } from '@/lib/client/api-error';
 
 type PaymentStatusResp = {
   status: string;
@@ -27,21 +28,21 @@ export default function WechatQrPage() {
   const canPoll = useMemo(() => Boolean(orderId), [orderId]);
   const qrValue = useMemo(() => decodeURIComponent(qr || ''), [qr]);
 
-  const pollOnce = async () => {
+  const pollOnce = useCallback(async () => {
     if (!canPoll) return;
     try {
-      const s = await clientHttp.get<PaymentStatusResp>(`/orders/${orderId}/payment-status`);
+      const s = await clientHttp.get<PaymentStatusResp>(`/payment/orders/${orderId}/status`);
       setStatus(s.status);
       setError(null);
       if (s.status === 'PAID' || s.status === 'COMPLETED') {
-        router.replace(`/payments/result?orderId=${encodeURIComponent(orderId)}`);
+        router.replace('/account');
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : '查询支付状态失败');
+      setError(getApiErrorMessage(e, '查询支付状态失败'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [canPoll, orderId, router]);
 
   useEffect(() => {
     if (!canPoll) {
@@ -58,7 +59,7 @@ export default function WechatQrPage() {
         timerRef.current = null;
       }
     };
-  }, [canPoll, orderId]);
+  }, [canPoll, pollOnce]);
 
   return (
     <div className="mx-auto max-w-xl space-y-4 p-6">

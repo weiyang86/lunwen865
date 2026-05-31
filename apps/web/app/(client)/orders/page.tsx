@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -14,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { clientHttp } from '@/lib/client/api-client';
+import { getApiErrorMessage } from '@/lib/client/api-error';
 import { formatYuanFromFen } from '@/utils/format';
 import { QRCodeCanvas } from 'qrcode.react';
 
@@ -73,6 +75,7 @@ function statusLabel(status: string): string {
 }
 
 export default function OrdersPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<ApiOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -84,6 +87,7 @@ export default function OrdersPage() {
   const [paying, setPaying] = useState(false);
   const [payQrValue, setPayQrValue] = useState<string | null>(null);
   const [payStatus, setPayStatus] = useState<string | null>(null);
+  const [payHint, setPayHint] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
 
   async function refreshAll() {
@@ -115,6 +119,7 @@ export default function OrdersPage() {
         window.clearInterval(pollRef.current);
         pollRef.current = null;
       }
+      setPayHint(null);
     }
   }, [payDialogOpen]);
 
@@ -123,18 +128,30 @@ export default function OrdersPage() {
     return orders.find((o) => o.id === payOrderId) ?? null;
   }, [orders, payOrderId]);
 
+  const handlePaidSuccess = async (status: string) => {
+    toast.success('支付成功，正在跳转个人中心');
+    setPayStatus(status);
+    setPayDialogOpen(false);
+    await refreshAll();
+    router.push('/account');
+  };
+
+  const queryPaymentStatusOnce = async (orderId: string) => {
+    return clientHttp.get<{ status: string }>(`/payment/orders/${orderId}/status`);
+  };
+
   const startPolling = (orderId: string) => {
     if (pollRef.current) window.clearInterval(pollRef.current);
     pollRef.current = window.setInterval(async () => {
       try {
-        const s = await clientHttp.get<{ status: string }>(
-          `/orders/${orderId}/payment-status`,
-        );
+        const s = await queryPaymentStatusOnce(orderId);
         setPayStatus(s.status);
         if (s.status === 'PAID' || s.status === 'COMPLETED') {
-          toast.success('支付成功');
-          setPayDialogOpen(false);
-          await refreshAll();
+          if (pollRef.current) {
+            window.clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+          await handlePaidSuccess(s.status);
         }
       } catch {
         return;
@@ -150,6 +167,7 @@ export default function OrdersPage() {
       setPaying(true);
       setPayQrValue(null);
       setPayStatus('PENDING');
+      setPayHint(null);
 
       const res = await clientHttp.post<Record<string, unknown>>('/payment/prepay', {
         orderId: opts.orderId,
@@ -170,7 +188,25 @@ export default function OrdersPage() {
         window.open(paymentUrl, '_blank', 'noopener,noreferrer');
       }
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : '发起支付失败');
+      const msg = getApiErrorMessage(e, '发起支付失败');
+      toast.error(msg);
+      setPayHint(msg);
+      if (msg.includes('ORDERPAID') || msg.includes('已支付')) {
+        try {
+          const s = await queryPaymentStatusOnce(opts.orderId);
+          if (s.status === 'PAID' || s.status === 'COMPLETED') {
+            if (pollRef.current) {
+              window.clearInterval(pollRef.current);
+              pollRef.current = null;
+            }
+            await handlePaidSuccess(s.status);
+            return;
+          }
+          await refreshAll();
+        } catch {
+          return;
+        }
+      }
       setPayQrValue(null);
       setPayStatus(null);
     } finally {
@@ -182,11 +218,9 @@ export default function OrdersPage() {
     try {
       setPaying(true);
       await clientHttp.post('/payment/sandbox/simulate-paid', { orderId });
-      toast.success('已支付（沙箱）');
-      setPayDialogOpen(false);
-      await refreshAll();
+      await handlePaidSuccess('PAID');
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : '支付失败');
+      toast.error(getApiErrorMessage(e, '支付失败'));
     } finally {
       setPaying(false);
     }
@@ -367,12 +401,22 @@ export default function OrdersPage() {
                   <div className="text-xs text-slate-500">
                     该弹框会自动轮询订单状态；支付成功后自动刷新订单列表。
                   </div>
+                  {payHint ? (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                      {payHint}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 点击上方「微信扫码支付 / 支付宝扫码/跳转」会生成二维码并弹出扫码支付。
                 {paying ? '（发起中...）' : null}
+                {payHint ? (
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    {payHint}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
@@ -380,6 +424,15 @@ export default function OrdersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => void refreshAll()} disabled={loading}>
               刷新订单
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setPayDialogOpen(false);
+                router.push('/account');
+              }}
+            >
+              去个人中心
             </Button>
           </DialogFooter>
         </DialogContent>
