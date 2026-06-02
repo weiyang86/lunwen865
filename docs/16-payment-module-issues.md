@@ -235,3 +235,10 @@
 - [x] API 新增：`POST /api/payments/create`。
 - [x] mock success/fail 接口已补齐（development 可用）。
 - [ ] 未处理：真实 wechat/alipay provider 接入（后续 PR-3/PR-4）。
+
+## Issue fix(payment-ui): hide mock payment for clients and redirect after paid
+
+- **状态**：已实现本 PR 修复。
+- **后端**：mock / sandbox 支付接口增加 development/test + 管理员限制；普通用户 403。新增/复用 `GET /api/orders/:id/payment-status` 返回 paid、taskId、redirectUrl、brainCellBalance。
+- **前端**：普通用户支付弹窗隐藏“沙箱一键支付”；点击“去支付”自动发起微信支付，PC Native 展示二维码，移动 H5 跳转；轮询后端支付状态，paid 后自动跳转。
+- **风险控制**：不改微信/支付宝签名逻辑，不提交真实密钥，不变更 Prisma 数据模型和脑细胞到账核心逻辑。

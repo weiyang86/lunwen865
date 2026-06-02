@@ -97,6 +97,14 @@ export class AlipayProvider {
     return this.client;
   }
 
+  private toScalarString(value: unknown, fallback = ''): string {
+    return typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+      ? String(value)
+      : fallback;
+  }
+
   private loadKeyContent(value: string, label: string): string {
     const raw = String(value ?? '').trim();
     if (!raw) {
@@ -251,15 +259,17 @@ export class AlipayProvider {
     const data =
       root && typeof root === 'object'
         ? (root as Record<string, unknown>)
-        : (response as Record<string, unknown>);
-    const status = String(data['trade_status'] ?? '');
+        : response;
+    const status = this.toScalarString(data['trade_status']);
     if (status === 'TRADE_SUCCESS' || status === 'TRADE_FINISHED') {
       return {
         status: 'PAID',
-        transactionId: String(data['trade_no'] ?? ''),
-        paidAmountCents: this.yuanToCents(String(data['total_amount'] ?? '0')),
-        paidAt: data['send_pay_date']
-          ? new Date(String(data['send_pay_date']))
+        transactionId: this.toScalarString(data['trade_no']),
+        paidAmountCents: this.yuanToCents(
+          this.toScalarString(data['total_amount'], '0'),
+        ),
+        paidAt: this.toScalarString(data['send_pay_date'])
+          ? new Date(this.toScalarString(data['send_pay_date']))
           : undefined,
       };
     }
@@ -290,7 +300,7 @@ export class AlipayProvider {
     const data =
       root && typeof root === 'object'
         ? (root as Record<string, unknown>)
-        : (response as Record<string, unknown>);
+        : response;
     const tradeNo = data['trade_no'];
     return { refundId: typeof tradeNo === 'string' ? tradeNo : undefined };
   }

@@ -16,8 +16,20 @@ import {
 } from '@/components/ui/dialog';
 import { clientHttp } from '@/lib/client/api-client';
 import { getApiErrorMessage } from '@/lib/client/api-error';
+import { clientAuth } from '@/lib/client/auth';
 import { formatYuanFromFen } from '@/utils/format';
 import { QRCodeCanvas } from 'qrcode.react';
+import {
+  canShowMockPay,
+  getDefaultWechatMethod,
+  isPaidPaymentStatus,
+  readPaymentJumpUrl,
+  readPaymentQrValue,
+  safeClientRedirectUrl,
+  type ClientPaymentStatus,
+  type PaymentChannel,
+  type PaymentMethod,
+} from '@/components/client/payment-ui';
 
 type ApiOrder = {
   id: string;
@@ -89,6 +101,13 @@ export default function OrdersPage() {
   const [payStatus, setPayStatus] = useState<string | null>(null);
   const [payHint, setPayHint] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
+  const pollStartedAtRef = useRef<number>(0);
+  const autoPrepayKeyRef = useRef<string | null>(null);
+  const redirectTimerRef = useRef<number | null>(null);
+  const mockPayEnabled = canShowMockPay({
+    role: clientAuth.getUser()?.role,
+    enableMockPay: process.env.NEXT_PUBLIC_ENABLE_MOCK_PAY,
+  });
 
   async function refreshAll() {
     setLoading(true);
@@ -119,6 +138,11 @@ export default function OrdersPage() {
         window.clearInterval(pollRef.current);
         pollRef.current = null;
       }
+      if (redirectTimerRef.current) {
+        window.clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+      autoPrepayKeyRef.current = null;
       setPayHint(null);
     }
   }, [payDialogOpen]);
@@ -128,7 +152,7 @@ export default function OrdersPage() {
     return orders.find((o) => o.id === payOrderId) ?? null;
   }, [orders, payOrderId]);
 
-  const handlePaidSuccess = async (status: string) => {
+  const handlePaidSuccess = async (status: ClientPaymentStatus) => {
     const brainCells = currentOrder
       ? calcBrainCellsFromSnapshot(currentOrder.productSnapshot)
       : 0;
@@ -137,40 +161,53 @@ export default function OrdersPage() {
     } else {
       toast.success('支付成功');
     }
-    setPayStatus(status);
-    setPayDialogOpen(false);
+    setPayStatus(status.orderStatus ?? status.paymentStatus ?? status.status ?? 'PAID');
+    const redirectUrl = safeClientRedirectUrl(status);
     await refreshAll();
-    router.replace('/account');
+    redirectTimerRef.current = window.setTimeout(() => {
+      setPayDialogOpen(false);
+      router.replace(redirectUrl);
+    }, 800);
   };
 
   const queryPaymentStatusOnce = async (orderId: string) => {
-    return clientHttp.get<{ status: string }>(`/payment/orders/${orderId}/status`);
+    return clientHttp.get<ClientPaymentStatus>(`/orders/${orderId}/payment-status`);
   };
 
   const startPolling = (orderId: string) => {
     if (pollRef.current) window.clearInterval(pollRef.current);
+    pollStartedAtRef.current = Date.now();
     pollRef.current = window.setInterval(async () => {
+      if (Date.now() - pollStartedAtRef.current > 180_000) {
+        if (pollRef.current) {
+          window.clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        setPayHint('支付状态查询超时，请点击刷新订单或稍后重试。');
+        return;
+      }
       try {
         const s = await queryPaymentStatusOnce(orderId);
-        setPayStatus(s.status);
-        if (s.status === 'PAID' || s.status === 'COMPLETED') {
+        setPayStatus(s.orderStatus ?? s.paymentStatus ?? s.status ?? null);
+        if (isPaidPaymentStatus(s)) {
           if (pollRef.current) {
             window.clearInterval(pollRef.current);
             pollRef.current = null;
           }
-          await handlePaidSuccess(s.status);
+          await handlePaidSuccess(s);
         }
       } catch (e: unknown) {
         const msg = getApiErrorMessage(e, '查询支付状态失败，请稍后再试');
         setPayHint(msg);
         return;
       }
-    }, 3000);
+    }, 2000);
   };
 
   const beginPrepay = async (opts: {
     orderId: string;
-    channel: 'WECHAT' | 'ALIPAY';
+    channel: PaymentChannel;
+    method?: PaymentMethod;
   }) => {
     try {
       setPaying(true);
@@ -181,21 +218,23 @@ export default function OrdersPage() {
       const res = await clientHttp.post<Record<string, unknown>>('/payment/prepay', {
         orderId: opts.orderId,
         channel: opts.channel,
-        method: opts.channel === 'WECHAT' ? 'WECHAT_NATIVE' : 'ALIPAY_PAGE',
+        method: opts.method ?? (opts.channel === 'WECHAT' ? getDefaultWechatMethod(window.navigator.userAgent) : 'ALIPAY_PAGE'),
       });
 
-      const codeUrl = typeof res['codeUrl'] === 'string' ? res['codeUrl'] : null;
-      const paymentUrl =
-        typeof res['paymentUrl'] === 'string' ? res['paymentUrl'] : null;
-
-      const qr = codeUrl || paymentUrl;
-      if (!qr) throw new Error('未获取到支付二维码链接');
-      setPayQrValue(qr);
+      const qr = readPaymentQrValue(res);
+      const jumpUrl = readPaymentJumpUrl(res);
       startPolling(opts.orderId);
 
-      if (paymentUrl) {
-        window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+      if (qr) {
+        setPayQrValue(qr);
+        return;
       }
+      if (jumpUrl) {
+        setPayHint('正在跳转微信 H5 支付，请完成支付后返回本页查看结果。');
+        window.location.href = jumpUrl;
+        return;
+      }
+      throw new Error('未获取到支付二维码或跳转链接');
     } catch (e: unknown) {
       const msg = getApiErrorMessage(e, '发起支付失败');
       toast.error(msg);
@@ -203,12 +242,12 @@ export default function OrdersPage() {
       if (msg.includes('ORDERPAID') || msg.includes('已支付')) {
         try {
           const s = await queryPaymentStatusOnce(opts.orderId);
-          if (s.status === 'PAID' || s.status === 'COMPLETED') {
+          if (isPaidPaymentStatus(s)) {
             if (pollRef.current) {
               window.clearInterval(pollRef.current);
               pollRef.current = null;
             }
-            await handlePaidSuccess(s.status);
+            await handlePaidSuccess(s);
             return;
           }
           await refreshAll();
@@ -223,11 +262,24 @@ export default function OrdersPage() {
     }
   };
 
+
+
+  useEffect(() => {
+    if (!payDialogOpen || !payOrderId) return;
+    const key = `${payOrderId}:wechat-default`;
+    if (autoPrepayKeyRef.current === key) return;
+    autoPrepayKeyRef.current = key;
+    void beginPrepay({ orderId: payOrderId, channel: 'WECHAT' });
+  // beginPrepay intentionally stays outside dependencies to avoid recreating the default prepay flow.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payDialogOpen, payOrderId]);
+
   const simulatePaid = async (orderId: string) => {
     try {
       setPaying(true);
       await clientHttp.post('/payment/sandbox/simulate-paid', { orderId });
-      await handlePaidSuccess('PAID');
+      const status = await queryPaymentStatusOnce(orderId);
+      await handlePaidSuccess(status);
     } catch (e: unknown) {
       toast.error(getApiErrorMessage(e, '支付失败'));
     } finally {
@@ -360,16 +412,7 @@ export default function OrdersPage() {
           </DialogHeader>
 
           <div className="grid gap-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <Button
-                onClick={() => {
-                  if (!payOrderId) return;
-                  void beginPrepay({ orderId: payOrderId, channel: 'WECHAT' });
-                }}
-                disabled={!payOrderId || paying}
-              >
-                微信扫码支付
-              </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -378,18 +421,20 @@ export default function OrdersPage() {
                 }}
                 disabled={!payOrderId || paying}
               >
-                支付宝扫码/跳转
+                切换支付宝支付
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (!payOrderId) return;
-                  void simulatePaid(payOrderId);
-                }}
-                disabled={!payOrderId || paying}
-              >
-                沙箱一键支付
-              </Button>
+              {mockPayEnabled ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!payOrderId) return;
+                    void simulatePaid(payOrderId);
+                  }}
+                  disabled={!payOrderId || paying}
+                >
+                  沙箱一键支付
+                </Button>
+              ) : null}
             </div>
 
             {payQrValue ? (
@@ -408,7 +453,7 @@ export default function OrdersPage() {
                     {payQrValue}
                   </div>
                   <div className="text-xs text-slate-500">
-                    该弹框会自动轮询订单状态；支付成功后自动刷新订单列表。
+                    该弹框每 2 秒轮询后端订单状态；支付成功后 0.8 秒自动跳转。
                   </div>
                   <Button
                     variant="secondary"
@@ -416,13 +461,13 @@ export default function OrdersPage() {
                       if (!payOrderId) return;
                       try {
                         const s = await queryPaymentStatusOnce(payOrderId);
-                        setPayStatus(s.status);
-                        if (s.status === 'PAID' || s.status === 'COMPLETED') {
+                        setPayStatus(s.orderStatus ?? s.paymentStatus ?? s.status ?? null);
+                        if (isPaidPaymentStatus(s)) {
                           if (pollRef.current) {
                             window.clearInterval(pollRef.current);
                             pollRef.current = null;
                           }
-                          await handlePaidSuccess(s.status);
+                          await handlePaidSuccess(s);
                           return;
                         }
                         setPayHint('尚未检测到支付成功，如已支付请稍后再点一次。');
@@ -443,8 +488,7 @@ export default function OrdersPage() {
               </div>
             ) : (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                点击上方「微信扫码支付 / 支付宝扫码/跳转」会生成二维码并弹出扫码支付。
-                {paying ? '（发起中...）' : null}
+                {paying ? '正在发起微信支付...' : '已默认发起微信支付；PC 将展示微信二维码，手机浏览器将跳转微信 H5。'}
                 {payHint ? (
                   <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
                     {payHint}

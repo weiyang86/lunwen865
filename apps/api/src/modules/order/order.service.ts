@@ -10,6 +10,7 @@ import {
   Order,
   OrderSourceType,
   OrderStatus,
+  UserRole,
   PaymentChannel,
   PaymentLogType,
   PaymentMethod,
@@ -276,12 +277,50 @@ export class OrderService {
     return expired.length;
   }
 
-  async getPaymentStatus(userId: string, id: string) {
-    const order = await this.findOne(userId, id);
+  async getPaymentStatus(
+    requester: { id: string; role?: UserRole | null },
+    id: string,
+  ) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { task: { select: { id: true } } },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+
+    const isAdmin =
+      requester.role === UserRole.ADMIN ||
+      requester.role === UserRole.SUPER_ADMIN;
+    if (!isAdmin && order.userId !== requester.id) {
+      throw new ForbiddenException('无权访问该订单');
+    }
+
+    const quota = await this.prisma.userQuota.findUnique({
+      where: {
+        userId_quotaType: {
+          userId: order.userId,
+          quotaType: QuotaType.BRAIN_CELL,
+        },
+      },
+      select: { balance: true },
+    });
+    const paid =
+      order.status === OrderStatus.PAID ||
+      order.status === OrderStatus.FULFILLING ||
+      order.status === OrderStatus.COMPLETED;
+    const taskId = order.taskId ?? order.task?.id ?? null;
+    const redirectUrl = taskId
+      ? `/tasks?taskId=${encodeURIComponent(taskId)}`
+      : paid
+        ? '/account'
+        : '/orders';
+
     return {
       orderId: order.id,
       orderNo: order.orderNo,
+      orderStatus: order.status,
+      paymentStatus: paid ? 'PAID' : order.status,
       status: order.status,
+      paid,
       paidAt: order.paidAt,
       paidAmountCents: order.paidAmountCents,
       channel: order.channel,
@@ -289,6 +328,9 @@ export class OrderService {
       outTradeNo: order.outTradeNo,
       transactionId: order.transactionId,
       expiresAt: order.expiresAt,
+      taskId,
+      redirectUrl,
+      brainCellBalance: quota?.balance ?? 0,
     };
   }
 }

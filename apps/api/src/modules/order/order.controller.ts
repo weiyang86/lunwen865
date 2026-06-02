@@ -8,6 +8,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import type { Request } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -40,14 +41,18 @@ export class OrderController {
     return this.orderService.findAll(uid, q);
   }
 
+  @Get(':id/payment-status')
+  getPaymentStatus(
+    @CurrentUser('id') uid: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('id') id: string,
+  ) {
+    return this.orderService.getPaymentStatus({ id: uid, role }, id);
+  }
+
   @Get(':id')
   findOne(@CurrentUser('id') uid: string, @Param('id') id: string) {
     return this.orderService.findOne(uid, id);
-  }
-
-  @Get(':id/payment-status')
-  getPaymentStatus(@CurrentUser('id') uid: string, @Param('id') id: string) {
-    return this.orderService.getPaymentStatus(uid, id);
   }
 
   @Post(':id/cancel')

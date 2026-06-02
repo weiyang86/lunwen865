@@ -14,6 +14,7 @@ import {
   QuotaChangeReason,
   QuotaType,
   RefundStatus,
+  UserRole,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
@@ -72,18 +73,39 @@ export class PaymentService {
     return neg ? -cents : cents;
   }
 
+  private canUseMockPayment(role?: UserRole | null): boolean {
+    const env = process.env.NODE_ENV || 'development';
+    const isAllowedEnv = env === 'development' || env === 'test';
+    const isAdmin = role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
+    return isAllowedEnv && isAdmin;
+  }
+
+  private assertMockPaymentAllowed(role?: UserRole | null) {
+    if (!this.canUseMockPayment(role)) {
+      throw new ForbiddenException(
+        'mock/sandbox 支付仅允许开发或测试环境的管理员使用',
+      );
+    }
+  }
+
   private extractRefundId(response: unknown): string | null {
     if (!this.isRecord(response)) return null;
     const id = response['refundId'] ?? response['refund_id'];
     return typeof id === 'string' ? id : null;
   }
 
-  async createPayment(userId: string, dto: CreatePaymentDto, clientIp: string) {
+  async createPayment(
+    requester: { id: string; role?: UserRole | null },
+    dto: CreatePaymentDto,
+    clientIp: string,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id: dto.orderId },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
+    if (order.userId !== requester.id)
+      throw new ForbiddenException('无权访问该订单');
+    if (dto.channel === 'mock') this.assertMockPaymentAllowed(requester.role);
     if (order.status !== OrderStatus.PENDING)
       throw new BadRequestException('订单当前状态不可支付');
     if (order.expiresAt.getTime() < Date.now())
@@ -115,7 +137,7 @@ export class PaymentService {
       data: {
         paymentNo,
         orderId: order.id,
-        userId,
+        userId: requester.id,
         amountCents: order.amountCents,
         status: 'CREATED',
       },
@@ -173,7 +195,7 @@ export class PaymentService {
           amountCents: order.amountCents,
         },
         dto.method,
-        { clientIp, userId },
+        { clientIp, userId: requester.id },
       );
       return {
         orderId: order.id,
@@ -258,9 +280,9 @@ export class PaymentService {
         method,
         providerOrderNo: outTradeNo,
         status: 'PENDING',
-        payUrl: (payload['payUrl'] as string | undefined) ?? null,
-        qrCodeUrl: (payload['codeUrl'] as string | undefined) ?? null,
-        rawResponse: (payload['rawResponse'] as Prisma.InputJsonValue) ?? null,
+        payUrl: payload['payUrl'] ?? null,
+        qrCodeUrl: payload['codeUrl'] ?? null,
+        rawResponse: payload['rawResponse'] ?? null,
       },
     });
 
@@ -287,20 +309,15 @@ export class PaymentService {
   }
 
   async mockSettle(
-    userId: string,
+    requester: { id: string; role?: UserRole | null },
     orderId: string,
     action: 'success' | 'fail',
   ) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new ForbiddenException(
-        'mock success/fail 仅允许 development 环境或管理员使用',
-      );
-    }
+    this.assertMockPaymentAllowed(requester.role);
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
 
     if (action === 'success') {
       return this.orderService.markPaid({
@@ -378,16 +395,31 @@ export class PaymentService {
 
     let response: unknown;
     if (dto.channel === PaymentChannel.WECHAT) {
-      if (dto.method !== PaymentMethod.WECHAT_NATIVE) {
-        throw new BadRequestException('暂仅支持 WECHAT_NATIVE');
+      if (dto.method === PaymentMethod.WECHAT_NATIVE) {
+        response = await this.wechat.nativePrepay({
+          outTradeNo,
+          description: order.product.name,
+          amountCents: order.amountCents,
+          clientIp,
+          notifyUrl,
+        });
+      } else if (dto.method === PaymentMethod.WECHAT_H5) {
+        const rsp = await this.wechat.h5Prepay({
+          outTradeNo,
+          description: order.product.name,
+          amountCents: order.amountCents,
+          clientIp,
+          notifyUrl,
+        });
+        response = {
+          mwebUrl: rsp.mwebUrl,
+          mweb_url: rsp.mwebUrl,
+          payUrl: rsp.mwebUrl,
+          rawResponse: rsp.rawResponse,
+        };
+      } else {
+        throw new BadRequestException('暂仅支持 WECHAT_NATIVE/WECHAT_H5');
       }
-      response = await this.wechat.nativePrepay({
-        outTradeNo,
-        description: order.product.name,
-        amountCents: order.amountCents,
-        clientIp,
-        notifyUrl,
-      });
     } else if (dto.channel === PaymentChannel.ALIPAY) {
       if (dto.method !== PaymentMethod.ALIPAY_PAGE) {
         throw new BadRequestException('暂仅支持 ALIPAY_PAGE');
@@ -447,7 +479,8 @@ export class PaymentService {
               ? q.transactionId.trim()
               : `WX_${order.outTradeNo}`;
           const paidAmountCents =
-            typeof q.paidAmountCents === 'number' && Number.isFinite(q.paidAmountCents)
+            typeof q.paidAmountCents === 'number' &&
+            Number.isFinite(q.paidAmountCents)
               ? q.paidAmountCents
               : order.amountCents;
           await this.orderService.markPaid({
@@ -460,6 +493,7 @@ export class PaymentService {
           });
         }
       } catch {
+        // 主动查单失败不应中断前端轮询，等待下一次查询或异步回调收敛。
       }
     }
 
@@ -483,10 +517,11 @@ export class PaymentService {
   }
 
   async simulatePaid(
-    userId: string,
+    requester: { id: string; role?: UserRole | null },
     orderId: string,
     options: { channel: PaymentChannel; method: PaymentMethod },
   ) {
+    this.assertMockPaymentAllowed(requester.role);
     if (!(await this.isSandbox())) {
       throw new ForbiddenException('该接口仅在沙箱模式可用');
     }
@@ -494,7 +529,6 @@ export class PaymentService {
       where: { id: orderId },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
     if (order.status !== OrderStatus.PENDING) {
       throw new BadRequestException('订单当前状态不可支付');
     }
@@ -623,7 +657,7 @@ export class PaymentService {
                   headers: params.headers,
                   rawBody: params.rawBody,
                   query: params.query,
-                } as unknown as Prisma.InputJsonValue,
+                },
               },
             });
             processStatus = 'SETTLED';
@@ -746,7 +780,10 @@ export class PaymentService {
 
       const order = await this.prisma.order.findFirst({
         where: {
-          OR: [{ outTradeNo: parsed.outTradeNo }, { orderNo: parsed.outTradeNo }],
+          OR: [
+            { outTradeNo: parsed.outTradeNo },
+            { orderNo: parsed.outTradeNo },
+          ],
         },
       });
       if (!order) {

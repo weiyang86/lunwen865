@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { PaymentChannel, PaymentMethod } from '@prisma/client';
+import { PaymentChannel, PaymentMethod, UserRole } from '@prisma/client';
 import type { ConfigService } from '@nestjs/config';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { OrderService } from '../order/order.service';
@@ -67,7 +67,7 @@ describe('PaymentService', () => {
   let config: Pick<ConfigService, 'get'>;
   let wechat: Pick<
     WechatPayProvider,
-    'nativePrepay' | 'refund' | 'verifyAndParsePayNotify'
+    'nativePrepay' | 'h5Prepay' | 'query' | 'refund' | 'verifyAndParsePayNotify'
   >;
   let alipay: Pick<
     AlipayProvider,
@@ -94,6 +94,10 @@ describe('PaymentService', () => {
       nativePrepay: jest.fn(({ outTradeNo }: { outTradeNo: string }) =>
         Promise.resolve({ codeUrl: `weixin://mock?o=${outTradeNo}` }),
       ),
+      h5Prepay: jest.fn(({ outTradeNo }: { outTradeNo: string }) =>
+        Promise.resolve({ mwebUrl: `https://wx.example/mweb?o=${outTradeNo}` }),
+      ),
+      query: jest.fn(() => Promise.resolve({ status: 'PENDING' as const })),
       refund: jest.fn(({ outRefundNo }: { outRefundNo: string }) =>
         Promise.resolve({ outRefundNo, refundId: 'WX_REF_1' }),
       ),
@@ -392,6 +396,10 @@ describe('PaymentService', () => {
       settingsService as unknown as SettingsService,
       wechat as unknown as WechatPayProvider,
       alipay as unknown as AlipayProvider,
+      {
+        createPayment: jest.fn(),
+        handleNotify: jest.fn(),
+      } as never,
     );
   });
 
@@ -506,6 +514,83 @@ describe('PaymentService', () => {
     expect(typeof codeUrl).toBe('string');
     expect(String(codeUrl)).toContain('weixin://mock');
     expect(paymentLogs.some((l) => l.type === 'PREPAY')).toBe(true);
+  });
+
+  it('prepay：WECHAT_H5 返回 payUrl/mweb_url 并写 PREPAY 日志', async () => {
+    products.set('p1', { id: 'p1', name: '体验包' });
+    orders.set('o1', {
+      id: 'o1',
+      orderNo: 'PAY1',
+      userId: 'u1',
+      productId: 'p1',
+      productSnapshot: { paperQuota: 1 },
+      amountCents: 100,
+      paidAmountCents: null,
+      status: 'PENDING',
+      channel: null,
+      method: null,
+      outTradeNo: null,
+      transactionId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      quotaGranted: false,
+    });
+
+    const res = await service.prepay(
+      'u1',
+      {
+        orderId: 'o1',
+        channel: PaymentChannel.WECHAT,
+        method: PaymentMethod.WECHAT_H5,
+      },
+      '127.0.0.1',
+    );
+
+    const payload = res as unknown as Record<string, unknown>;
+    expect(payload['payUrl']).toContain('https://wx.example/mweb');
+    expect(payload['mweb_url']).toContain('https://wx.example/mweb');
+  });
+
+  it('mockSettle：普通用户即使在 test 环境也返回 403', async () => {
+    const oldEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'test';
+    try {
+      await expect(
+        service.mockSettle({ id: 'u1', role: UserRole.USER }, 'o1', 'success'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    } finally {
+      process.env.NODE_ENV = oldEnv;
+    }
+  });
+
+  it('mockSettle：管理员在 test 环境可以驱动 mock success', async () => {
+    const oldEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'test';
+    orders.set('o1', {
+      id: 'o1',
+      orderNo: 'PAY1',
+      userId: 'u1',
+      productId: 'p1',
+      productSnapshot: {},
+      amountCents: 100,
+      paidAmountCents: null,
+      status: 'PENDING',
+      channel: null,
+      method: null,
+      outTradeNo: null,
+      transactionId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      quotaGranted: false,
+    });
+    try {
+      await service.mockSettle(
+        { id: 'admin1', role: UserRole.ADMIN },
+        'o1',
+        'success',
+      );
+      expect(orderService.markPaid).toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = oldEnv;
+    }
   });
 
   it('handleWechatPayNotify（sandbox）：调用 markPaid', async () => {

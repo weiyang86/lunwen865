@@ -78,7 +78,9 @@ export class WechatPayProvider {
   constructor(private readonly settings: SettingsService) {}
 
   private async isSandbox(): Promise<boolean> {
-    const mode = String(process.env.PAYMENT_MODE ?? '').trim().toLowerCase();
+    const mode = String(process.env.PAYMENT_MODE ?? '')
+      .trim()
+      .toLowerCase();
     if (mode === 'production') return false;
     if (mode === 'mock') return true;
     const cfg = await this.settings.getPaymentSettings();
@@ -176,12 +178,15 @@ export class WechatPayProvider {
       throw new BadRequestException('微信回调报文不完整：resource 缺失');
     }
     const r = params.resource as Record<string, unknown>;
-    const ciphertext = typeof r['ciphertext'] === 'string' ? r['ciphertext'] : '';
+    const ciphertext =
+      typeof r['ciphertext'] === 'string' ? r['ciphertext'] : '';
     const nonce = typeof r['nonce'] === 'string' ? r['nonce'] : '';
     const associatedData =
       typeof r['associated_data'] === 'string' ? r['associated_data'] : '';
     if (!ciphertext || !nonce) {
-      throw new BadRequestException('微信回调报文不完整：ciphertext/nonce 缺失');
+      throw new BadRequestException(
+        '微信回调报文不完整：ciphertext/nonce 缺失',
+      );
     }
 
     const apiV3Key = String(params.apiV3Key ?? '').trim();
@@ -191,7 +196,9 @@ export class WechatPayProvider {
 
     const buf = Buffer.from(ciphertext, 'base64');
     if (buf.length <= 16) {
-      throw new BadRequestException('微信回调报文解密失败：ciphertext 长度异常');
+      throw new BadRequestException(
+        '微信回调报文解密失败：ciphertext 长度异常',
+      );
     }
     const authTag = buf.subarray(buf.length - 16);
     const data = buf.subarray(0, buf.length - 16);
@@ -218,12 +225,20 @@ export class WechatPayProvider {
     }
   }
 
+  private toScalarString(value: unknown, fallback = ''): string {
+    return typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+      ? String(value)
+      : fallback;
+  }
+
   private safeJson(value: unknown): string {
     try {
       return JSON.stringify(value);
     } catch {
       try {
-        return String(value);
+        return this.toScalarString(value, '[unknown]');
       } catch {
         return '[unserializable]';
       }
@@ -327,7 +342,8 @@ export class WechatPayProvider {
         return parseMaybeJson(s);
       }
       if (typeof value === 'number' || typeof value === 'boolean') return value;
-      if (Array.isArray(value)) return value.slice(0, 50).map((v) => sanitize(v, depth + 1));
+      if (Array.isArray(value))
+        return value.slice(0, 50).map((v) => sanitize(v, depth + 1));
 
       if (typeof value === 'object') {
         const obj = value as Record<string, unknown>;
@@ -347,7 +363,9 @@ export class WechatPayProvider {
         const names = Object.getOwnPropertyNames(obj);
         const symbols = Object.getOwnPropertySymbols(obj);
         out.__ownPropertyNames = names.slice(0, 80);
-        out.__ownPropertySymbols = symbols.slice(0, 40).map((s) => s.toString());
+        out.__ownPropertySymbols = symbols
+          .slice(0, 40)
+          .map((s) => s.toString());
 
         const prioritized = new Set([
           'status',
@@ -366,10 +384,7 @@ export class WechatPayProvider {
           '_body',
         ]);
 
-        const keys: Array<string | symbol> = [
-          ...names,
-          ...symbols,
-        ];
+        const keys: Array<string | symbol> = [...names, ...symbols];
         const sortedKeys = keys.sort((a, b) => {
           const ak = typeof a === 'string' ? a : a.toString();
           const bk = typeof b === 'string' ? b : b.toString();
@@ -386,10 +401,7 @@ export class WechatPayProvider {
             continue;
           }
           try {
-            const v =
-              typeof k === 'string'
-                ? (obj as Record<string, unknown>)[k]
-                : (obj as unknown as Record<symbol, unknown>)[k as symbol];
+            const v: unknown = Reflect.get(obj, k);
             out[key] = sanitize(v, depth + 1, key);
           } catch {
             out[key] = '[unreadable]';
@@ -403,7 +415,10 @@ export class WechatPayProvider {
           out.code = typeof err.code === 'string' ? err.code : undefined;
           out.status = err.status;
           out.statusCode = err.statusCode;
-          if (process.env.NODE_ENV !== 'production' && typeof err.stack === 'string') {
+          if (
+            process.env.NODE_ENV !== 'production' &&
+            typeof err.stack === 'string'
+          ) {
             out.stack = err.stack.split('\n').slice(0, 25).join('\n');
           }
         }
@@ -412,7 +427,7 @@ export class WechatPayProvider {
       }
 
       try {
-        return String(value);
+        return this.toScalarString(value, '[unknown]');
       } catch {
         return '[unknown]';
       }
@@ -421,7 +436,9 @@ export class WechatPayProvider {
     return sanitize(input, 0);
   }
 
-  private async normalizeWechatResponse(response: unknown): Promise<Record<string, unknown>> {
+  private async normalizeWechatResponse(
+    response: unknown,
+  ): Promise<Record<string, unknown>> {
     const allowHeaderKeys = new Set([
       'request-id',
       'wechatpay-serial',
@@ -440,7 +457,9 @@ export class WechatPayProvider {
           if (direct != null) return direct;
           const get = (h as unknown as { get?: (k: string) => unknown }).get;
           if (typeof get === 'function') {
-            return get.call(headers, key) ?? get.call(headers, key.toLowerCase());
+            return (
+              get.call(headers, key) ?? get.call(headers, key.toLowerCase())
+            );
           }
         }
         return undefined;
@@ -453,34 +472,72 @@ export class WechatPayProvider {
       return out;
     };
 
-    const normalizeBodyFromText = (text: string): { body: unknown; data?: unknown; code?: unknown; message?: unknown; detail?: unknown } => {
+    const normalizeBodyFromText = (
+      text: string,
+    ): {
+      body: unknown;
+      data?: unknown;
+      code?: unknown;
+      message?: unknown;
+      detail?: unknown;
+    } => {
       const trimmed = text.trim();
       if (!trimmed) return { body: '' };
       try {
         const parsed = JSON.parse(trimmed) as unknown;
-        const obj = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
-        const data = obj ? (obj['data'] ?? obj['body'] ?? obj['result']) : undefined;
-        const dataObj = data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
-        const code = (obj ? (obj['code'] ?? dataObj?.['code']) : undefined);
-        const message = (obj ? (obj['message'] ?? dataObj?.['message']) : undefined);
-        const detail = (obj ? (obj['detail'] ?? dataObj?.['detail']) : undefined);
+        const obj =
+          parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : null;
+        const data = obj
+          ? (obj['data'] ?? obj['body'] ?? obj['result'])
+          : undefined;
+        const dataObj =
+          data && typeof data === 'object' && !Array.isArray(data)
+            ? (data as Record<string, unknown>)
+            : null;
+        const code = obj ? (obj['code'] ?? dataObj?.['code']) : undefined;
+        const message = obj
+          ? (obj['message'] ?? dataObj?.['message'])
+          : undefined;
+        const detail = obj ? (obj['detail'] ?? dataObj?.['detail']) : undefined;
         return { body: parsed, data, code, message, detail };
       } catch {
         return { body: trimmed };
       }
     };
 
-    const normalizePlainObject = (obj: Record<string, unknown>): Record<string, unknown> => {
+    const normalizePlainObject = (
+      obj: Record<string, unknown>,
+    ): Record<string, unknown> => {
       const parsed = this.parseWechatResponse(obj);
-      const o = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : obj;
-      const root = (o['response'] && typeof o['response'] === 'object' && !Array.isArray(o['response']))
-        ? (o['response'] as Record<string, unknown>)
-        : o;
+      const o =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : obj;
+      const root =
+        o['response'] &&
+        typeof o['response'] === 'object' &&
+        !Array.isArray(o['response'])
+          ? (o['response'] as Record<string, unknown>)
+          : o;
 
-      const status = root['status'] ?? root['statusCode'] ?? o['status'] ?? o['statusCode'];
+      const status =
+        root['status'] ?? root['statusCode'] ?? o['status'] ?? o['statusCode'];
       const headers = pickHeaders(root['headers'] ?? o['headers']);
-      const body = root['body'] ?? root['data'] ?? root['result'] ?? root['text'] ?? o['body'] ?? o['data'] ?? o['result'] ?? o['text'];
-      const bodyObj = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+      const body =
+        root['body'] ??
+        root['data'] ??
+        root['result'] ??
+        root['text'] ??
+        o['body'] ??
+        o['data'] ??
+        o['result'] ??
+        o['text'];
+      const bodyObj =
+        body && typeof body === 'object' && !Array.isArray(body)
+          ? (body as Record<string, unknown>)
+          : null;
       const code = o['code'] ?? root['code'] ?? bodyObj?.['code'];
       const message = o['message'] ?? root['message'] ?? bodyObj?.['message'];
       const detail = o['detail'] ?? root['detail'] ?? bodyObj?.['detail'];
@@ -509,32 +566,45 @@ export class WechatPayProvider {
     if (response && typeof response === 'object' && !Array.isArray(response)) {
       const rsp = response as Record<string, unknown>;
 
-      const hasStatus = typeof rsp['status'] === 'number' || typeof rsp['statusCode'] === 'number';
-      const hasText = typeof (rsp as unknown as { text?: unknown }).text === 'function';
-      const hasJson = typeof (rsp as unknown as { json?: unknown }).json === 'function';
+      const hasStatus =
+        typeof rsp['status'] === 'number' ||
+        typeof rsp['statusCode'] === 'number';
+      const hasText =
+        typeof (rsp as unknown as { text?: unknown }).text === 'function';
+      const hasJson =
+        typeof (rsp as unknown as { json?: unknown }).json === 'function';
       if (hasStatus && (hasText || hasJson)) {
-        const status = (rsp['status'] ?? rsp['statusCode']) as unknown;
+        const status = rsp['status'] ?? rsp['statusCode'];
         const headers = pickHeaders(rsp['headers']);
 
         const cloner = (rsp as unknown as { clone?: () => unknown }).clone;
-        const target = typeof cloner === 'function' ? cloner.call(response) : response;
+        const target: unknown =
+          typeof cloner === 'function'
+            ? (cloner.call(response) as unknown)
+            : response;
 
         let text: string | null = null;
-        const textFn = (target as unknown as { text?: () => Promise<unknown> }).text;
+        const textFn = (target as { text?: () => Promise<unknown> }).text;
         if (typeof textFn === 'function') {
           try {
-            const t = await textFn.call(target);
+            const t: unknown = await textFn.call(target);
             text = typeof t === 'string' ? t : this.safeJson(t);
           } catch {
             text = null;
           }
         }
         if (text == null) {
-          const jsonFn = (target as unknown as { json?: () => Promise<unknown> }).json;
+          const jsonFn = (target as { json?: () => Promise<unknown> }).json;
           if (typeof jsonFn === 'function') {
             try {
-              const j = await jsonFn.call(target);
-              const normalized = normalizePlainObject({ status, statusCode: status, headers, body: j, data: j } as Record<string, unknown>);
+              const j: unknown = await jsonFn.call(target);
+              const normalized = normalizePlainObject({
+                status,
+                statusCode: status,
+                headers,
+                body: j,
+                data: j,
+              });
               return normalized;
             } catch {
               return { status, statusCode: status, headers, body: null };
@@ -580,20 +650,19 @@ export class WechatPayProvider {
   }
 
   private summarizeWechatResponse(response: unknown): Record<string, unknown> {
-    return this.sanitizeWechatDebugObject(this.parseWechatResponse(response)) as Record<
-      string,
-      unknown
-    >;
+    return this.sanitizeWechatDebugObject(
+      this.parseWechatResponse(response),
+    ) as Record<string, unknown>;
   }
 
   private summarizeWechatError(error: unknown): Record<string, unknown> {
     const ownNames =
       error && typeof error === 'object'
-        ? Object.getOwnPropertyNames(error as object)
+        ? Object.getOwnPropertyNames(error)
         : [];
     const ownSymbols =
       error && typeof error === 'object'
-        ? Object.getOwnPropertySymbols(error as object).map((s) => s.toString())
+        ? Object.getOwnPropertySymbols(error).map((s) => s.toString())
         : [];
 
     const errObj =
@@ -605,7 +674,10 @@ export class WechatPayProvider {
     const base = this.sanitizeWechatDebugObject({
       ownPropertyNames: ownNames,
       ownPropertySymbols: ownSymbols,
-      name: errObj && typeof errObj['name'] === 'string' ? errObj['name'] : undefined,
+      name:
+        errObj && typeof errObj['name'] === 'string'
+          ? errObj['name']
+          : undefined,
       message:
         error instanceof Error
           ? error.message
@@ -621,8 +693,8 @@ export class WechatPayProvider {
       response: response,
       responseStatus:
         response && typeof response === 'object'
-          ? (response as Record<string, unknown>)['status'] ??
-            (response as Record<string, unknown>)['statusCode']
+          ? ((response as Record<string, unknown>)['status'] ??
+            (response as Record<string, unknown>)['statusCode'])
           : undefined,
       responseData:
         response && typeof response === 'object'
@@ -646,10 +718,21 @@ export class WechatPayProvider {
   private async getClient(): Promise<WxPayClient> {
     await this.assertWechatConfigReady();
     const w = await this.getWechatRuntimeConfig();
-    const key = [w.appid, w.mchid, w.serialNo, w.privateKeyRaw, w.publicKeyRaw, w.publicKeyId, 'wechat'].join('|');
+    const key = [
+      w.appid,
+      w.mchid,
+      w.serialNo,
+      w.privateKeyRaw,
+      w.publicKeyRaw,
+      w.publicKeyId,
+      'wechat',
+    ].join('|');
     if (this.client && this.clientKey === key) return this.client;
 
-    const privateKey = this.loadSecretContent(w.privateKeyRaw, 'privateKeyPath');
+    const privateKey = this.loadSecretContent(
+      w.privateKeyRaw,
+      'privateKeyPath',
+    );
     const publicKey = w.publicKeyRaw
       ? this.loadSecretContent(w.publicKeyRaw, 'publicKeyPath')
       : '';
@@ -698,7 +781,9 @@ export class WechatPayProvider {
         '',
     );
     if (!serialNo) {
-      throw new BadRequestException('微信支付配置缺失：WECHAT_PAY_CERT_SERIAL_NO');
+      throw new BadRequestException(
+        '微信支付配置缺失：WECHAT_PAY_CERT_SERIAL_NO',
+      );
     }
     if (!privateKeyRaw) {
       throw new BadRequestException(
@@ -706,7 +791,10 @@ export class WechatPayProvider {
       );
     }
 
-    const privateKey = this.loadSecretContent(privateKeyRaw, 'WECHAT_PAY_PRIVATE_KEY');
+    const privateKey = this.loadSecretContent(
+      privateKeyRaw,
+      'WECHAT_PAY_PRIVATE_KEY',
+    );
     const urlPath = '/v3/pay/transactions/native';
     const payload = {
       appid: runtime.appid,
@@ -784,13 +872,17 @@ export class WechatPayProvider {
         String(codeUrl).includes('wxpay/mock') ||
         String(codeUrl).includes('weixin://wxpay/mock')
       ) {
-        throw new BadRequestException('微信 Native 下单失败：返回了 mock 二维码');
+        throw new BadRequestException(
+          '微信 Native 下单失败：返回了 mock 二维码',
+        );
       }
       return { codeUrl: String(codeUrl), rawResponse: normalized };
     }
 
     if (code && message) {
-      throw new BadRequestException(`微信 Native 下单失败：${code} - ${message}`);
+      throw new BadRequestException(
+        `微信 Native 下单失败：${code} - ${message}`,
+      );
     }
     if (rsp.status === 403) {
       throw new BadRequestException(
@@ -823,25 +915,34 @@ export class WechatPayProvider {
       const codeUrl = this.extractWechatCodeUrl(normalized) ?? result.codeUrl;
       if (!codeUrl) {
         const summary = this.summarizeWechatResponse(normalized);
-        this.logger.error(`[wechat] nativePrepay 未返回 code_url summary=${this.safeJson(summary)}`);
+        this.logger.error(
+          `[wechat] nativePrepay 未返回 code_url summary=${this.safeJson(summary)}`,
+        );
         this.logger.error(
           `[wechat] nativePrepay 未返回 code_url inspect=${inspect(summary, { depth: 8, showHidden: true })}`,
         );
         const httpStatus = Number(summary.statusCode ?? summary.status ?? NaN);
-        const code = typeof summary.code === 'string' ? summary.code.trim() : '';
-        const message = typeof summary.message === 'string' ? summary.message.trim() : '';
+        const code =
+          typeof summary.code === 'string' ? summary.code.trim() : '';
+        const message =
+          typeof summary.message === 'string' ? summary.message.trim() : '';
         const merged =
-          code && message ? `${code} - ${message}` : (code || message);
+          code && message ? `${code} - ${message}` : code || message;
         if (Number.isFinite(httpStatus) && httpStatus === 403 && merged) {
           throw new BadRequestException(`微信 Native 下单失败：${merged}`);
         }
-        if (Number.isFinite(httpStatus) && httpStatus >= 400 && httpStatus < 600) {
+        if (
+          Number.isFinite(httpStatus) &&
+          httpStatus >= 400 &&
+          httpStatus < 600
+        ) {
           const detail = merged ? ` - ${merged}` : '';
           throw new BadRequestException(
             `微信 Native 下单失败：HTTP ${httpStatus}${detail}`,
           );
         }
-        if (merged) throw new BadRequestException(`微信 Native 下单失败：${merged}`);
+        if (merged)
+          throw new BadRequestException(`微信 Native 下单失败：${merged}`);
         if (Number.isFinite(httpStatus) && httpStatus === 403) {
           throw new BadRequestException(
             '微信 Native 下单失败：HTTP 403，微信未返回可解析错误体',
@@ -849,7 +950,10 @@ export class WechatPayProvider {
         }
         throw new BadRequestException('微信 Native 下单失败：未返回 code_url');
       }
-      if (String(codeUrl).includes('wxpay/mock') || String(codeUrl).includes('weixin://wxpay/mock')) {
+      if (
+        String(codeUrl).includes('wxpay/mock') ||
+        String(codeUrl).includes('weixin://wxpay/mock')
+      ) {
         throw new BadRequestException(
           '微信 Native 下单失败：返回了 mock 二维码',
         );
@@ -858,7 +962,9 @@ export class WechatPayProvider {
       return { codeUrl: String(codeUrl), rawResponse: result };
     } catch (error: unknown) {
       const errSummary = this.summarizeWechatError(error);
-      this.logger.error(`[wechat] nativePrepay 调用失败 summary=${this.safeJson(errSummary)}`);
+      this.logger.error(
+        `[wechat] nativePrepay 调用失败 summary=${this.safeJson(errSummary)}`,
+      );
       this.logger.error(
         `[wechat] nativePrepay 调用失败 inspect=${inspect(errSummary, { depth: 8, showHidden: true })}`,
       );
@@ -866,38 +972,36 @@ export class WechatPayProvider {
 
       const wechat =
         errSummary && typeof errSummary === 'object'
-          ? (errSummary as Record<string, unknown>)['wechat']
+          ? errSummary['wechat']
           : undefined;
       const wechatObj =
         wechat && typeof wechat === 'object' && !Array.isArray(wechat)
           ? (wechat as Record<string, unknown>)
           : {};
       const httpStatus = Number(
-        (errSummary as Record<string, unknown>)['statusCode'] ??
-          (errSummary as Record<string, unknown>)['status'] ??
-          (wechatObj['statusCode'] as unknown) ??
-          (wechatObj['status'] as unknown) ??
+        errSummary['statusCode'] ??
+          errSummary['status'] ??
+          wechatObj['statusCode'] ??
+          wechatObj['status'] ??
           (wechatObj['error'] && typeof wechatObj['error'] === 'object'
-            ? (wechatObj['error'] as Record<string, unknown>)['statusCode'] ??
-              (wechatObj['error'] as Record<string, unknown>)['status']
+            ? ((wechatObj['error'] as Record<string, unknown>)['statusCode'] ??
+              (wechatObj['error'] as Record<string, unknown>)['status'])
             : undefined) ??
           NaN,
       );
-      const code = String(
+      const code = this.toScalarString(
         wechatObj['code'] ??
           (wechatObj['error'] && typeof wechatObj['error'] === 'object'
             ? (wechatObj['error'] as Record<string, unknown>)['code']
-            : '') ??
-          '',
+            : undefined),
       ).trim();
-      const message = String(
+      const message = this.toScalarString(
         wechatObj['message'] ??
           (wechatObj['error'] && typeof wechatObj['error'] === 'object'
             ? (wechatObj['error'] as Record<string, unknown>)['message']
-            : '') ??
-          '',
+            : undefined),
       ).trim();
-      const merged = code && message ? `${code} - ${message}` : (code || message);
+      const merged = code && message ? `${code} - ${message}` : code || message;
       if (merged) {
         throw new BadRequestException(`微信 Native 下单失败：${merged}`);
       }
@@ -906,8 +1010,14 @@ export class WechatPayProvider {
           '微信 Native 下单失败：HTTP 403，微信 SDK 未暴露响应体，请检查 Native 支付权限、AppID 与商户号绑定、商户证书序列号和私钥是否匹配。',
         );
       }
-      if (Number.isFinite(httpStatus) && httpStatus >= 400 && httpStatus < 600) {
-        throw new BadRequestException(`微信 Native 下单失败：HTTP ${httpStatus}`);
+      if (
+        Number.isFinite(httpStatus) &&
+        httpStatus >= 400 &&
+        httpStatus < 600
+      ) {
+        throw new BadRequestException(
+          `微信 Native 下单失败：HTTP ${httpStatus}`,
+        );
       }
       throw new BadRequestException(
         `微信 Native 下单失败：${error instanceof Error ? error.message : String(error)}`,
@@ -951,7 +1061,10 @@ export class WechatPayProvider {
   ): Promise<WechatNotifyNormalizedResult> {
     await this.assertWechatConfigReady();
     const w = await this.getWechatRuntimeConfig();
-    const platformPublicKey = this.loadSecretContent(w.publicKeyRaw, 'publicKeyPath');
+    const platformPublicKey = this.loadSecretContent(
+      w.publicKeyRaw,
+      'publicKeyPath',
+    );
     const verified = this.verifyWechatPayNotifySignature({
       headers,
       rawBody,
@@ -1043,7 +1156,10 @@ export class WechatPayProvider {
     if (!serialNo || !privateKeyRaw) {
       return { status: 'PENDING' as const };
     }
-    const privateKey = this.loadSecretContent(privateKeyRaw, 'WECHAT_PAY_PRIVATE_KEY');
+    const privateKey = this.loadSecretContent(
+      privateKeyRaw,
+      'WECHAT_PAY_PRIVATE_KEY',
+    );
 
     const pathWithQuery = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(outTradeNo)}?mchid=${encodeURIComponent(runtime.mchid)}`;
     const timestamp = String(Math.floor(Date.now() / 1000));
@@ -1094,13 +1210,13 @@ export class WechatPayProvider {
 
     const body =
       normalized && typeof normalized === 'object'
-        ? (normalized.body as unknown)
+        ? normalized.body
         : undefined;
     const bodyObj =
       body && typeof body === 'object' && !Array.isArray(body)
         ? (body as Record<string, unknown>)
         : null;
-    const tradeState = String(bodyObj?.['trade_state'] ?? '');
+    const tradeState = this.toScalarString(bodyObj?.['trade_state']);
     if (tradeState !== 'SUCCESS') {
       return { status: 'PENDING' as const };
     }
@@ -1112,9 +1228,14 @@ export class WechatPayProvider {
     const successTime = bodyObj?.['success_time'];
     return {
       status: 'PAID',
-      transactionId: typeof bodyObj?.['transaction_id'] === 'string' ? bodyObj['transaction_id'] : undefined,
+      transactionId:
+        typeof bodyObj?.['transaction_id'] === 'string'
+          ? bodyObj['transaction_id']
+          : undefined,
       paidAmountCents: Number(amountRaw ?? 0),
-      paidAt: successTime ? new Date(String(successTime)) : undefined,
+      paidAt: this.toScalarString(successTime)
+        ? new Date(this.toScalarString(successTime))
+        : undefined,
     };
   }
 
@@ -1142,7 +1263,10 @@ export class WechatPayProvider {
     if (await this.isSandbox()) {
       return { refundId: `WX_REFUND_${params.outRefundNo}` };
     }
-    const client = (await this.getClient()) as unknown as Record<string, unknown>;
+    const client = (await this.getClient()) as unknown as Record<
+      string,
+      unknown
+    >;
     const fn =
       client['refund'] ??
       client['refunds'] ??
