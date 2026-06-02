@@ -71,3 +71,9 @@
 - [ ] 支付宝异步通知验签失败不入账，金额不一致不入账，`TRADE_SUCCESS` / `TRADE_FINISHED` 才调用统一到账。
 - [ ] 支付宝 `return_url` 回来后仅进入结果页，结果页以后端订单状态和主动查单结果为准。
 - [ ] 微信支付与 mock/admin 测试支付仍保持原有能力。
+
+## 支付宝 SDK 构造函数修复验收
+
+- [ ] 点击支付宝 PC/Wap 支付不再出现 `TypeError: AlipayCtor is not a constructor`。
+- [ ] SDK 导出形态异常时返回明确错误，错误只包含 export keys，不包含密钥内容。
+- [ ] Page/Wap 支付仍分别生成 `alipay.trade.page.pay` / `alipay.trade.wap.pay`，且不返回 `mock-page-pay`。

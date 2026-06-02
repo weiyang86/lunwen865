@@ -469,3 +469,7 @@
 - 支付宝 Page/Wap 不再根据 sandbox 生成 mock 链接；mock 支付仅保留在 mock channel 或管理员开发测试入口。
 - Page Pay 使用 `alipay.trade.page.pay` + `FAST_INSTANT_TRADE_PAY`，Wap Pay 使用 `alipay.trade.wap.pay` + `QUICK_WAP_WAY`，订单金额从系统分单位转换为支付宝元字符串。
 - 异步通知与主动查单统一归一化为 `PaymentCallbackService` 输入，到账、订单 paid、PaymentRecord succeeded、脑细胞流水均复用统一幂等 settlement 流程。
+
+### AlipayCtor 兼容修复
+
+`alipay-sdk@4.x` 在 CommonJS/ESM 转译下可能导出为 `{ AlipaySdk }` 而不是默认构造函数。`AlipayProvider` 解析 SDK 构造函数时必须按 `module.AlipaySdk`、`module.default.AlipaySdk`、`module.default` 顺序兼容，并在解析失败时仅暴露安全 export keys 供排障。

@@ -125,3 +125,7 @@
   - 仅 `TRADE_SUCCESS` / `TRADE_FINISHED` 归一化为支付成功，成功后调用统一 `PaymentCallbackService` 做幂等到账。
   - 验签失败、金额不一致或支付记录不存在不得入账，并写入 `PaymentCallbackLog`。
 - `POST /api/payment/orders/:orderId/status/refresh` 与 `POST /api/orders/:orderId/payment-status/refresh` 主动查单；支付宝订单通过 `alipay.trade.query` 归一化后走同一 `PaymentCallbackService`，重复查单不重复到账。
+
+### Alipay SDK 初始化兼容说明（fix AlipayCtor）
+
+- 后端初始化 `alipay-sdk` 时兼容 `module.AlipaySdk`、`module.default.AlipaySdk`、`module.default` 三种导出形态；若无法解析构造函数，仅返回安全的 export key 诊断信息，不输出应用私钥或支付宝公钥内容。

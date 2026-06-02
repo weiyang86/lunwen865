@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import AlipaySdk from 'alipay-sdk';
+import * as AlipaySdkModule from 'alipay-sdk';
 import { existsSync, readFileSync } from 'node:fs';
 import { SettingsService } from '../../settings/settings.service';
 
@@ -11,8 +11,47 @@ type AlipayClient = {
     params: Record<string, unknown>,
     options?: Record<string, unknown>,
   ) => Promise<AlipayExecResult>;
+  pageExecute?: (
+    method: string,
+    httpMethodOrParams: string | Record<string, unknown>,
+    bizParams?: Record<string, unknown>,
+  ) => AlipayExecResult | Promise<AlipayExecResult>;
   checkNotifySign: (payload: Record<string, string>) => boolean;
 };
+
+type AlipayCtor = new (options: Record<string, unknown>) => AlipayClient;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
+function exportKeys(value: unknown): string[] {
+  return isRecord(value) ? Object.keys(value).sort() : [];
+}
+
+export function resolveAlipaySdkConstructor(mod: unknown): AlipayCtor {
+  const topLevel = isRecord(mod) ? mod : {};
+  const defaultExport = topLevel['default'];
+  const defaultRecord = isRecord(defaultExport) ? defaultExport : {};
+  const candidates = [
+    topLevel['AlipaySdk'],
+    defaultRecord['AlipaySdk'],
+    defaultExport,
+    mod,
+  ];
+  const ctor = candidates.find((candidate) => typeof candidate === 'function');
+  if (typeof ctor !== 'function') {
+    const keys = exportKeys(mod);
+    const defaultKeys = exportKeys(defaultExport);
+    const suffix = defaultKeys.length
+      ? `; default keys: ${defaultKeys.join(',')}`
+      : '';
+    throw new BadRequestException(
+      `支付宝 SDK 导出无效，无法初始化 AlipaySdk。exports keys: ${keys.join(',') || '(none)'}${suffix}`,
+    );
+  }
+  return ctor as AlipayCtor;
+}
 
 type AlipaySettings = {
   appId: string;
@@ -116,10 +155,8 @@ export class AlipayProvider {
     const privateKey = this.loadKeyContent(a.privateKeyPath, '支付宝应用私钥');
     const publicKey = this.loadKeyContent(a.publicKeyPath, '支付宝公钥');
 
-    const AlipayCtor = AlipaySdk as unknown as new (
-      options: Record<string, unknown>,
-    ) => AlipayClient;
-    this.client = new AlipayCtor({
+    const AlipaySdkCtor = resolveAlipaySdkConstructor(AlipaySdkModule);
+    this.client = new AlipaySdkCtor({
       appId: a.appId,
       privateKey,
       alipayPublicKey: publicKey,
@@ -174,7 +211,9 @@ export class AlipayProvider {
         subject: params.subject || '论文通脑细胞套餐',
       },
     };
-    const url = await client.exec(params.method, request, { method: 'GET' });
+    const url = client.pageExecute
+      ? await client.pageExecute(params.method, 'GET', request)
+      : await client.exec(params.method, request, { method: 'GET' });
     return {
       paymentUrl: typeof url === 'string' ? url : JSON.stringify(url),
       rawRequest: request,

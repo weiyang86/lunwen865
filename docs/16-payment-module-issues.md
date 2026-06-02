@@ -249,3 +249,9 @@
 - **修复范围**：后端 `AlipayProvider`、支付创建、支付宝异步通知、主动查单；前端支付跳转/结果页刷新；`.env.example` 与支付接口文档。
 - **验收重点**：Page/Wap 分别调用 `alipay.trade.page.pay` / `alipay.trade.wap.pay`，验签失败和金额不一致不入账，成功后必须走统一 `PaymentCallbackService`，不影响微信支付和 MockPay。
 - **数据迁移**：无新增 Prisma migration，复用 `PaymentRecord`、`PaymentCallbackLog`、`PaymentLog`。
+
+## Issue：fix(payment-alipay): fix AlipayCtor is not a constructor
+
+- **问题**：`alipay-sdk` 实际导出为 `AlipaySdk` 命名导出时，默认导入会让 `new AlipayCtor(...)` 拿到非构造函数并抛出 `TypeError`。
+- **修复范围**：`AlipayProvider` SDK 构造函数解析、Page/Wap pageExecute 调用、Provider 单元测试与支付文档。
+- **验收重点**：PC/Wap 支付不再抛 `AlipayCtor is not a constructor`，异常诊断不泄露密钥，仍不返回 `mock-page-pay`。

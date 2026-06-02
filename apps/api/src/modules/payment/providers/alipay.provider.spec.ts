@@ -1,9 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
-import { AlipayProvider } from './alipay.provider';
+import { AlipayProvider, resolveAlipaySdkConstructor } from './alipay.provider';
 import type { SettingsService } from '../../settings/settings.service';
 
 type AlipaySdkMockBag = {
   exec: jest.Mock;
+  pageExecute: jest.Mock;
   checkNotifySign: jest.Mock;
   ctor: jest.Mock;
 };
@@ -11,11 +12,13 @@ type AlipaySdkMockBag = {
 jest.mock('alipay-sdk', () => {
   const bag: AlipaySdkMockBag = {
     exec: jest.fn(),
+    pageExecute: jest.fn(),
     checkNotifySign: jest.fn(),
     ctor: jest.fn(),
   };
   bag.ctor.mockImplementation(() => ({
     exec: bag.exec,
+    pageExecute: bag.pageExecute,
     checkNotifySign: bag.checkNotifySign,
   }));
   (
@@ -23,7 +26,8 @@ jest.mock('alipay-sdk', () => {
   ).__ALIPAY_SDK_MOCKS__ = bag;
   return {
     __esModule: true,
-    default: bag.ctor,
+    AlipaySdk: bag.ctor,
+    default: { AlipaySdk: bag.ctor },
   };
 });
 
@@ -57,15 +61,46 @@ function createSettings(overrides: Record<string, unknown> = {}) {
   } as unknown as SettingsService;
 }
 
+describe('resolveAlipaySdkConstructor', () => {
+  it('supports module.AlipaySdk, module.default.AlipaySdk and module.default exports', () => {
+    class DirectCtor {}
+    class NestedCtor {}
+    class DefaultCtor {}
+
+    expect(resolveAlipaySdkConstructor({ AlipaySdk: DirectCtor })).toBe(
+      DirectCtor,
+    );
+    expect(
+      resolveAlipaySdkConstructor({ default: { AlipaySdk: NestedCtor } }),
+    ).toBe(NestedCtor);
+    expect(resolveAlipaySdkConstructor({ default: DefaultCtor })).toBe(
+      DefaultCtor,
+    );
+  });
+
+  it('resolves the installed alipay-sdk package export', () => {
+    const actualModule = jest.requireActual('alipay-sdk') as unknown;
+
+    expect(typeof resolveAlipaySdkConstructor(actualModule)).toBe('function');
+  });
+
+  it('throws safe export keys when alipay-sdk export shape is invalid', () => {
+    expect(() =>
+      resolveAlipaySdkConstructor({ default: { notSdk: true }, other: true }),
+    ).toThrow('exports keys: default,other; default keys: notSdk');
+  });
+});
+
 describe('AlipayProvider', () => {
   beforeEach(() => {
     sdkMocks().exec.mockReset();
+    sdkMocks().pageExecute.mockReset();
     sdkMocks().checkNotifySign.mockReset();
     sdkMocks().ctor.mockClear();
   });
 
   it('pagePay uses alipay.trade.page.pay and never returns mock-page-pay', async () => {
-    sdkMocks().exec.mockResolvedValue(
+    sdkMocks().pageExecute.mockResolvedValue(
       'https://openapi.alipay.com/gateway.do?method=alipay.trade.page.pay&sign=abc',
     );
     const provider = new AlipayProvider(createSettings());
@@ -78,27 +113,28 @@ describe('AlipayProvider', () => {
       returnUrl: 'https://example.com/payments/result?orderId=o1',
     });
 
-    const pageCall = sdkMocks().exec.mock.calls[0] as [
+    const pageCall = sdkMocks().pageExecute.mock.calls[0] as [
+      string,
       string,
       { notify_url: string; bizContent: Record<string, unknown> },
-      { method: string },
     ];
     expect(pageCall[0]).toBe('alipay.trade.page.pay');
-    expect(pageCall[1].notify_url).toBe(
+    expect(pageCall[1]).toBe('GET');
+    expect(pageCall[2].notify_url).toBe(
       'https://example.com/api/payments/alipay/notify',
     );
-    expect(pageCall[1].bizContent).toMatchObject({
+    expect(pageCall[2].bizContent).toMatchObject({
       out_trade_no: 'PAY1',
       product_code: 'FAST_INSTANT_TRADE_PAY',
       total_amount: '0.01',
     });
-    expect(pageCall[2]).toEqual({ method: 'GET' });
+
     expect(result.paymentUrl).toContain('alipay.trade.page.pay');
     expect(result.paymentUrl).not.toContain('mock-page-pay');
   });
 
   it('wapPay uses alipay.trade.wap.pay', async () => {
-    sdkMocks().exec.mockResolvedValue(
+    sdkMocks().pageExecute.mockResolvedValue(
       'https://openapi.alipay.com/gateway.do?method=alipay.trade.wap.pay&sign=abc',
     );
     const provider = new AlipayProvider(createSettings());
@@ -111,18 +147,19 @@ describe('AlipayProvider', () => {
       returnUrl: 'https://example.com/payments/result?orderId=o2',
     });
 
-    const wapCall = sdkMocks().exec.mock.calls[0] as [
+    const wapCall = sdkMocks().pageExecute.mock.calls[0] as [
+      string,
       string,
       { bizContent: Record<string, unknown> },
-      { method: string },
     ];
     expect(wapCall[0]).toBe('alipay.trade.wap.pay');
-    expect(wapCall[1].bizContent).toMatchObject({
+    expect(wapCall[1]).toBe('GET');
+    expect(wapCall[2].bizContent).toMatchObject({
       out_trade_no: 'PAY2',
       product_code: 'QUICK_WAP_WAY',
       total_amount: '1.00',
     });
-    expect(wapCall[2]).toEqual({ method: 'GET' });
+
     expect(result.paymentUrl).toContain('alipay.trade.wap.pay');
   });
 
