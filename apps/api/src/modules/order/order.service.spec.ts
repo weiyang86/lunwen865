@@ -12,6 +12,7 @@ import {
   PaymentMethod,
   ProductStatus,
   QuotaType,
+  UserRole,
 } from '@prisma/client';
 import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -53,6 +54,9 @@ type PrismaMock = {
     update: (args: OrderUpdateArgs) => Promise<unknown>;
     updateMany: (args: unknown) => Promise<unknown>;
     findMany: (args: unknown) => Promise<unknown[]>;
+  };
+  userQuota: {
+    findUnique: (args: unknown) => Promise<unknown>;
   };
   $transaction: <T>(fn: (tx: PrismaMock) => Promise<T>) => Promise<T>;
 };
@@ -347,6 +351,50 @@ describe('OrderService', () => {
     });
 
     expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('getPaymentStatus：用户不能查询他人订单', async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'o1',
+      orderNo: 'NO1',
+      userId: 'u2',
+      status: OrderStatus.PENDING,
+      taskId: null,
+      task: null,
+    });
+
+    await expect(
+      service.getPaymentStatus({ id: 'u1', role: UserRole.USER }, 'o1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('getPaymentStatus：paid 订单返回站内 redirectUrl、taskId 与脑细胞余额', async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'o1',
+      orderNo: 'NO1',
+      userId: 'u1',
+      status: OrderStatus.PAID,
+      paidAt: new Date('2026-01-01T00:00:00Z'),
+      paidAmountCents: 100,
+      channel: PaymentChannel.WECHAT,
+      method: PaymentMethod.WECHAT_NATIVE,
+      outTradeNo: 'NO1',
+      transactionId: 'TX1',
+      expiresAt: new Date('2026-01-01T01:00:00Z'),
+      taskId: 't1',
+      task: { id: 't1' },
+    });
+    prisma.userQuota.findUnique.mockResolvedValue({ balance: 88 });
+
+    const status = await service.getPaymentStatus(
+      { id: 'u1', role: UserRole.USER },
+      'o1',
+    );
+
+    expect(status.paid).toBe(true);
+    expect(status.redirectUrl).toBe('/tasks?taskId=t1');
+    expect(status.redirectUrl.startsWith('/')).toBe(true);
+    expect(status.brainCellBalance).toBe(88);
   });
 
   it('closeExpired：到期 PENDING 订单被关闭，未到期不动', async () => {

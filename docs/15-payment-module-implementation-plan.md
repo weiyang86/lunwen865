@@ -453,3 +453,12 @@
 - 已新增 `MockPayAdapter` 并接入 `PaymentService`。
 - 已新增 `POST /api/payments/create`，并对订单归属、pending 状态、channel/method 做校验。
 - wechat/alipay 当前保持未启用策略：返回明确错误，避免误接真实支付。
+
+## fix(payment-ui): 用户端默认微信支付与支付成功跳转
+
+- 用户端订单列表点击“去支付”后不再展示三种支付方式并列入口，而是打开弹窗后立即创建微信支付。
+- PC 浏览器默认 `WECHAT_NATIVE`，前端使用本地二维码组件渲染 `qrCodeUrl` / `codeUrl` / `code_url`。
+- 手机浏览器默认 `WECHAT_H5`，前端使用 `payUrl` / `mwebUrl` / `mweb_url` 跳转。
+- “切换支付宝支付”作为次要操作保留；“沙箱一键支付”仅管理员且 `NEXT_PUBLIC_ENABLE_MOCK_PAY=true` 时显示。
+- 支付成功判断统一以后端 `GET /api/orders/:id/payment-status` 为准，轮询间隔 2 秒，最长 3 分钟，paid 后 0.8 秒跳转。
+- mock / sandbox 支付入账接口限制为 development/test 环境 + 管理员，避免普通用户绕过真实支付链路。

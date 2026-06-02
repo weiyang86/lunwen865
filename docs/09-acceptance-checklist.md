@@ -49,3 +49,16 @@
 - [ ] Issue #92: `POST /api/payments/create` 支持 mock/wechat/alipay 通道与 method 校验。
 - [ ] Issue #92: 仅 mock 可用，wechat/alipay 未启用时返回明确错误。
 - [ ] Issue #92: mock success/fail 可驱动 PaymentRecord 状态变化。
+
+## 支付 UI 与 mock 权限回归（fix/payment-ui）
+
+- [ ] 普通用户订单支付弹窗不显示“沙箱一键支付”。
+- [ ] 普通用户直接调用 mock / sandbox 支付接口返回 403。
+- [ ] 管理员在 development/test 环境且开启 mock 配置时仍可使用 mock 支付。
+- [ ] 普通用户点击“去支付”后自动发起微信支付，PC 默认 Native 并展示二维码。
+- [ ] 手机浏览器默认微信 H5，并使用后端返回的 `payUrl` / `mweb_url` 跳转。
+- [ ] 微信 Native 二维码由前端本地组件生成，不依赖第三方在线二维码 API。
+- [ ] 前端每 2 秒轮询 `/api/orders/:id/payment-status`，paid 后停止轮询。
+- [ ] paid 后 0.8 秒按后端 `redirectUrl` / `taskId` / `/account` / `/orders` 规则跳转。
+- [ ] 关闭弹窗、切换订单、页面卸载后不再继续轮询。
+- [ ] 用户不能查询他人的 `payment-status`；返回的 `redirectUrl` 必须是站内相对路径。

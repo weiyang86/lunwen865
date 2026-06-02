@@ -88,3 +88,28 @@
 ### Payment PR-5（Issue #113）
 - `POST /api/payment/notify/alipay`：支付宝异步通知按「验签 -> 状态判断 -> 金额校验 -> 结算」处理。
 - 对非成功状态、金额不一致、订单不存在等分支写入 `PaymentCallbackLog`，结算成功写入 `PaymentLog.NOTIFY` 并调用订单 `markPaid`。
+
+## 支付状态与 mock 权限补充（fix/payment-ui）
+
+### GET /api/orders/:id/payment-status
+
+- 鉴权：必须登录。
+- 权限：普通用户仅可查询自己的订单；`ADMIN` / `SUPER_ADMIN` 可查询任意订单。
+- 用途：微信 Native 扫码后前端轮询该接口，支付成功以后端订单状态为准，不以前端跳转结果为准。
+- 返回字段：
+  - `orderId`、`orderNo`
+  - `orderStatus`：订单状态。
+  - `paymentStatus`：支付归一状态，已支付时为 `PAID`。
+  - `paid`、`paidAt`
+  - `paidAmountCents`、`channel`、`method`、`outTradeNo`、`transactionId`、`expiresAt`
+  - `taskId`
+  - `redirectUrl`：站内相对路径；关联任务时为 `/tasks?taskId=...`，纯脑细胞购买为 `/account`，兜底 `/orders`。
+  - `brainCellBalance`：该订单所属用户的脑细胞余额。
+
+### mock / sandbox 支付接口权限
+
+- `POST /api/payments/mock/success`
+- `POST /api/payments/mock/fail`
+- `POST /api/payment/sandbox/simulate-paid`
+
+以上接口仅允许 `development` / `test` 环境中的 `ADMIN` / `SUPER_ADMIN` 使用；普通用户直接调用必须返回 `403`。生产环境不得使用 mock / sandbox 支付入账接口。
