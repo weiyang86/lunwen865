@@ -15,9 +15,15 @@ export default registerAs('payment', () => ({
     appid: pickEnv('WECHAT_PAY_APP_ID'),
     mchid: pickEnv('WECHAT_PAY_MCH_ID'),
     serialNo: pickEnv('WECHAT_PAY_CERT_SERIAL_NO', 'WECHAT_PAY_SERIAL_NO'),
-    privateKeyPath: pickEnv('WECHAT_PAY_PRIVATE_KEY_PATH', 'WECHAT_PAY_PRIVATE_KEY'),
+    privateKeyPath: pickEnv(
+      'WECHAT_PAY_PRIVATE_KEY_PATH',
+      'WECHAT_PAY_PRIVATE_KEY',
+    ),
     apiV3Key: pickEnv('WECHAT_PAY_API_V3_KEY'),
-    publicKeyPath: pickEnv('WECHAT_PAY_PUBLIC_KEY_PATH', 'WECHAT_PAY_PUBLIC_KEY'),
+    publicKeyPath: pickEnv(
+      'WECHAT_PAY_PUBLIC_KEY_PATH',
+      'WECHAT_PAY_PUBLIC_KEY',
+    ),
     platformCertPath: pickEnv(
       'WECHAT_PAY_PLATFORM_CERT_PATH',
       'WECHAT_PAY_PLATFORM_CERT',
@@ -33,6 +39,8 @@ export default registerAs('payment', () => ({
     notifyUrl: pickEnv('ALIPAY_NOTIFY_URL'),
     returnUrl: pickEnv('ALIPAY_RETURN_URL'),
     sellerId: pickEnv('ALIPAY_SELLER_ID'),
+    signType: pickEnv('ALIPAY_SIGN_TYPE') || 'RSA2',
+    charset: pickEnv('ALIPAY_CHARSET') || 'utf-8',
   },
   orderExpireMinutes: Number(process.env.ORDER_EXPIRE_MINUTES ?? 30),
   sandbox: (process.env.PAYMENT_SANDBOX ?? 'true') === 'true',

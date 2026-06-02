@@ -26,6 +26,7 @@ import { RefundDto } from './dto/refund.dto';
 import { AlipayProvider } from './providers/alipay.provider';
 import { WechatPayProvider } from './providers/wechat-pay.provider';
 import { MockPayAdapter } from './providers/mock-pay.adapter';
+import { PaymentCallbackService } from './payment-callback.service';
 import { generateRefundNo } from '../order/utils/order-no.util';
 
 @Injectable()
@@ -39,6 +40,7 @@ export class PaymentService {
     private readonly wechat: WechatPayProvider,
     private readonly alipay: AlipayProvider,
     private readonly mockPay: MockPayAdapter,
+    private readonly callbackService?: PaymentCallbackService,
   ) {}
 
   private async isSandbox(): Promise<boolean> {
@@ -85,6 +87,25 @@ export class PaymentService {
       throw new ForbiddenException(
         'mock/sandbox 支付仅允许开发或测试环境的管理员使用',
       );
+    }
+  }
+
+  private appendReturnOrderId(
+    returnUrl: string | undefined,
+    orderId: string,
+  ): string | undefined {
+    const raw = String(returnUrl ?? '').trim();
+    if (!raw) return undefined;
+    try {
+      const url = raw.startsWith('/')
+        ? new URL(raw, 'https://placeholder.local')
+        : new URL(raw);
+      url.searchParams.set('orderId', orderId);
+      if (raw.startsWith('/')) return `${url.pathname}${url.search}${url.hash}`;
+      return url.toString();
+    } catch {
+      const sep = raw.includes('?') ? '&' : '?';
+      return `${raw}${sep}orderId=${encodeURIComponent(orderId)}`;
     }
   }
 
@@ -249,11 +270,15 @@ export class PaymentService {
           subject: order.orderNo,
           totalAmountCents: order.amountCents,
           notifyUrl,
-          returnUrl: paymentSettings.alipay.returnUrl,
+          returnUrl: this.appendReturnOrderId(
+            paymentSettings.alipay.returnUrl,
+            order.id,
+          ),
         });
         payload = {
           payUrl: rsp.paymentUrl,
           paymentUrl: rsp.paymentUrl,
+          rawRequest: rsp.rawRequest,
           rawResponse: rsp.rawResponse,
         };
       } else {
@@ -263,11 +288,15 @@ export class PaymentService {
           subject: order.orderNo,
           totalAmountCents: order.amountCents,
           notifyUrl,
-          returnUrl: paymentSettings.alipay.returnUrl,
+          returnUrl: this.appendReturnOrderId(
+            paymentSettings.alipay.returnUrl,
+            order.id,
+          ),
         });
         payload = {
           payUrl: rsp.paymentUrl,
           paymentUrl: rsp.paymentUrl,
+          rawRequest: rsp.rawRequest,
           rawResponse: rsp.rawResponse,
         };
       }
@@ -282,6 +311,8 @@ export class PaymentService {
         status: 'PENDING',
         payUrl: payload['payUrl'] ?? null,
         qrCodeUrl: payload['codeUrl'] ?? null,
+        clientPayload: payload['clientPayload'] ?? null,
+        rawRequest: payload['rawRequest'] ?? null,
         rawResponse: payload['rawResponse'] ?? null,
       },
     });
@@ -421,16 +452,31 @@ export class PaymentService {
         throw new BadRequestException('暂仅支持 WECHAT_NATIVE/WECHAT_H5');
       }
     } else if (dto.channel === PaymentChannel.ALIPAY) {
-      if (dto.method !== PaymentMethod.ALIPAY_PAGE) {
-        throw new BadRequestException('暂仅支持 ALIPAY_PAGE');
+      if (dto.method === PaymentMethod.ALIPAY_PAGE) {
+        response = await this.alipay.pagePay({
+          outTradeNo,
+          subject: order.product.name || '论文通脑细胞套餐',
+          totalAmountCents: order.amountCents,
+          notifyUrl,
+          returnUrl: this.appendReturnOrderId(
+            paymentSettings.alipay.returnUrl,
+            order.id,
+          ),
+        });
+      } else if (dto.method === PaymentMethod.ALIPAY_WAP) {
+        response = await this.alipay.wapPay({
+          outTradeNo,
+          subject: order.product.name || '论文通脑细胞套餐',
+          totalAmountCents: order.amountCents,
+          notifyUrl,
+          returnUrl: this.appendReturnOrderId(
+            paymentSettings.alipay.returnUrl,
+            order.id,
+          ),
+        });
+      } else {
+        throw new BadRequestException('暂仅支持 ALIPAY_PAGE/ALIPAY_WAP');
       }
-      response = await this.alipay.pagePay({
-        outTradeNo,
-        subject: order.product.name,
-        totalAmountCents: order.amountCents,
-        notifyUrl,
-        returnUrl: paymentSettings.alipay.returnUrl,
-      });
     } else {
       throw new BadRequestException('不支持的支付通道');
     }
@@ -751,7 +797,16 @@ export class PaymentService {
     const callbackLogModel = (
       this.prisma as unknown as Record<string, unknown>
     )['paymentCallbackLog'] as {
-      create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
+      create: (args: {
+        data: Record<string, unknown>;
+      }) => Promise<{ id?: string }>;
+    };
+    const paymentRecordModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentRecord'] as {
+      findFirst: (args: {
+        where: Record<string, unknown>;
+      }) => Promise<Record<string, unknown> | null>;
     };
     const now = new Date();
 
@@ -761,66 +816,73 @@ export class PaymentService {
       | 'SETTLED'
       | 'FAILED'
       | 'ORDER_NOT_FOUND'
-      | 'AMOUNT_MISMATCH' = 'PENDING';
+      | 'AMOUNT_MISMATCH'
+      | 'IGNORED' = 'PENDING';
     let normalizedStatus = 'UNKNOWN';
     let errorMessage: string | null = null;
+    let verified = false;
 
     try {
       const sandbox = await this.isSandbox();
-      const parsed = sandbox
-        ? this.parseAlipaySandboxNotify(payload)
-        : await this.alipay.verifyAndParsePayNotify(payload);
       const normalized = sandbox
         ? {
-            success: true,
+            channel: 'alipay' as const,
+            providerOrderNo: String(payload['out_trade_no'] ?? ''),
+            providerTradeNo: String(payload['trade_no'] ?? ''),
+            amount: this.yuanStringToCents(
+              String(payload['total_amount'] ?? '0'),
+            ),
+            paidAt: payload['gmt_payment']
+              ? new Date(payload['gmt_payment'])
+              : new Date(),
             tradeStatus: 'TRADE_SUCCESS',
+            success: true,
+            raw: payload as Record<string, unknown>,
           }
         : await this.alipay.verifyAndNormalizeNotify(payload);
+      verified = true;
       normalizedStatus = normalized.tradeStatus;
 
-      const order = await this.prisma.order.findFirst({
-        where: {
-          OR: [
-            { outTradeNo: parsed.outTradeNo },
-            { orderNo: parsed.outTradeNo },
-          ],
-        },
+      const payment = await paymentRecordModel.findFirst({
+        where: { providerOrderNo: normalized.providerOrderNo },
       });
-      if (!order) {
+      if (payment && typeof payment['orderId'] === 'string') {
+        orderId = payment['orderId'];
+      }
+
+      if (!payment) {
         processStatus = 'ORDER_NOT_FOUND';
-        errorMessage = '订单不存在';
+        errorMessage = '支付记录不存在';
+      } else if (!normalized.success) {
+        processStatus = 'IGNORED';
+        errorMessage = `交易状态未成功: ${normalized.tradeStatus}`;
+      } else if (normalized.amount !== Number(payment['amountCents'])) {
+        processStatus = 'AMOUNT_MISMATCH';
+        errorMessage = `金额不匹配: expected=${String(payment['amountCents'])}, actual=${normalized.amount}`;
+      } else if (!this.callbackService) {
+        processStatus = 'FAILED';
+        errorMessage = '统一支付回调服务未初始化';
       } else {
-        orderId = order.id;
-        if (!normalized.success) {
-          processStatus = 'FAILED';
-          errorMessage = `交易状态未成功: ${normalized.tradeStatus}`;
-        } else if (parsed.paidAmountCents !== order.amountCents) {
-          processStatus = 'AMOUNT_MISMATCH';
-          errorMessage = `金额不匹配: expected=${order.amountCents}, actual=${parsed.paidAmountCents}`;
-        } else {
-          const method =
-            order.method === PaymentMethod.ALIPAY_WAP
-              ? PaymentMethod.ALIPAY_WAP
-              : PaymentMethod.ALIPAY_PAGE;
-          await this.orderService.markPaid({
-            orderId: order.id,
-            transactionId: parsed.tradeNo,
-            paidAmountCents: parsed.paidAmountCents,
-            method,
+        const settled = await this.callbackService.process({
+          channel: 'alipay',
+          providerOrderNo: normalized.providerOrderNo,
+          providerTradeNo: normalized.providerTradeNo,
+          amount: normalized.amount,
+          paidAt: normalized.paidAt ?? now,
+          tradeStatus: normalized.tradeStatus,
+          success: normalized.success,
+          raw: normalized.raw,
+        });
+        await this.prisma.paymentLog.create({
+          data: {
+            orderId: String(payment['orderId']),
+            type: PaymentLogType.NOTIFY,
             channel: PaymentChannel.ALIPAY,
-            paidAt: parsed.paidAt,
-          });
-          await this.prisma.paymentLog.create({
-            data: {
-              orderId: order.id,
-              type: PaymentLogType.NOTIFY,
-              channel: PaymentChannel.ALIPAY,
-              success: true,
-              request: payload,
-            },
-          });
-          processStatus = 'SETTLED';
-        }
+            success: true,
+            request: payload,
+          },
+        });
+        processStatus = settled.processed ? 'SETTLED' : 'IGNORED';
       }
 
       await callbackLogModel.create({
@@ -830,7 +892,7 @@ export class PaymentService {
           rawHeaders: null,
           rawBody: JSON.stringify(payload),
           rawQuery: payload,
-          verified: true,
+          verified,
           normalizedStatus,
           processStatus,
           errorMessage,
@@ -838,6 +900,10 @@ export class PaymentService {
           processedAt: new Date(),
         },
       });
+
+      if (processStatus === 'FAILED' || processStatus === 'AMOUNT_MISMATCH') {
+        throw new BadRequestException(errorMessage ?? '支付宝通知处理失败');
+      }
       return { code: 'SUCCESS' as const };
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : '处理失败';
@@ -848,7 +914,7 @@ export class PaymentService {
           rawHeaders: null,
           rawBody: JSON.stringify(payload),
           rawQuery: payload,
-          verified: false,
+          verified,
           normalizedStatus,
           processStatus: 'FAILED',
           errorMessage: errMessage,

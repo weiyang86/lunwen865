@@ -6,6 +6,34 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { clientHttp } from '@/lib/client/api-client';
 
+
+function submitAlipayFormHtml(html: string) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const form = doc.querySelector('form');
+  if (!form) return false;
+
+  const targetForm = document.createElement('form');
+  targetForm.method = (form.getAttribute('method') || 'post').toLowerCase() === 'get' ? 'get' : 'post';
+  targetForm.action = form.getAttribute('action') || '';
+  targetForm.acceptCharset = form.getAttribute('accept-charset') || 'utf-8';
+  targetForm.style.display = 'none';
+
+  for (const input of Array.from(form.querySelectorAll('input'))) {
+    const name = input.getAttribute('name');
+    if (!name) continue;
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = name;
+    hidden.value = input.getAttribute('value') || '';
+    targetForm.appendChild(hidden);
+  }
+
+  document.body.appendChild(targetForm);
+  targetForm.submit();
+  return true;
+}
+
 function isMobile() {
   if (typeof navigator === 'undefined') return false;
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -59,7 +87,16 @@ export default function CheckoutPage() {
         return;
       }
 
-      setError('发起支付失败：未获取到支付链接。');
+      const html =
+        (typeof res['html'] === 'string' && res['html']) ||
+        (typeof res['formHtml'] === 'string' && res['formHtml']) ||
+        (typeof res['form'] === 'string' && res['form']) ||
+        null;
+      if (html && submitAlipayFormHtml(html)) {
+        return;
+      }
+
+      setError('发起支付失败：未获取到支付链接或支付表单。');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '发起支付失败，请稍后重试。');
     } finally {
