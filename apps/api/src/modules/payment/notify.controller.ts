@@ -39,21 +39,26 @@ export class NotifyController {
     }
   }
 
-  @Post('payment/notify/alipay')
+  @Post('payments/alipay/notify')
   async alipayPayNotify(
     @Req() req: Request,
     @Body() body: Record<string, string>,
-  ): Promise<NotifyResultDto> {
+  ): Promise<string> {
     try {
       void req;
       await this.paymentService.handleAlipayPayNotify(body);
-      return { code: 'SUCCESS' };
-    } catch (error: unknown) {
-      return {
-        code: 'FAIL',
-        message: error instanceof Error ? error.message : '处理失败',
-      };
+      return 'success';
+    } catch {
+      return 'failure';
     }
+  }
+
+  @Post('payment/notify/alipay')
+  async alipayPayNotifyLegacy(
+    @Req() req: Request,
+    @Body() body: Record<string, string>,
+  ): Promise<string> {
+    return this.alipayPayNotify(req, body);
   }
 
   @Post('payment/notify/wechat/refund')

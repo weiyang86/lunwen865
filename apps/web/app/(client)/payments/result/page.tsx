@@ -51,7 +51,7 @@ export default function PaymentResultPage() {
       return;
     }
     try {
-      const s = await clientHttp.get<PaymentStatusResp>(`/payment/orders/${orderId}/status`);
+      const s = await clientHttp.post<PaymentStatusResp>(`/payment/orders/${orderId}/status/refresh`, {});
       setData(s);
       setError(null);
       if (s.status === 'PAID' || s.status === 'COMPLETED') {
@@ -95,7 +95,7 @@ export default function PaymentResultPage() {
 
       <div className="flex gap-2">
         <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
-          刷新状态
+          我已完成支付，刷新状态
         </Button>
         <Button variant="secondary" onClick={() => router.push('/orders')}>
           返回订单页

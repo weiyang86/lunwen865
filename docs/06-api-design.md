@@ -113,3 +113,19 @@
 - `POST /api/payment/sandbox/simulate-paid`
 
 以上接口仅允许 `development` / `test` 环境中的 `ADMIN` / `SUPER_ADMIN` 使用；普通用户直接调用必须返回 `403`。生产环境不得使用 mock / sandbox 支付入账接口。
+
+## 支付宝 Page/Wap 正式支付（fix-payment-alipay）
+
+- `POST /api/payments/create` 当 `channel=alipay` 时仅支持真实支付宝跳转能力，不再返回 `mock-page-pay`：
+  - PC 端传 `method=page`，后端调用 `alipay.trade.page.pay`，`product_code=FAST_INSTANT_TRADE_PAY`。
+  - 手机浏览器传 `method=wap`，后端调用 `alipay.trade.wap.pay`，`product_code=QUICK_WAP_WAY`。
+  - 返回体优先包含 `payUrl/paymentUrl`；若后续 SDK 返回表单 HTML，前端按受信后端响应提交表单，不以 `return_url` 作为支付成功依据。
+- `POST /api/payments/alipay/notify` 为支付宝异步通知入口，兼容旧入口 `POST /api/payment/notify/alipay`；生产环境 `ALIPAY_NOTIFY_URL` 应配置为 `/api/payments/alipay/notify`。
+  - 通知处理必须使用支付宝公钥验签，校验 `out_trade_no`、`trade_no`、`total_amount`、`trade_status`、`app_id` 与可选 `seller_id`。
+  - 仅 `TRADE_SUCCESS` / `TRADE_FINISHED` 归一化为支付成功，成功后调用统一 `PaymentCallbackService` 做幂等到账。
+  - 验签失败、金额不一致或支付记录不存在不得入账，并写入 `PaymentCallbackLog`。
+- `POST /api/payment/orders/:orderId/status/refresh` 与 `POST /api/orders/:orderId/payment-status/refresh` 主动查单；支付宝订单通过 `alipay.trade.query` 归一化后走同一 `PaymentCallbackService`，重复查单不重复到账。
+
+### Alipay SDK 初始化兼容说明（fix AlipayCtor）
+
+- 后端初始化 `alipay-sdk` 时兼容 `module.AlipaySdk`、`module.default.AlipaySdk`、`module.default` 三种导出形态；若无法解析构造函数，仅返回安全的 export key 诊断信息，不输出应用私钥或支付宝公钥内容。

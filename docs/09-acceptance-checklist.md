@@ -62,3 +62,18 @@
 - [ ] paid 后 0.8 秒按后端 `redirectUrl` / `taskId` / `/account` / `/orders` 规则跳转。
 - [ ] 关闭弹窗、切换订单、页面卸载后不再继续轮询。
 - [ ] 用户不能查询他人的 `payment-status`；返回的 `redirectUrl` 必须是站内相对路径。
+
+## 支付宝 mock-page-pay 修复验收
+
+- [ ] 生产或沙箱配置下，`channel=alipay&method=page` 不返回 `mock-page-pay`，返回内容包含 `alipay.trade.page.pay` 与 `sign`。
+- [ ] `channel=alipay&method=wap` 返回内容包含 `alipay.trade.wap.pay` 与 `sign`。
+- [ ] 未配置 `ALIPAY_APP_ID` / 私钥路径 / 支付宝公钥路径 / `ALIPAY_NOTIFY_URL` 时，发起支付宝支付返回明确配置错误。
+- [ ] 支付宝异步通知验签失败不入账，金额不一致不入账，`TRADE_SUCCESS` / `TRADE_FINISHED` 才调用统一到账。
+- [ ] 支付宝 `return_url` 回来后仅进入结果页，结果页以后端订单状态和主动查单结果为准。
+- [ ] 微信支付与 mock/admin 测试支付仍保持原有能力。
+
+## 支付宝 SDK 构造函数修复验收
+
+- [ ] 点击支付宝 PC/Wap 支付不再出现 `TypeError: AlipayCtor is not a constructor`。
+- [ ] SDK 导出形态异常时返回明确错误，错误只包含 export keys，不包含密钥内容。
+- [ ] Page/Wap 支付仍分别生成 `alipay.trade.page.pay` / `alipay.trade.wap.pay`，且不返回 `mock-page-pay`。
