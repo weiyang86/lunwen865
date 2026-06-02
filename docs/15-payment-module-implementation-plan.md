@@ -462,3 +462,10 @@
 - “切换支付宝支付”作为次要操作保留；“沙箱一键支付”仅管理员且 `NEXT_PUBLIC_ENABLE_MOCK_PAY=true` 时显示。
 - 支付成功判断统一以后端 `GET /api/orders/:id/payment-status` 为准，轮询间隔 2 秒，最长 3 分钟，paid 后 0.8 秒跳转。
 - mock / sandbox 支付入账接口限制为 development/test 环境 + 管理员，避免普通用户绕过真实支付链路。
+
+## fix-payment-alipay：Page/Wap 正式支付落地说明
+
+- `AlipayProvider` 使用已安装的 `alipay-sdk`，从 `ALIPAY_APP_ID`、`ALIPAY_GATEWAY`、`ALIPAY_PRIVATE_KEY_PATH`、`ALIPAY_PUBLIC_KEY_PATH`、`ALIPAY_NOTIFY_URL`、`ALIPAY_RETURN_URL`、`ALIPAY_SELLER_ID`、`ALIPAY_SIGN_TYPE`、`ALIPAY_CHARSET` 读取配置。
+- 支付宝 Page/Wap 不再根据 sandbox 生成 mock 链接；mock 支付仅保留在 mock channel 或管理员开发测试入口。
+- Page Pay 使用 `alipay.trade.page.pay` + `FAST_INSTANT_TRADE_PAY`，Wap Pay 使用 `alipay.trade.wap.pay` + `QUICK_WAP_WAY`，订单金额从系统分单位转换为支付宝元字符串。
+- 异步通知与主动查单统一归一化为 `PaymentCallbackService` 输入，到账、订单 paid、PaymentRecord succeeded、脑细胞流水均复用统一幂等 settlement 流程。

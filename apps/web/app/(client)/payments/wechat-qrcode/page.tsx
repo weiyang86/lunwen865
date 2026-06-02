@@ -31,7 +31,7 @@ export default function WechatQrPage() {
   const pollOnce = useCallback(async () => {
     if (!canPoll) return;
     try {
-      const s = await clientHttp.get<PaymentStatusResp>(`/payment/orders/${orderId}/status`);
+      const s = await clientHttp.post<PaymentStatusResp>(`/payment/orders/${orderId}/status/refresh`, {});
       setStatus(s.status);
       setError(null);
       if (s.status === 'PAID' || s.status === 'COMPLETED') {
@@ -85,7 +85,7 @@ export default function WechatQrPage() {
 
       <div className="flex gap-2">
         <Button variant="outline" onClick={() => void pollOnce()} disabled={!canPoll}>
-          立即刷新状态
+          我已完成支付，刷新状态
         </Button>
         <Button variant="secondary" onClick={() => router.push(`/payments/result?orderId=${encodeURIComponent(orderId)}`)}>
           去支付结果页

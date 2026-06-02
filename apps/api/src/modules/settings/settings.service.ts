@@ -23,6 +23,9 @@ type PaymentSdkSettings = {
     gateway: string;
     privateKeyPath: string;
     publicKeyPath: string;
+    sellerId: string;
+    signType: string;
+    charset: string;
   };
 };
 
@@ -44,6 +47,9 @@ type PaymentSettingsForAdmin = {
     gateway: string;
     privateKeyPath: string;
     publicKeyPath: string;
+    sellerId: string;
+    signType: string;
+    charset: string;
   };
 };
 
@@ -164,6 +170,9 @@ export class SettingsService {
           'payment.alipay.publicKeyPath',
           '',
         ),
+        sellerId: this.config.get<string>('payment.alipay.sellerId', ''),
+        signType: this.config.get<string>('payment.alipay.signType', 'RSA2'),
+        charset: this.config.get<string>('payment.alipay.charset', 'utf-8'),
       },
     };
 
@@ -203,6 +212,9 @@ export class SettingsService {
           asString(alipay['privateKeyPath']) ?? defaults.alipay.privateKeyPath,
         publicKeyPath:
           asString(alipay['publicKeyPath']) ?? defaults.alipay.publicKeyPath,
+        sellerId: asString(alipay['sellerId']) ?? defaults.alipay.sellerId,
+        signType: asString(alipay['signType']) ?? defaults.alipay.signType,
+        charset: asString(alipay['charset']) ?? defaults.alipay.charset,
       },
     };
   }
@@ -227,6 +239,9 @@ export class SettingsService {
         gateway: s.alipay.gateway,
         privateKeyPath: s.alipay.privateKeyPath,
         publicKeyPath: s.alipay.publicKeyPath,
+        sellerId: s.alipay.sellerId,
+        signType: s.alipay.signType,
+        charset: s.alipay.charset,
       },
     };
   }
