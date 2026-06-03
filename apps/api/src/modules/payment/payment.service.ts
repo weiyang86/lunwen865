@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  Order,
   OrderStatus,
   PaymentChannel,
   PaymentLogType,
@@ -115,6 +116,44 @@ export class PaymentService {
     return typeof id === 'string' ? id : null;
   }
 
+  private isPaidOrderStatus(status: OrderStatus): boolean {
+    return (
+      status === OrderStatus.PAID ||
+      status === OrderStatus.FULFILLING ||
+      status === OrderStatus.COMPLETED
+    );
+  }
+
+  private isPendingOrderStatus(status: OrderStatus): boolean {
+    return (
+      status === OrderStatus.PENDING || status === OrderStatus.PENDING_PAYMENT
+    );
+  }
+
+  private async rejectIfNotPayable<T extends Order>(order: T) {
+    if (this.isPaidOrderStatus(order.status)) {
+      return { paid: true as const };
+    }
+    const latest =
+      typeof this.orderService.expirePendingOrderIfNeeded === 'function'
+        ? await this.orderService.expirePendingOrderIfNeeded(order)
+        : order;
+    if (
+      this.isPendingOrderStatus(latest.status) &&
+      latest.expiresAt.getTime() <= Date.now()
+    ) {
+      throw new BadRequestException('订单已过期，请重新下单');
+    }
+    if (!this.isPendingOrderStatus(latest.status)) {
+      throw new BadRequestException(
+        latest.status === OrderStatus.CLOSED
+          ? '订单已过期，请重新下单'
+          : '订单当前状态不可支付',
+      );
+    }
+    return { paid: false as const };
+  }
+
   async createPayment(
     requester: { id: string; role?: UserRole | null },
     dto: CreatePaymentDto,
@@ -127,10 +166,17 @@ export class PaymentService {
     if (order.userId !== requester.id)
       throw new ForbiddenException('无权访问该订单');
     if (dto.channel === 'mock') this.assertMockPaymentAllowed(requester.role);
-    if (order.status !== OrderStatus.PENDING)
-      throw new BadRequestException('订单当前状态不可支付');
-    if (order.expiresAt.getTime() < Date.now())
-      throw new BadRequestException('订单已过期');
+    const payable = await this.rejectIfNotPayable(order);
+    if (payable.paid) {
+      return {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        status: 'PAID',
+        paid: true,
+        paidAt: order.paidAt,
+        message: '订单已支付',
+      };
+    }
 
     if (dto.channel === 'mock' && dto.method !== 'mock') {
       throw new BadRequestException('mock 通道仅支持 mock method');
@@ -382,10 +428,17 @@ export class PaymentService {
     });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
-    if (order.status !== OrderStatus.PENDING)
-      throw new BadRequestException('订单当前状态不可支付');
-    if (order.expiresAt.getTime() < Date.now())
-      throw new BadRequestException('订单已过期');
+    const payable = await this.rejectIfNotPayable(order);
+    if (payable.paid) {
+      return {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        status: 'PAID',
+        paid: true,
+        paidAt: order.paidAt,
+        message: '订单已支付',
+      };
+    }
 
     if (dto.channel === PaymentChannel.WECHAT) {
       if (!String(dto.method).startsWith('WECHAT_')) {
@@ -503,63 +556,7 @@ export class PaymentService {
   }
 
   async getOrderPaymentStatus(userId: string, orderId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-    });
-    if (!order) throw new NotFoundException('订单不存在');
-    if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
-
-    if (
-      (order.status === OrderStatus.PENDING ||
-        order.status === OrderStatus.PENDING_PAYMENT) &&
-      order.channel === PaymentChannel.WECHAT &&
-      order.method === PaymentMethod.WECHAT_NATIVE &&
-      order.outTradeNo &&
-      !(await this.isSandbox())
-    ) {
-      try {
-        const q = await this.wechat.query(order.outTradeNo);
-        if (q.status === 'PAID') {
-          const transactionId =
-            q.transactionId && q.transactionId.trim()
-              ? q.transactionId.trim()
-              : `WX_${order.outTradeNo}`;
-          const paidAmountCents =
-            typeof q.paidAmountCents === 'number' &&
-            Number.isFinite(q.paidAmountCents)
-              ? q.paidAmountCents
-              : order.amountCents;
-          await this.orderService.markPaid({
-            orderId: order.id,
-            transactionId,
-            paidAmountCents,
-            method: PaymentMethod.WECHAT_NATIVE,
-            channel: PaymentChannel.WECHAT,
-            paidAt: q.paidAt ?? new Date(),
-          });
-        }
-      } catch {
-        // 主动查单失败不应中断前端轮询，等待下一次查询或异步回调收敛。
-      }
-    }
-
-    const latest = await this.prisma.order.findUnique({
-      where: { id: orderId },
-    });
-    if (!latest) throw new NotFoundException('订单不存在');
-
-    return {
-      orderId: latest.id,
-      orderNo: latest.orderNo,
-      status: latest.status,
-      paidAt: latest.paidAt,
-      paidAmountCents: latest.paidAmountCents,
-      channel: latest.channel,
-      method: latest.method,
-      outTradeNo: latest.outTradeNo,
-      transactionId: latest.transactionId,
-      expiresAt: latest.expiresAt,
-    };
+    return this.orderService.getPaymentStatus({ id: userId }, orderId);
   }
 
   async simulatePaid(
@@ -575,9 +572,7 @@ export class PaymentService {
       where: { id: orderId },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException('订单当前状态不可支付');
-    }
+    await this.rejectIfNotPayable(order);
     const outTradeNo = order.outTradeNo ?? order.orderNo;
     if (
       !order.outTradeNo ||
@@ -609,6 +604,7 @@ export class PaymentService {
       out_trade_no: outTradeNo,
       trade_no: `SIM_${Date.now()}`,
       total_amount: this.centsToYuanString(order.amountCents),
+      trade_status: 'TRADE_SUCCESS',
       gmt_payment: new Date().toISOString(),
     });
   }
@@ -824,6 +820,10 @@ export class PaymentService {
 
     try {
       const sandbox = await this.isSandbox();
+      const sandboxTradeStatus = String(payload['trade_status'] ?? 'UNKNOWN');
+      const sandboxSuccess =
+        sandboxTradeStatus === 'TRADE_SUCCESS' ||
+        sandboxTradeStatus === 'TRADE_FINISHED';
       const normalized = sandbox
         ? {
             channel: 'alipay' as const,
@@ -835,8 +835,8 @@ export class PaymentService {
             paidAt: payload['gmt_payment']
               ? new Date(payload['gmt_payment'])
               : new Date(),
-            tradeStatus: 'TRADE_SUCCESS',
-            success: true,
+            tradeStatus: sandboxTradeStatus,
+            success: sandboxSuccess,
             raw: payload as Record<string, unknown>,
           }
         : await this.alipay.verifyAndNormalizeNotify(payload);

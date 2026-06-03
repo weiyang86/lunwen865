@@ -42,7 +42,11 @@ export default registerAs('payment', () => ({
     signType: pickEnv('ALIPAY_SIGN_TYPE') || 'RSA2',
     charset: pickEnv('ALIPAY_CHARSET') || 'utf-8',
   },
-  orderExpireMinutes: Number(process.env.ORDER_EXPIRE_MINUTES ?? 30),
+  orderExpireMinutes: Number(
+    process.env.ORDER_PAYMENT_TTL_MINUTES ??
+      process.env.ORDER_EXPIRE_MINUTES ??
+      10,
+  ),
   sandbox: (process.env.PAYMENT_SANDBOX ?? 'true') === 'true',
   registerGift: {
     paperGeneration: Number(process.env.REGISTER_GIFT_PAPER_GENERATION ?? 1),

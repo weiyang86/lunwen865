@@ -77,3 +77,13 @@
 - [ ] 点击支付宝 PC/Wap 支付不再出现 `TypeError: AlipayCtor is not a constructor`。
 - [ ] SDK 导出形态异常时返回明确错误，错误只包含 export keys，不包含密钥内容。
 - [ ] Page/Wap 支付仍分别生成 `alipay.trade.page.pay` / `alipay.trade.wap.pay`，且不返回 `mock-page-pay`。
+
+## fix(payment-expiry)：10 分钟支付超时验收
+
+- [ ] 新建订单默认写入 10 分钟支付有效期，接口返回 `expiredAt` 与 `remainingSeconds`。
+- [ ] 待支付订单未过期时可以发起支付，过期后 `POST /api/payments/create` 返回“订单已过期，请重新下单”。
+- [ ] `GET /api/orders/:id/payment-status` 对超时未支付订单返回 `expired=true`、`canPay=false`，且前端展示“已过期”。
+- [ ] 支付宝 `return_url` 回跳后必须查询后端状态，不直接展示支付成功。
+- [ ] 支付宝 `WAIT_BUYER_PAY`、`TRADE_CLOSED` 等非成功状态不会触发统一结算；只有 `TRADE_SUCCESS / TRADE_FINISHED` 可入账。
+- [ ] 过期未支付订单不会变成 `paid`，不会发放脑细胞，不产生 recharge 流水。
+- [ ] 订单列表、支付弹框、支付结果页均展示倒计时/已过期状态，未支付订单不得显示“已完成”。

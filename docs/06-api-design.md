@@ -129,3 +129,37 @@
 ### Alipay SDK 初始化兼容说明（fix AlipayCtor）
 
 - 后端初始化 `alipay-sdk` 时兼容 `module.AlipaySdk`、`module.default.AlipaySdk`、`module.default` 三种导出形态；若无法解析构造函数，仅返回安全的 export key 诊断信息，不输出应用私钥或支付宝公钥内容。
+
+## 支付有效期与状态接口补充（fix-payment-expiry）
+
+### 订单支付有效期
+
+- 新建订单默认 `expiresAt = createdAt + 10 分钟`，配置项为 `ORDER_PAYMENT_TTL_MINUTES`，默认值 10。
+- `POST /api/payments/create` 仅允许 `pending/PENDING_PAYMENT` 且未过期订单发起支付；已过期返回“订单已过期，请重新下单”，已支付订单直接返回已支付状态，不重新拉起渠道支付。
+- `alipay.return_url` 仅用于前端回到结果页，不直接改变订单状态；支付宝入账只能来自验签成功的异步通知或主动查单确认 `TRADE_SUCCESS / TRADE_FINISHED`。
+
+### `GET /api/orders/:id/payment-status`
+
+返回新增/统一字段：
+
+```json
+{
+  "orderId": "xxx",
+  "orderNo": "PAYxxx",
+  "orderStatus": "PENDING | PAID | EXPIRED | CANCELLED",
+  "paymentStatus": "PENDING | SUCCEEDED | CLOSED",
+  "paid": false,
+  "expired": false,
+  "canPay": true,
+  "expiredAt": "2026-06-02T00:10:00.000Z",
+  "remainingSeconds": 520,
+  "paidAt": null,
+  "taskId": null,
+  "redirectUrl": "/account",
+  "message": "待支付"
+}
+```
+
+- 普通用户只能查询自己的订单，管理员可查询任意订单。
+- 若订单仍为待支付且当前时间超过 `expiresAt`，接口会懒标记为 `EXPIRED/CLOSED` 并返回 `expired=true`、`canPay=false`。
+- `POST /api/orders/:id/payment-status/refresh` 会先尝试支付渠道主动查单；渠道未确认成功时，超时订单会被标记为已过期。

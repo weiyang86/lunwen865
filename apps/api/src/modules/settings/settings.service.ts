@@ -136,7 +136,7 @@ export class SettingsService {
       sandbox: this.config.get<boolean>('payment.sandbox', true) === true,
       orderExpireMinutes: this.config.get<number>(
         'payment.orderExpireMinutes',
-        30,
+        10,
       ),
       wechat: {
         notifyUrl: this.config.get<string>('payment.wechat.notifyUrl', ''),

@@ -473,3 +473,11 @@
 ### AlipayCtor 兼容修复
 
 `alipay-sdk@4.x` 在 CommonJS/ESM 转译下可能导出为 `{ AlipaySdk }` 而不是默认构造函数。`AlipayProvider` 解析 SDK 构造函数时必须按 `module.AlipaySdk`、`module.default.AlipaySdk`、`module.default` 顺序兼容，并在解析失败时仅暴露安全 export keys 供排障。
+
+## fix(payment-expiry)：支付超时与状态机加固
+
+- 默认支付 TTL 固定为 10 分钟，配置项 `ORDER_PAYMENT_TTL_MINUTES`，兼容读取旧 `ORDER_EXPIRE_MINUTES`。
+- 本 PR 不新增数据表或字段，复用 `Order.expiresAt`；对外支付状态响应增加 `expiredAt`、`remainingSeconds`、`paid`、`expired`、`canPay`。
+- 采用懒过期策略：查询支付状态、创建支付、主动 refresh 时检查超时；超时待支付订单落库为 `CLOSED`，对外展示为 `EXPIRED`。
+- 渠道成功必须继续走 `PaymentCallbackService`/订单 `markPaid`，并校验支付成功时间不晚于订单有效期；重复通知/重复查单仍依赖统一幂等结算避免重复到账。
+- 历史已错误标记为 paid 的调试订单不在本 PR 批量处理，需管理员按渠道流水人工核对。

@@ -255,3 +255,10 @@
 - **问题**：`alipay-sdk` 实际导出为 `AlipaySdk` 命名导出时，默认导入会让 `new AlipayCtor(...)` 拿到非构造函数并抛出 `TypeError`。
 - **修复范围**：`AlipayProvider` SDK 构造函数解析、Page/Wap pageExecute 调用、Provider 单元测试与支付文档。
 - **验收重点**：PC/Wap 支付不再抛 `AlipayCtor is not a constructor`，异常诊断不泄露密钥，仍不返回 `mock-page-pay`。
+
+## Issue：fix(payment-expiry): enforce 10-minute payment timeout and prevent unpaid orders becoming paid
+
+- **问题**：支付宝未支付订单在前端回跳、refresh、mock/sandbox 或查单路径中可能被错误展示/处理为已完成。
+- **修复范围**：订单创建有效期、懒过期状态机、支付发起拦截、主动查单/回调结算时效校验、用户端订单列表/支付弹框/结果页状态展示。
+- **验收重点**：10 分钟倒计时、超时后 `EXPIRED/已过期`、expired 订单不能继续支付、支付宝 `return_url` 不触发 paid、只有渠道确认成功才统一到账。
+- **数据迁移**：无新增 Prisma migration，复用现有 `Order.expiresAt`，历史错误 paid 订单需人工核对渠道流水，不自动退款或扣回脑细胞。
