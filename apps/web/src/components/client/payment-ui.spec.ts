@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 
 import {
   canShowMockPay,
+  formatRemainingSeconds,
   getDefaultWechatMethod,
+  isExpiredPaymentStatus,
   isPaidPaymentStatus,
+  normalizePaymentStatus,
   readPaymentJumpUrl,
   readPaymentQrValue,
   safeClientRedirectUrl,
@@ -31,4 +34,13 @@ test('支付状态 paid 后按后端 redirectUrl 优先跳转且拒绝外部 URL
   assert.equal(safeClientRedirectUrl({ redirectUrl: '/tasks?taskId=t1' }), '/tasks?taskId=t1');
   assert.equal(safeClientRedirectUrl({ redirectUrl: 'https://evil.example', taskId: 't1' }), '/tasks?taskId=t1');
   assert.equal(safeClientRedirectUrl({ redirectUrl: '//evil.example' }), '/account');
+});
+
+
+test('支付状态判断兼容大小写并识别过期倒计时', () => {
+  assert.equal(normalizePaymentStatus(' pending_payment '), 'PENDING_PAYMENT');
+  assert.equal(isPaidPaymentStatus({ orderId: 'o1', paymentStatus: 'succeeded' }), true);
+  assert.equal(isExpiredPaymentStatus({ orderId: 'o1', orderStatus: 'expired' }), true);
+  assert.equal(isExpiredPaymentStatus({ orderId: 'o1', remainingSeconds: 0, paid: false }), true);
+  assert.equal(formatRemainingSeconds(599), '09:59');
 });

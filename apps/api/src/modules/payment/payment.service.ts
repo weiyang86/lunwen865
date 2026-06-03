@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  Order,
   OrderStatus,
   PaymentChannel,
   PaymentLogType,
@@ -26,6 +27,7 @@ import { RefundDto } from './dto/refund.dto';
 import { AlipayProvider } from './providers/alipay.provider';
 import { WechatPayProvider } from './providers/wechat-pay.provider';
 import { MockPayAdapter } from './providers/mock-pay.adapter';
+import { PaymentCallbackService } from './payment-callback.service';
 import { generateRefundNo } from '../order/utils/order-no.util';
 
 @Injectable()
@@ -39,6 +41,7 @@ export class PaymentService {
     private readonly wechat: WechatPayProvider,
     private readonly alipay: AlipayProvider,
     private readonly mockPay: MockPayAdapter,
+    private readonly callbackService?: PaymentCallbackService,
   ) {}
 
   private async isSandbox(): Promise<boolean> {
@@ -88,10 +91,67 @@ export class PaymentService {
     }
   }
 
+  private appendReturnOrderId(
+    returnUrl: string | undefined,
+    orderId: string,
+  ): string | undefined {
+    const raw = String(returnUrl ?? '').trim();
+    if (!raw) return undefined;
+    try {
+      const url = raw.startsWith('/')
+        ? new URL(raw, 'https://placeholder.local')
+        : new URL(raw);
+      url.searchParams.set('orderId', orderId);
+      if (raw.startsWith('/')) return `${url.pathname}${url.search}${url.hash}`;
+      return url.toString();
+    } catch {
+      const sep = raw.includes('?') ? '&' : '?';
+      return `${raw}${sep}orderId=${encodeURIComponent(orderId)}`;
+    }
+  }
+
   private extractRefundId(response: unknown): string | null {
     if (!this.isRecord(response)) return null;
     const id = response['refundId'] ?? response['refund_id'];
     return typeof id === 'string' ? id : null;
+  }
+
+  private isPaidOrderStatus(status: OrderStatus): boolean {
+    return (
+      status === OrderStatus.PAID ||
+      status === OrderStatus.FULFILLING ||
+      status === OrderStatus.COMPLETED
+    );
+  }
+
+  private isPendingOrderStatus(status: OrderStatus): boolean {
+    return (
+      status === OrderStatus.PENDING || status === OrderStatus.PENDING_PAYMENT
+    );
+  }
+
+  private async rejectIfNotPayable<T extends Order>(order: T) {
+    if (this.isPaidOrderStatus(order.status)) {
+      return { paid: true as const };
+    }
+    const latest =
+      typeof this.orderService.expirePendingOrderIfNeeded === 'function'
+        ? await this.orderService.expirePendingOrderIfNeeded(order)
+        : order;
+    if (
+      this.isPendingOrderStatus(latest.status) &&
+      latest.expiresAt.getTime() <= Date.now()
+    ) {
+      throw new BadRequestException('订单已过期，请重新下单');
+    }
+    if (!this.isPendingOrderStatus(latest.status)) {
+      throw new BadRequestException(
+        latest.status === OrderStatus.CLOSED
+          ? '订单已过期，请重新下单'
+          : '订单当前状态不可支付',
+      );
+    }
+    return { paid: false as const };
   }
 
   async createPayment(
@@ -106,10 +166,17 @@ export class PaymentService {
     if (order.userId !== requester.id)
       throw new ForbiddenException('无权访问该订单');
     if (dto.channel === 'mock') this.assertMockPaymentAllowed(requester.role);
-    if (order.status !== OrderStatus.PENDING)
-      throw new BadRequestException('订单当前状态不可支付');
-    if (order.expiresAt.getTime() < Date.now())
-      throw new BadRequestException('订单已过期');
+    const payable = await this.rejectIfNotPayable(order);
+    if (payable.paid) {
+      return {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        status: 'PAID',
+        paid: true,
+        paidAt: order.paidAt,
+        message: '订单已支付',
+      };
+    }
 
     if (dto.channel === 'mock' && dto.method !== 'mock') {
       throw new BadRequestException('mock 通道仅支持 mock method');
@@ -249,11 +316,15 @@ export class PaymentService {
           subject: order.orderNo,
           totalAmountCents: order.amountCents,
           notifyUrl,
-          returnUrl: paymentSettings.alipay.returnUrl,
+          returnUrl: this.appendReturnOrderId(
+            paymentSettings.alipay.returnUrl,
+            order.id,
+          ),
         });
         payload = {
           payUrl: rsp.paymentUrl,
           paymentUrl: rsp.paymentUrl,
+          rawRequest: rsp.rawRequest,
           rawResponse: rsp.rawResponse,
         };
       } else {
@@ -263,11 +334,15 @@ export class PaymentService {
           subject: order.orderNo,
           totalAmountCents: order.amountCents,
           notifyUrl,
-          returnUrl: paymentSettings.alipay.returnUrl,
+          returnUrl: this.appendReturnOrderId(
+            paymentSettings.alipay.returnUrl,
+            order.id,
+          ),
         });
         payload = {
           payUrl: rsp.paymentUrl,
           paymentUrl: rsp.paymentUrl,
+          rawRequest: rsp.rawRequest,
           rawResponse: rsp.rawResponse,
         };
       }
@@ -282,6 +357,8 @@ export class PaymentService {
         status: 'PENDING',
         payUrl: payload['payUrl'] ?? null,
         qrCodeUrl: payload['codeUrl'] ?? null,
+        clientPayload: payload['clientPayload'] ?? null,
+        rawRequest: payload['rawRequest'] ?? null,
         rawResponse: payload['rawResponse'] ?? null,
       },
     });
@@ -351,10 +428,17 @@ export class PaymentService {
     });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
-    if (order.status !== OrderStatus.PENDING)
-      throw new BadRequestException('订单当前状态不可支付');
-    if (order.expiresAt.getTime() < Date.now())
-      throw new BadRequestException('订单已过期');
+    const payable = await this.rejectIfNotPayable(order);
+    if (payable.paid) {
+      return {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        status: 'PAID',
+        paid: true,
+        paidAt: order.paidAt,
+        message: '订单已支付',
+      };
+    }
 
     if (dto.channel === PaymentChannel.WECHAT) {
       if (!String(dto.method).startsWith('WECHAT_')) {
@@ -421,16 +505,31 @@ export class PaymentService {
         throw new BadRequestException('暂仅支持 WECHAT_NATIVE/WECHAT_H5');
       }
     } else if (dto.channel === PaymentChannel.ALIPAY) {
-      if (dto.method !== PaymentMethod.ALIPAY_PAGE) {
-        throw new BadRequestException('暂仅支持 ALIPAY_PAGE');
+      if (dto.method === PaymentMethod.ALIPAY_PAGE) {
+        response = await this.alipay.pagePay({
+          outTradeNo,
+          subject: order.product.name || '论文通脑细胞套餐',
+          totalAmountCents: order.amountCents,
+          notifyUrl,
+          returnUrl: this.appendReturnOrderId(
+            paymentSettings.alipay.returnUrl,
+            order.id,
+          ),
+        });
+      } else if (dto.method === PaymentMethod.ALIPAY_WAP) {
+        response = await this.alipay.wapPay({
+          outTradeNo,
+          subject: order.product.name || '论文通脑细胞套餐',
+          totalAmountCents: order.amountCents,
+          notifyUrl,
+          returnUrl: this.appendReturnOrderId(
+            paymentSettings.alipay.returnUrl,
+            order.id,
+          ),
+        });
+      } else {
+        throw new BadRequestException('暂仅支持 ALIPAY_PAGE/ALIPAY_WAP');
       }
-      response = await this.alipay.pagePay({
-        outTradeNo,
-        subject: order.product.name,
-        totalAmountCents: order.amountCents,
-        notifyUrl,
-        returnUrl: paymentSettings.alipay.returnUrl,
-      });
     } else {
       throw new BadRequestException('不支持的支付通道');
     }
@@ -457,63 +556,7 @@ export class PaymentService {
   }
 
   async getOrderPaymentStatus(userId: string, orderId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-    });
-    if (!order) throw new NotFoundException('订单不存在');
-    if (order.userId !== userId) throw new ForbiddenException('无权访问该订单');
-
-    if (
-      (order.status === OrderStatus.PENDING ||
-        order.status === OrderStatus.PENDING_PAYMENT) &&
-      order.channel === PaymentChannel.WECHAT &&
-      order.method === PaymentMethod.WECHAT_NATIVE &&
-      order.outTradeNo &&
-      !(await this.isSandbox())
-    ) {
-      try {
-        const q = await this.wechat.query(order.outTradeNo);
-        if (q.status === 'PAID') {
-          const transactionId =
-            q.transactionId && q.transactionId.trim()
-              ? q.transactionId.trim()
-              : `WX_${order.outTradeNo}`;
-          const paidAmountCents =
-            typeof q.paidAmountCents === 'number' &&
-            Number.isFinite(q.paidAmountCents)
-              ? q.paidAmountCents
-              : order.amountCents;
-          await this.orderService.markPaid({
-            orderId: order.id,
-            transactionId,
-            paidAmountCents,
-            method: PaymentMethod.WECHAT_NATIVE,
-            channel: PaymentChannel.WECHAT,
-            paidAt: q.paidAt ?? new Date(),
-          });
-        }
-      } catch {
-        // 主动查单失败不应中断前端轮询，等待下一次查询或异步回调收敛。
-      }
-    }
-
-    const latest = await this.prisma.order.findUnique({
-      where: { id: orderId },
-    });
-    if (!latest) throw new NotFoundException('订单不存在');
-
-    return {
-      orderId: latest.id,
-      orderNo: latest.orderNo,
-      status: latest.status,
-      paidAt: latest.paidAt,
-      paidAmountCents: latest.paidAmountCents,
-      channel: latest.channel,
-      method: latest.method,
-      outTradeNo: latest.outTradeNo,
-      transactionId: latest.transactionId,
-      expiresAt: latest.expiresAt,
-    };
+    return this.orderService.getPaymentStatus({ id: userId }, orderId);
   }
 
   async simulatePaid(
@@ -529,9 +572,7 @@ export class PaymentService {
       where: { id: orderId },
     });
     if (!order) throw new NotFoundException('订单不存在');
-    if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException('订单当前状态不可支付');
-    }
+    await this.rejectIfNotPayable(order);
     const outTradeNo = order.outTradeNo ?? order.orderNo;
     if (
       !order.outTradeNo ||
@@ -563,6 +604,7 @@ export class PaymentService {
       out_trade_no: outTradeNo,
       trade_no: `SIM_${Date.now()}`,
       total_amount: this.centsToYuanString(order.amountCents),
+      trade_status: 'TRADE_SUCCESS',
       gmt_payment: new Date().toISOString(),
     });
   }
@@ -751,7 +793,16 @@ export class PaymentService {
     const callbackLogModel = (
       this.prisma as unknown as Record<string, unknown>
     )['paymentCallbackLog'] as {
-      create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
+      create: (args: {
+        data: Record<string, unknown>;
+      }) => Promise<{ id?: string }>;
+    };
+    const paymentRecordModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentRecord'] as {
+      findFirst: (args: {
+        where: Record<string, unknown>;
+      }) => Promise<Record<string, unknown> | null>;
     };
     const now = new Date();
 
@@ -761,66 +812,77 @@ export class PaymentService {
       | 'SETTLED'
       | 'FAILED'
       | 'ORDER_NOT_FOUND'
-      | 'AMOUNT_MISMATCH' = 'PENDING';
+      | 'AMOUNT_MISMATCH'
+      | 'IGNORED' = 'PENDING';
     let normalizedStatus = 'UNKNOWN';
     let errorMessage: string | null = null;
+    let verified = false;
 
     try {
       const sandbox = await this.isSandbox();
-      const parsed = sandbox
-        ? this.parseAlipaySandboxNotify(payload)
-        : await this.alipay.verifyAndParsePayNotify(payload);
+      const sandboxTradeStatus = String(payload['trade_status'] ?? 'UNKNOWN');
+      const sandboxSuccess =
+        sandboxTradeStatus === 'TRADE_SUCCESS' ||
+        sandboxTradeStatus === 'TRADE_FINISHED';
       const normalized = sandbox
         ? {
-            success: true,
-            tradeStatus: 'TRADE_SUCCESS',
+            channel: 'alipay' as const,
+            providerOrderNo: String(payload['out_trade_no'] ?? ''),
+            providerTradeNo: String(payload['trade_no'] ?? ''),
+            amount: this.yuanStringToCents(
+              String(payload['total_amount'] ?? '0'),
+            ),
+            paidAt: payload['gmt_payment']
+              ? new Date(payload['gmt_payment'])
+              : new Date(),
+            tradeStatus: sandboxTradeStatus,
+            success: sandboxSuccess,
+            raw: payload as Record<string, unknown>,
           }
         : await this.alipay.verifyAndNormalizeNotify(payload);
+      verified = true;
       normalizedStatus = normalized.tradeStatus;
 
-      const order = await this.prisma.order.findFirst({
-        where: {
-          OR: [
-            { outTradeNo: parsed.outTradeNo },
-            { orderNo: parsed.outTradeNo },
-          ],
-        },
+      const payment = await paymentRecordModel.findFirst({
+        where: { providerOrderNo: normalized.providerOrderNo },
       });
-      if (!order) {
+      if (payment && typeof payment['orderId'] === 'string') {
+        orderId = payment['orderId'];
+      }
+
+      if (!payment) {
         processStatus = 'ORDER_NOT_FOUND';
-        errorMessage = '订单不存在';
+        errorMessage = '支付记录不存在';
+      } else if (!normalized.success) {
+        processStatus = 'IGNORED';
+        errorMessage = `交易状态未成功: ${normalized.tradeStatus}`;
+      } else if (normalized.amount !== Number(payment['amountCents'])) {
+        processStatus = 'AMOUNT_MISMATCH';
+        errorMessage = `金额不匹配: expected=${String(payment['amountCents'])}, actual=${normalized.amount}`;
+      } else if (!this.callbackService) {
+        processStatus = 'FAILED';
+        errorMessage = '统一支付回调服务未初始化';
       } else {
-        orderId = order.id;
-        if (!normalized.success) {
-          processStatus = 'FAILED';
-          errorMessage = `交易状态未成功: ${normalized.tradeStatus}`;
-        } else if (parsed.paidAmountCents !== order.amountCents) {
-          processStatus = 'AMOUNT_MISMATCH';
-          errorMessage = `金额不匹配: expected=${order.amountCents}, actual=${parsed.paidAmountCents}`;
-        } else {
-          const method =
-            order.method === PaymentMethod.ALIPAY_WAP
-              ? PaymentMethod.ALIPAY_WAP
-              : PaymentMethod.ALIPAY_PAGE;
-          await this.orderService.markPaid({
-            orderId: order.id,
-            transactionId: parsed.tradeNo,
-            paidAmountCents: parsed.paidAmountCents,
-            method,
+        const settled = await this.callbackService.process({
+          channel: 'alipay',
+          providerOrderNo: normalized.providerOrderNo,
+          providerTradeNo: normalized.providerTradeNo,
+          amount: normalized.amount,
+          paidAt: normalized.paidAt ?? now,
+          tradeStatus: normalized.tradeStatus,
+          success: normalized.success,
+          raw: normalized.raw,
+        });
+        await this.prisma.paymentLog.create({
+          data: {
+            orderId: String(payment['orderId']),
+            type: PaymentLogType.NOTIFY,
             channel: PaymentChannel.ALIPAY,
-            paidAt: parsed.paidAt,
-          });
-          await this.prisma.paymentLog.create({
-            data: {
-              orderId: order.id,
-              type: PaymentLogType.NOTIFY,
-              channel: PaymentChannel.ALIPAY,
-              success: true,
-              request: payload,
-            },
-          });
-          processStatus = 'SETTLED';
-        }
+            success: true,
+            request: payload,
+          },
+        });
+        processStatus = settled.processed ? 'SETTLED' : 'IGNORED';
       }
 
       await callbackLogModel.create({
@@ -830,7 +892,7 @@ export class PaymentService {
           rawHeaders: null,
           rawBody: JSON.stringify(payload),
           rawQuery: payload,
-          verified: true,
+          verified,
           normalizedStatus,
           processStatus,
           errorMessage,
@@ -838,6 +900,10 @@ export class PaymentService {
           processedAt: new Date(),
         },
       });
+
+      if (processStatus === 'FAILED' || processStatus === 'AMOUNT_MISMATCH') {
+        throw new BadRequestException(errorMessage ?? '支付宝通知处理失败');
+      }
       return { code: 'SUCCESS' as const };
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : '处理失败';
@@ -848,7 +914,7 @@ export class PaymentService {
           rawHeaders: null,
           rawBody: JSON.stringify(payload),
           rawQuery: payload,
-          verified: false,
+          verified,
           normalizedStatus,
           processStatus: 'FAILED',
           errorMessage: errMessage,

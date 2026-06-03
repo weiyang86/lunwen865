@@ -1,44 +1,85 @@
-'use client';
+"use client";
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { QRCodeCanvas } from "qrcode.react";
 
-import { Button } from '@/components/ui/button';
-import { clientHttp } from '@/lib/client/api-client';
-import { getApiErrorMessage } from '@/lib/client/api-error';
+import {
+  isExpiredPaymentStatus,
+  isPaidPaymentStatus,
+  normalizePaymentStatus,
+  type ClientPaymentStatus,
+} from "@/components/client/payment-ui";
+import { Button } from "@/components/ui/button";
+import { clientHttp } from "@/lib/client/api-client";
+import { getApiErrorMessage } from "@/lib/client/api-error";
 
-type PaymentStatusResp = {
+type PaymentStatusResp = ClientPaymentStatus & {
   status: string;
-  paidAt?: string | null;
-  orderNo?: string;
 };
+
+function isTerminalPaymentStatus(status: string): boolean {
+  return ["PAID", "COMPLETED", "SUCCEEDED", "CLOSED", "EXPIRED", "CANCELLED"].includes(
+    normalizePaymentStatus(status),
+  );
+}
+
+function statusText(status: string): string {
+  const normalized = normalizePaymentStatus(status);
+  return (
+    {
+      PENDING: "待支付",
+      PENDING_PAYMENT: "待支付",
+      PAID: "已支付",
+      SUCCEEDED: "已支付",
+      COMPLETED: "已完成",
+      CLOSED: "已过期",
+      EXPIRED: "已过期",
+      CANCELLED: "已取消",
+    }[normalized] ?? status
+  );
+}
 
 export default function WechatQrPage() {
   const sp = useSearchParams();
   const router = useRouter();
-  const orderId = sp?.get('orderId') || '';
-  const qr = sp?.get('qr') || '';
+  const orderId = sp?.get("orderId") || "";
+  const qr = sp?.get("qr") || "";
 
-  const [status, setStatus] = useState<string>('PENDING');
+  const [status, setStatus] = useState<string>("PENDING");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
-  const canPoll = useMemo(() => Boolean(orderId), [orderId]);
-  const qrValue = useMemo(() => decodeURIComponent(qr || ''), [qr]);
+  const canPoll = useMemo(
+    () => Boolean(orderId) && !isTerminalPaymentStatus(status),
+    [orderId, status],
+  );
+  const qrValue = useMemo(() => decodeURIComponent(qr || ""), [qr]);
 
   const pollOnce = useCallback(async () => {
     if (!canPoll) return;
     try {
-      const s = await clientHttp.get<PaymentStatusResp>(`/payment/orders/${orderId}/status`);
-      setStatus(s.status);
+      const s = await clientHttp.post<PaymentStatusResp>(
+        `/payment/orders/${orderId}/status/refresh`,
+        {},
+      );
+      const nextStatus = isExpiredPaymentStatus(s)
+        ? "EXPIRED"
+        : normalizePaymentStatus(s.status || s.orderStatus || s.paymentStatus);
+      setStatus(nextStatus);
       setError(null);
-      if (s.status === 'PAID' || s.status === 'COMPLETED') {
-        router.replace('/account');
+      if (isExpiredPaymentStatus(s) || isTerminalPaymentStatus(nextStatus)) {
+        if (timerRef.current) {
+          window.clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+      }
+      if (isPaidPaymentStatus(s)) {
+        router.replace("/account");
       }
     } catch (e: unknown) {
-      setError(getApiErrorMessage(e, '查询支付状态失败'));
+      setError(getApiErrorMessage(e, "查询支付状态失败"));
     } finally {
       setLoading(false);
     }
@@ -64,7 +105,9 @@ export default function WechatQrPage() {
   return (
     <div className="mx-auto max-w-xl space-y-4 p-6">
       <h1 className="text-xl font-semibold">扫码支付</h1>
-      <div className="rounded-md border bg-slate-50 p-3 text-sm text-slate-600">订单号：{orderId || '未提供'}</div>
+      <div className="rounded-md border bg-slate-50 p-3 text-sm text-slate-600">
+        订单号：{orderId || "未提供"}
+      </div>
 
       {!qrValue ? (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
@@ -78,16 +121,31 @@ export default function WechatQrPage() {
       )}
 
       <div className="rounded-md border p-3 text-sm">
-        状态：{loading ? '查询中...' : status}
+        状态：{loading ? "查询中..." : statusText(status)}
       </div>
 
-      {error ? <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}
+      {error ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
 
       <div className="flex gap-2">
-        <Button variant="outline" onClick={() => void pollOnce()} disabled={!canPoll}>
-          立即刷新状态
+        <Button
+          variant="outline"
+          onClick={() => void pollOnce()}
+          disabled={!canPoll}
+        >
+          我已完成支付，刷新状态
         </Button>
-        <Button variant="secondary" onClick={() => router.push(`/payments/result?orderId=${encodeURIComponent(orderId)}`)}>
+        <Button
+          variant="secondary"
+          onClick={() =>
+            router.push(
+              `/payments/result?orderId=${encodeURIComponent(orderId)}`,
+            )
+          }
+        >
           去支付结果页
         </Button>
       </div>

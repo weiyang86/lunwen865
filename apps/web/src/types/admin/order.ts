@@ -4,6 +4,7 @@ export type OrderStatus =
   | 'PAID'
   | 'FULFILLING'
   | 'COMPLETED'
+  | 'EXPIRED'
   | 'CANCELLED'
   | 'REFUNDING'
   | 'REFUNDED';

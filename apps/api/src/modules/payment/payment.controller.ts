@@ -16,11 +16,15 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PrepayDto } from './dto/prepay.dto';
 import { PaymentService } from './payment.service';
+import { ReconcileService } from './reconcile.service';
 
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) {}
+  constructor(
+    private readonly paymentService: PaymentService,
+    private readonly reconcileService: ReconcileService,
+  ) {}
 
   @Post('payments/create')
   createPayment(
@@ -78,6 +82,34 @@ export class PaymentController {
       channel: PaymentChannel.WECHAT,
       method: PaymentMethod.WECHAT_NATIVE,
     });
+  }
+
+  @Get('orders/:orderId/payment-status')
+  getOrderPaymentStatusAlias(
+    @CurrentUser('id') uid: string,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.paymentService.getOrderPaymentStatus(uid, orderId);
+  }
+
+  @Post('orders/:orderId/payment-status/refresh')
+  async refreshOrderPaymentStatusAlias(
+    @CurrentUser('id') uid: string,
+    @Param('orderId') orderId: string,
+  ) {
+    await this.paymentService.getOrderPaymentStatus(uid, orderId);
+    await this.reconcileService.queryAndSettleByOrderId(orderId);
+    return this.paymentService.getOrderPaymentStatus(uid, orderId);
+  }
+
+  @Post('payment/orders/:orderId/status/refresh')
+  async refreshOrderPaymentStatus(
+    @CurrentUser('id') uid: string,
+    @Param('orderId') orderId: string,
+  ) {
+    await this.paymentService.getOrderPaymentStatus(uid, orderId);
+    await this.reconcileService.queryAndSettleByOrderId(orderId);
+    return this.paymentService.getOrderPaymentStatus(uid, orderId);
   }
 
   @Get('payment/orders/:orderId/status')
