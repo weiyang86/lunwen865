@@ -147,7 +147,7 @@ describe('PaymentService', () => {
       getPaymentSettings: jest.fn(() =>
         Promise.resolve({
           sandbox: true,
-          orderExpireMinutes: 30,
+          orderExpireMinutes: 10,
           wechat: {
             notifyUrl: '',
             appid: '',

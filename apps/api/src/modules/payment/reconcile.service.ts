@@ -6,7 +6,7 @@ import { PaymentCallbackService } from './payment-callback.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AlipayProvider } from './providers/alipay.provider';
 import { WechatPayProvider } from './providers/wechat-pay.provider';
-import { PaymentChannel } from '@prisma/client';
+import { OrderStatus, PaymentChannel } from '@prisma/client';
 
 @Injectable()
 export class ReconcileService {
@@ -24,8 +24,9 @@ export class ReconcileService {
   async reconcilePending() {
     const candidates = await this.prisma.order.findMany({
       where: {
-        status: 'PENDING',
+        status: { in: [OrderStatus.PENDING, OrderStatus.PENDING_PAYMENT] },
         outTradeNo: { not: null },
+        expiresAt: { gte: new Date() },
         createdAt: { gt: dayjs().subtract(2, 'hour').toDate() },
       },
       take: 50,
@@ -39,7 +40,14 @@ export class ReconcileService {
         const provider =
           o.channel === PaymentChannel.WECHAT ? this.wechat : this.alipay;
         const r = await provider.query(o.outTradeNo);
-        if (r.status === 'PAID' && r.transactionId && r.paidAmountCents) {
+        const paidAt = r.paidAt ?? new Date();
+        if (
+          r.status === 'PAID' &&
+          r.transactionId &&
+          r.paidAmountCents &&
+          paidAt.getTime() <=
+            (o.expiresAt?.getTime() ?? Number.MAX_SAFE_INTEGER)
+        ) {
           this.logger.warn(`[Reconcile] 发现漏单 ${o.orderNo}，执行补偿`);
           await this.orderService.markPaid({
             orderId: o.id,
@@ -47,7 +55,7 @@ export class ReconcileService {
             paidAmountCents: r.paidAmountCents,
             method: o.method,
             channel: o.channel,
-            paidAt: r.paidAt ?? new Date(),
+            paidAt,
           });
         }
       } catch (e: unknown) {
@@ -136,30 +144,28 @@ export class ReconcileService {
           raw: { query: r },
         };
       }
-    } else {
-      normalized = {
-        channel: 'mock',
-        providerOrderNo: outTradeNo,
-        providerTradeNo:
-          pickString(record['providerTradeNo']) ?? `MOCK_${Date.now()}`,
-        amount: Number(record['amountCents'] ?? order.amountCents),
-        paidAt: new Date(),
-        tradeStatus: 'SUCCESS',
-        success: true,
-        raw: { query: 'mock' },
-      };
     }
 
     if (normalized) {
+      if (
+        normalized.paidAt.getTime() >
+        (order.expiresAt?.getTime() ?? Number.MAX_SAFE_INTEGER)
+      ) {
+        return { ok: true, settled: false, reason: 'PAID_AFTER_EXPIRY' };
+      }
       const settled = await this.callbackService.process(normalized);
       return { ok: true, settled };
     }
 
-    if (order.status === 'PENDING' && order.expiresAt < new Date()) {
+    if (
+      (order.status === OrderStatus.PENDING ||
+        order.status === OrderStatus.PENDING_PAYMENT) &&
+      order.expiresAt < new Date()
+    ) {
       await this.prisma.order.update({
         where: { id: order.id },
         data: {
-          status: 'CANCELLED',
+          status: OrderStatus.CLOSED,
           cancelledAt: new Date(),
           remark: 'reconcile close expired',
         },

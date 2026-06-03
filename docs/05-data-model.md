@@ -64,3 +64,9 @@
 
 ### 补充（2026-05-25）
 - 新增 `TopicCandidateRevision`：用于记录题目候选的版本历史（AI 生成、自定义选定、导师意见更改、手动更改）。
+
+### 补充（2026-06-03）：订单支付有效期
+- 订单支付有效期复用现有 `Order.expiresAt` 字段，不新增 Prisma 字段；对外接口使用 `expiredAt` 作为兼容别名返回同一时间。
+- 默认支付有效期为 10 分钟，可通过 `ORDER_PAYMENT_TTL_MINUTES` 调整；旧变量 `ORDER_EXPIRE_MINUTES` 仅作为兼容兜底。
+- 待支付订单超时后按现有 `OrderStatus.CLOSED` 落库，并在支付状态接口/前端展示为 `EXPIRED / 已过期`。
+- 只有渠道异步通知验签成功或主动查单确认支付成功，且支付成功时间不晚于 `expiresAt`，才允许进入统一结算；未支付或超时订单不得发放脑细胞。

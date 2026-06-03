@@ -78,7 +78,7 @@ describe('OrderService', () => {
       getPaymentSettings: jest.fn(() =>
         Promise.resolve({
           sandbox: true,
-          orderExpireMinutes: 30,
+          orderExpireMinutes: 10,
           wechat: {
             notifyUrl: '',
             appid: '',
@@ -140,8 +140,8 @@ describe('OrderService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('create 成功：状态 PENDING、expiresAt = 30min 后', async () => {
-    config.get.mockReturnValue(30);
+  it('create 成功：状态 PENDING、expiresAt = 10min 后', async () => {
+    config.get.mockReturnValue(10);
     prisma.product.findUnique.mockResolvedValue({
       id: 'p1',
       code: 'TRIAL',
@@ -192,8 +192,8 @@ describe('OrderService', () => {
 
     expect(order.status).toBe(OrderStatus.PENDING);
     const expMs = new Date(order.expiresAt).getTime();
-    expect(expMs).toBeGreaterThanOrEqual(before + 29 * 60_000);
-    expect(expMs).toBeLessThanOrEqual(after + 31 * 60_000);
+    expect(expMs).toBeGreaterThanOrEqual(before + 9 * 60_000);
+    expect(expMs).toBeLessThanOrEqual(after + 11 * 60_000);
   });
 
   it('findOne 跨用户 → 403', async () => {
@@ -395,6 +395,58 @@ describe('OrderService', () => {
     expect(status.redirectUrl).toBe('/tasks?taskId=t1');
     expect(status.redirectUrl.startsWith('/')).toBe(true);
     expect(status.brainCellBalance).toBe(88);
+  });
+
+  it('getPaymentStatus：过期 PENDING 订单懒标记为 EXPIRED，不能继续支付', async () => {
+    const expiredAt = new Date(Date.now() - 1_000);
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'o_expired',
+      orderNo: 'NO_EXPIRED',
+      userId: 'u1',
+      status: OrderStatus.PENDING,
+      paidAt: null,
+      paidAmountCents: null,
+      channel: PaymentChannel.ALIPAY,
+      method: PaymentMethod.ALIPAY_PAGE,
+      outTradeNo: 'NO_EXPIRED',
+      transactionId: null,
+      expiresAt: expiredAt,
+      taskId: null,
+      task: null,
+      remark: null,
+    });
+    prisma.order.update.mockResolvedValue({
+      id: 'o_expired',
+      orderNo: 'NO_EXPIRED',
+      userId: 'u1',
+      status: OrderStatus.CLOSED,
+      paidAt: null,
+      paidAmountCents: null,
+      channel: PaymentChannel.ALIPAY,
+      method: PaymentMethod.ALIPAY_PAGE,
+      outTradeNo: 'NO_EXPIRED',
+      transactionId: null,
+      expiresAt: expiredAt,
+      taskId: null,
+      task: null,
+      remark: '支付超时自动过期',
+    });
+    prisma.userQuota.findUnique.mockResolvedValue({ balance: 0 });
+
+    const status = await service.getPaymentStatus(
+      { id: 'u1', role: UserRole.USER },
+      'o_expired',
+    );
+
+    expect(status.orderStatus).toBe('EXPIRED');
+    expect(status.expired).toBe(true);
+    expect(status.canPay).toBe(false);
+    expect(status.remainingSeconds).toBe(0);
+    const updateArg = prisma.order.update.mock.calls[0]?.[0] as
+      | OrderUpdateArgs
+      | undefined;
+    expect(updateArg?.where).toEqual({ id: 'o_expired' });
+    expect(updateArg?.data.status).toBe(OrderStatus.CLOSED);
   });
 
   it('closeExpired：到期 PENDING 订单被关闭，未到期不动', async () => {

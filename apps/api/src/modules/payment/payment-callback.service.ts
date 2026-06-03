@@ -71,11 +71,12 @@ export class PaymentCallbackService {
       transactionId: result.providerTradeNo,
       paidAmountCents: result.amount,
       method:
-        result.channel === 'wechat'
+        order.method ??
+        (result.channel === 'wechat'
           ? PaymentMethod.WECHAT_NATIVE
           : result.channel === 'alipay'
             ? PaymentMethod.ALIPAY_PAGE
-            : PaymentMethod.WECHAT_NATIVE,
+            : PaymentMethod.WECHAT_NATIVE),
       channel:
         result.channel === 'wechat'
           ? PaymentChannel.WECHAT

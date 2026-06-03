@@ -62,3 +62,28 @@
 - [ ] paid 后 0.8 秒按后端 `redirectUrl` / `taskId` / `/account` / `/orders` 规则跳转。
 - [ ] 关闭弹窗、切换订单、页面卸载后不再继续轮询。
 - [ ] 用户不能查询他人的 `payment-status`；返回的 `redirectUrl` 必须是站内相对路径。
+
+## 支付宝 mock-page-pay 修复验收
+
+- [ ] 生产或沙箱配置下，`channel=alipay&method=page` 不返回 `mock-page-pay`，返回内容包含 `alipay.trade.page.pay` 与 `sign`。
+- [ ] `channel=alipay&method=wap` 返回内容包含 `alipay.trade.wap.pay` 与 `sign`。
+- [ ] 未配置 `ALIPAY_APP_ID` / 私钥路径 / 支付宝公钥路径 / `ALIPAY_NOTIFY_URL` 时，发起支付宝支付返回明确配置错误。
+- [ ] 支付宝异步通知验签失败不入账，金额不一致不入账，`TRADE_SUCCESS` / `TRADE_FINISHED` 才调用统一到账。
+- [ ] 支付宝 `return_url` 回来后仅进入结果页，结果页以后端订单状态和主动查单结果为准。
+- [ ] 微信支付与 mock/admin 测试支付仍保持原有能力。
+
+## 支付宝 SDK 构造函数修复验收
+
+- [ ] 点击支付宝 PC/Wap 支付不再出现 `TypeError: AlipayCtor is not a constructor`。
+- [ ] SDK 导出形态异常时返回明确错误，错误只包含 export keys，不包含密钥内容。
+- [ ] Page/Wap 支付仍分别生成 `alipay.trade.page.pay` / `alipay.trade.wap.pay`，且不返回 `mock-page-pay`。
+
+## fix(payment-expiry)：10 分钟支付超时验收
+
+- [ ] 新建订单默认写入 10 分钟支付有效期，接口返回 `expiredAt` 与 `remainingSeconds`。
+- [ ] 待支付订单未过期时可以发起支付，过期后 `POST /api/payments/create` 返回“订单已过期，请重新下单”。
+- [ ] `GET /api/orders/:id/payment-status` 对超时未支付订单返回 `expired=true`、`canPay=false`，且前端展示“已过期”。
+- [ ] 支付宝 `return_url` 回跳后必须查询后端状态，不直接展示支付成功。
+- [ ] 支付宝 `WAIT_BUYER_PAY`、`TRADE_CLOSED` 等非成功状态不会触发统一结算；只有 `TRADE_SUCCESS / TRADE_FINISHED` 可入账。
+- [ ] 过期未支付订单不会变成 `paid`，不会发放脑细胞，不产生 recharge 流水。
+- [ ] 订单列表、支付弹框、支付结果页均展示倒计时/已过期状态，未支付订单不得显示“已完成”。

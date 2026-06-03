@@ -114,3 +114,8 @@ test('mapOrderStatus: 未知 status 兜底为 in_progress 且 warn', () => {
     console.warn = prev;
   }
 });
+
+test('mapOrderStatus: CLOSED/EXPIRED 展示为已过期而不是已完成或已取消', () => {
+  assert.equal(mapOrderStatus('CLOSED'), 'expired');
+  assert.equal(mapOrderStatus('EXPIRED'), 'expired');
+});

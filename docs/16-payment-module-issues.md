@@ -242,3 +242,23 @@
 - **后端**：mock / sandbox 支付接口增加 development/test + 管理员限制；普通用户 403。新增/复用 `GET /api/orders/:id/payment-status` 返回 paid、taskId、redirectUrl、brainCellBalance。
 - **前端**：普通用户支付弹窗隐藏“沙箱一键支付”；点击“去支付”自动发起微信支付，PC Native 展示二维码，移动 H5 跳转；轮询后端支付状态，paid 后自动跳转。
 - **风险控制**：不改微信/支付宝签名逻辑，不提交真实密钥，不变更 Prisma 数据模型和脑细胞到账核心逻辑。
+
+## Issue：fix(payment-alipay): replace mock page pay with real alipay page/wap payment
+
+- **问题**：支付宝支付曾返回 `https://openapi.alipay.com/gateway.do/mock-page-pay?...` 占位链接，生产不可用。
+- **修复范围**：后端 `AlipayProvider`、支付创建、支付宝异步通知、主动查单；前端支付跳转/结果页刷新；`.env.example` 与支付接口文档。
+- **验收重点**：Page/Wap 分别调用 `alipay.trade.page.pay` / `alipay.trade.wap.pay`，验签失败和金额不一致不入账，成功后必须走统一 `PaymentCallbackService`，不影响微信支付和 MockPay。
+- **数据迁移**：无新增 Prisma migration，复用 `PaymentRecord`、`PaymentCallbackLog`、`PaymentLog`。
+
+## Issue：fix(payment-alipay): fix AlipayCtor is not a constructor
+
+- **问题**：`alipay-sdk` 实际导出为 `AlipaySdk` 命名导出时，默认导入会让 `new AlipayCtor(...)` 拿到非构造函数并抛出 `TypeError`。
+- **修复范围**：`AlipayProvider` SDK 构造函数解析、Page/Wap pageExecute 调用、Provider 单元测试与支付文档。
+- **验收重点**：PC/Wap 支付不再抛 `AlipayCtor is not a constructor`，异常诊断不泄露密钥，仍不返回 `mock-page-pay`。
+
+## Issue：fix(payment-expiry): enforce 10-minute payment timeout and prevent unpaid orders becoming paid
+
+- **问题**：支付宝未支付订单在前端回跳、refresh、mock/sandbox 或查单路径中可能被错误展示/处理为已完成。
+- **修复范围**：订单创建有效期、懒过期状态机、支付发起拦截、主动查单/回调结算时效校验、用户端订单列表/支付弹框/结果页状态展示。
+- **验收重点**：10 分钟倒计时、超时后 `EXPIRED/已过期`、expired 订单不能继续支付、支付宝 `return_url` 不触发 paid、只有渠道确认成功才统一到账。
+- **数据迁移**：无新增 Prisma migration，复用现有 `Order.expiresAt`，历史错误 paid 订单需人工核对渠道流水，不自动退款或扣回脑细胞。

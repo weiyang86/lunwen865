@@ -32,7 +32,8 @@ function normalizeOrderStatus(raw: string): OrderStatus {
   if (raw === 'PAID') return 'PAID';
   if (raw === 'FULFILLING') return 'FULFILLING';
   if (raw === 'COMPLETED') return 'COMPLETED';
-  if (raw === 'CANCELLED' || raw === 'CLOSED') return 'CANCELLED';
+  if (raw === 'CLOSED' || raw === 'EXPIRED') return 'EXPIRED';
+  if (raw === 'CANCELLED') return 'CANCELLED';
   if (raw === 'REFUNDING') return 'REFUNDING';
   return 'REFUNDED';
 }
