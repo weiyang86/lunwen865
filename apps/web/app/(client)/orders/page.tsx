@@ -23,8 +23,12 @@ import {
   canShowMockPay,
   getDefaultWechatMethod,
   formatRemainingSeconds,
+  isExpiredPaymentLikeStatus,
   isExpiredPaymentStatus,
+  isPaidPaymentLikeStatus,
   isPaidPaymentStatus,
+  isPendingPaymentLikeStatus,
+  normalizePaymentStatus,
   readPaymentJumpUrl,
   readPaymentQrValue,
   safeClientRedirectUrl,
@@ -80,11 +84,13 @@ function calcBrainCellsFromSnapshot(snapshot: unknown): number {
 }
 
 function statusLabel(status: string): string {
+  const normalized = normalizePaymentStatus(status);
   return (
     {
       PENDING: "待支付",
       PENDING_PAYMENT: "待支付",
       PAID: "已支付",
+      SUCCEEDED: "已支付",
       FULFILLING: "履约中",
       COMPLETED: "已完成",
       CANCELLED: "已取消",
@@ -92,39 +98,36 @@ function statusLabel(status: string): string {
       REFUNDED: "已退款",
       CLOSED: "已过期",
       EXPIRED: "已过期",
-    }[status] ?? status
+    }[normalized] ?? status
   );
 }
 
-function getOrderPublicStatus(order: ApiOrder, nowMs = Date.now()): string {
-  if (order.paid === true) return "PAID";
-  if (order.expired === true) return "EXPIRED";
-  const raw = order.orderStatus || order.status;
-  if (raw === "CLOSED") return "EXPIRED";
-  if (
-    (raw === "PENDING" || raw === "PENDING_PAYMENT") &&
-    getOrderRemainingSeconds(order, nowMs) <= 0
-  ) {
-    return "EXPIRED";
-  }
-  return raw;
-}
-
-function isOrderPaid(order: ApiOrder): boolean {
-  const raw = order.orderStatus || order.status;
-  return (
-    order.paid === true ||
-    raw === "PAID" ||
-    raw === "FULFILLING" ||
-    raw === "COMPLETED"
-  );
+function getOrderRawStatus(order: ApiOrder): string {
+  return normalizePaymentStatus(order.orderStatus || order.status);
 }
 
 function getOrderRemainingSeconds(order: ApiOrder, nowMs = Date.now()): number {
   const expires = Date.parse(order.expiredAt || order.expiresAt || "");
-  if (Number.isFinite(expires))
+  if (Number.isFinite(expires)) {
     return Math.max(0, Math.floor((expires - nowMs) / 1000));
+  }
   return Math.max(0, Math.floor(Number(order.remainingSeconds ?? 0)));
+}
+
+function getOrderPublicStatus(order: ApiOrder, nowMs = Date.now()): string {
+  const raw = getOrderRawStatus(order);
+  if (isExpiredPaymentLikeStatus(raw) || order.expired === true) return "EXPIRED";
+  if (raw === "CANCELLED") return "CANCELLED";
+  if (isPendingPaymentLikeStatus(raw)) {
+    return getOrderRemainingSeconds(order, nowMs) <= 0 ? "EXPIRED" : "PENDING";
+  }
+  if (isPaidPaymentLikeStatus(raw)) return raw === "SUCCEEDED" ? "PAID" : raw;
+  if (order.paid === true) return "PAID";
+  return raw;
+}
+
+function isOrderPaid(order: ApiOrder): boolean {
+  return isPaidPaymentLikeStatus(getOrderPublicStatus(order));
 }
 
 function isOrderExpired(order: ApiOrder, nowMs = Date.now()): boolean {
@@ -132,6 +135,7 @@ function isOrderExpired(order: ApiOrder, nowMs = Date.now()): boolean {
 }
 
 function canPayOrder(order: ApiOrder, nowMs = Date.now()): boolean {
+  if (order.canPay === false) return false;
   return (
     !isOrderPaid(order) &&
     !isOrderExpired(order, nowMs) &&
@@ -144,10 +148,10 @@ function payButtonLabel(order: ApiOrder, nowMs = Date.now()): string {
   if (status === "PENDING") return "去支付";
   if (status === "EXPIRED") return "已过期";
   if (status === "CANCELLED") return "已取消";
-  if (status === "PAID" || status === "FULFILLING" || status === "COMPLETED")
-    return "已完成";
+  if (isPaidPaymentLikeStatus(status)) return "已完成";
   return statusLabel(status);
 }
+
 
 export default function OrdersPage() {
   const router = useRouter();

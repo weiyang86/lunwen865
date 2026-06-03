@@ -481,3 +481,8 @@
 - 采用懒过期策略：查询支付状态、创建支付、主动 refresh 时检查超时；超时待支付订单落库为 `CLOSED`，对外展示为 `EXPIRED`。
 - 渠道成功必须继续走 `PaymentCallbackService`/订单 `markPaid`，并校验支付成功时间不晚于订单有效期；重复通知/重复查单仍依赖统一幂等结算避免重复到账。
 - 历史已错误标记为 paid 的调试订单不在本 PR 批量处理，需管理员按渠道流水人工核对。
+
+## fix(payment-expiry-ui)：倒计时展示加固
+
+- 用户端订单列表、支付弹框、订单详情和支付结果页统一使用后端 `expiredAt` / `remainingSeconds` 推导倒计时和过期状态。
+- 前端状态展示增加大小写归一化，优先识别 `EXPIRED/CLOSED/CANCELLED/PENDING`，避免未支付或已取消订单被误显示为“已完成”。

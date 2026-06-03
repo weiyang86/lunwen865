@@ -163,3 +163,9 @@
 - 普通用户只能查询自己的订单，管理员可查询任意订单。
 - 若订单仍为待支付且当前时间超过 `expiresAt`，接口会懒标记为 `EXPIRED/CLOSED` 并返回 `expired=true`、`canPay=false`。
 - `POST /api/orders/:id/payment-status/refresh` 会先尝试支付渠道主动查单；渠道未确认成功时，超时订单会被标记为已过期。
+
+### 支付倒计时 UI 展示补充（fix-payment-expiry-ui）
+
+- 用户订单列表 `GET /api/orders` / `GET /api/orders/my` 返回的每个订单应包含 `expiredAt`、`remainingSeconds`、`expired`、`canPay`、`paid`、`orderStatus`、`paymentStatus`。
+- 前端展示倒计时必须以后端 `expiredAt` / `remainingSeconds` 为准，并将大小写不同的 `pending/PENDING`、`expired/EXPIRED` 等状态归一化后展示。
+- 订单列表和支付弹框中，只有归一化后 paid/succeeded/completed 的订单可以显示“已完成”；`pending/cancelled/expired/closed` 不得显示“已完成”。

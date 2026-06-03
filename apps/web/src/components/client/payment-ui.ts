@@ -24,6 +24,31 @@ export type ClientPaymentStatus = {
   brainCellBalance?: number;
 };
 
+
+export function normalizePaymentStatus(status?: string | null): string {
+  return String(status ?? "").trim().toUpperCase();
+}
+
+export function isPendingPaymentLikeStatus(status?: string | null): boolean {
+  const normalized = normalizePaymentStatus(status);
+  return normalized === "PENDING" || normalized === "PENDING_PAYMENT";
+}
+
+export function isPaidPaymentLikeStatus(status?: string | null): boolean {
+  const normalized = normalizePaymentStatus(status);
+  return (
+    normalized === "PAID" ||
+    normalized === "SUCCEEDED" ||
+    normalized === "FULFILLING" ||
+    normalized === "COMPLETED"
+  );
+}
+
+export function isExpiredPaymentLikeStatus(status?: string | null): boolean {
+  const normalized = normalizePaymentStatus(status);
+  return normalized === "EXPIRED" || normalized === "CLOSED";
+}
+
 export function isAdminRole(role?: string | null): boolean {
   return role === "ADMIN" || role === "SUPER_ADMIN";
 }
@@ -70,13 +95,9 @@ export function readPaymentJumpUrl(
 export function isPaidPaymentStatus(status: ClientPaymentStatus): boolean {
   return (
     status.paid === true ||
-    status.paymentStatus === "SUCCEEDED" ||
-    status.paymentStatus === "PAID" ||
-    status.orderStatus === "PAID" ||
-    status.orderStatus === "FULFILLING" ||
-    status.orderStatus === "COMPLETED" ||
-    status.status === "PAID" ||
-    status.status === "COMPLETED"
+    isPaidPaymentLikeStatus(status.paymentStatus) ||
+    isPaidPaymentLikeStatus(status.orderStatus) ||
+    isPaidPaymentLikeStatus(status.status)
   );
 }
 
@@ -95,10 +116,9 @@ export function safeClientRedirectUrl(
 export function isExpiredPaymentStatus(status: ClientPaymentStatus): boolean {
   return (
     status.expired === true ||
-    status.orderStatus === "EXPIRED" ||
-    status.paymentStatus === "CLOSED" ||
-    status.status === "EXPIRED" ||
-    status.status === "CLOSED" ||
+    isExpiredPaymentLikeStatus(status.orderStatus) ||
+    isExpiredPaymentLikeStatus(status.paymentStatus) ||
+    isExpiredPaymentLikeStatus(status.status) ||
     (typeof status.remainingSeconds === "number" &&
       status.remainingSeconds <= 0 &&
       status.paid !== true)

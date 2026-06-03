@@ -4,37 +4,39 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 
+import {
+  isExpiredPaymentStatus,
+  isPaidPaymentStatus,
+  normalizePaymentStatus,
+  type ClientPaymentStatus,
+} from "@/components/client/payment-ui";
 import { Button } from "@/components/ui/button";
 import { clientHttp } from "@/lib/client/api-client";
 import { getApiErrorMessage } from "@/lib/client/api-error";
 
-type PaymentStatusResp = {
+type PaymentStatusResp = ClientPaymentStatus & {
   status: string;
-  orderStatus?: string;
-  paymentStatus?: string;
-  paid?: boolean;
-  expired?: boolean;
-  remainingSeconds?: number;
-  message?: string;
-  paidAt?: string | null;
-  orderNo?: string;
 };
 
 function isTerminalPaymentStatus(status: string): boolean {
-  return ["PAID", "COMPLETED", "CLOSED", "EXPIRED", "CANCELLED"].includes(status);
+  return ["PAID", "COMPLETED", "SUCCEEDED", "CLOSED", "EXPIRED", "CANCELLED"].includes(
+    normalizePaymentStatus(status),
+  );
 }
 
 function statusText(status: string): string {
+  const normalized = normalizePaymentStatus(status);
   return (
     {
       PENDING: "待支付",
       PENDING_PAYMENT: "待支付",
       PAID: "已支付",
+      SUCCEEDED: "已支付",
       COMPLETED: "已完成",
       CLOSED: "已过期",
       EXPIRED: "已过期",
       CANCELLED: "已取消",
-    }[status] ?? status
+    }[normalized] ?? status
   );
 }
 
@@ -62,15 +64,18 @@ export default function WechatQrPage() {
         `/payment/orders/${orderId}/status/refresh`,
         {},
       );
-      setStatus(s.expired ? "EXPIRED" : s.status);
+      const nextStatus = isExpiredPaymentStatus(s)
+        ? "EXPIRED"
+        : normalizePaymentStatus(s.status || s.orderStatus || s.paymentStatus);
+      setStatus(nextStatus);
       setError(null);
-      if (s.expired || isTerminalPaymentStatus(s.status)) {
+      if (isExpiredPaymentStatus(s) || isTerminalPaymentStatus(nextStatus)) {
         if (timerRef.current) {
           window.clearInterval(timerRef.current);
           timerRef.current = null;
         }
       }
-      if (s.status === "PAID" || s.status === "COMPLETED") {
+      if (isPaidPaymentStatus(s)) {
         router.replace("/account");
       }
     } catch (e: unknown) {

@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-import { formatRemainingSeconds } from "@/components/client/payment-ui";
+import {
+  formatRemainingSeconds,
+  isExpiredPaymentLikeStatus,
+  isPaidPaymentLikeStatus,
+  isPendingPaymentLikeStatus,
+  normalizePaymentStatus,
+} from "@/components/client/payment-ui";
 import { clientHttp } from "@/lib/client/api-client";
 
 type OrderDetail = {
@@ -18,34 +24,39 @@ type OrderDetail = {
   expiredAt?: string;
 };
 
-function publicStatus(order: OrderDetail, nowMs: number): string {
-  if (order.paid) return "PAID";
-  if (order.expired) return "EXPIRED";
-  const raw = order.orderStatus || order.status;
-  if (raw === "CLOSED") return "EXPIRED";
+function remainingSeconds(order: OrderDetail, nowMs: number): number {
   const expires = Date.parse(order.expiredAt || order.expiresAt || "");
-  if (
-    (raw === "PENDING" || raw === "PENDING_PAYMENT") &&
-    Number.isFinite(expires) &&
-    expires <= nowMs
-  ) {
-    return "EXPIRED";
+  return Number.isFinite(expires)
+    ? Math.max(0, Math.floor((expires - nowMs) / 1000))
+    : 0;
+}
+
+function publicStatus(order: OrderDetail, nowMs: number): string {
+  const raw = normalizePaymentStatus(order.orderStatus || order.status);
+  if (isExpiredPaymentLikeStatus(raw) || order.expired) return "EXPIRED";
+  if (raw === "CANCELLED") return "CANCELLED";
+  if (isPendingPaymentLikeStatus(raw)) {
+    return remainingSeconds(order, nowMs) <= 0 ? "EXPIRED" : "PENDING";
   }
+  if (isPaidPaymentLikeStatus(raw)) return raw === "SUCCEEDED" ? "PAID" : raw;
+  if (order.paid) return "PAID";
   return raw;
 }
 
 function statusLabel(status: string): string {
+  const normalized = normalizePaymentStatus(status);
   return (
     {
       PENDING: "待支付",
       PENDING_PAYMENT: "待支付",
       PAID: "已支付",
+      SUCCEEDED: "已支付",
       FULFILLING: "履约中",
       COMPLETED: "已完成",
       CANCELLED: "已取消",
       CLOSED: "已过期",
       EXPIRED: "已过期",
-    }[status] ?? status
+    }[normalized] ?? status
   );
 }
 
@@ -69,17 +80,14 @@ export default function OrderDetailPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const remainingSeconds = useMemo(() => {
+  const secondsLeft = useMemo(() => {
     if (!order) return 0;
-    const expires = Date.parse(order.expiredAt || order.expiresAt || "");
-    return Number.isFinite(expires)
-      ? Math.max(0, Math.floor((expires - nowMs) / 1000))
-      : 0;
+    return remainingSeconds(order, nowMs);
   }, [order, nowMs]);
 
   if (!order) return <div className="p-6">加载中...</div>;
   const status = publicStatus(order, nowMs);
-  const canPay = status === "PENDING" && remainingSeconds > 0;
+  const canPay = status === "PENDING" && secondsLeft > 0;
 
   return (
     <div className="space-y-2 p-6">
@@ -89,7 +97,7 @@ export default function OrderDetailPage() {
       <div>状态: {statusLabel(status)}</div>
       <div>过期时间: {order.expiredAt || order.expiresAt}</div>
       {canPay ? (
-        <div>剩余 {formatRemainingSeconds(remainingSeconds)}</div>
+        <div>剩余 {formatRemainingSeconds(secondsLeft)}</div>
       ) : null}
       {status === "EXPIRED" ? (
         <div className="text-rose-600">订单已过期，请重新下单</div>

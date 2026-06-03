@@ -87,3 +87,11 @@
 - [ ] 支付宝 `WAIT_BUYER_PAY`、`TRADE_CLOSED` 等非成功状态不会触发统一结算；只有 `TRADE_SUCCESS / TRADE_FINISHED` 可入账。
 - [ ] 过期未支付订单不会变成 `paid`，不会发放脑细胞，不产生 recharge 流水。
 - [ ] 订单列表、支付弹框、支付结果页均展示倒计时/已过期状态，未支付订单不得显示“已完成”。
+
+## fix(payment-expiry-ui)：订单列表/弹框倒计时验收
+
+- [ ] 待支付订单列表卡片显示“剩余 09:59”格式倒计时。
+- [ ] 支付弹框显示“请在 10 分钟内完成支付”和实时剩余时间。
+- [ ] 倒计时归零后订单显示“已过期”，支付按钮不可点击。
+- [ ] `pending/cancelled/expired/closed` 不显示“已完成”，只有已支付订单显示“已完成”。
+- [ ] 前端兼容后端返回大小写不同的 `orderStatus/paymentStatus/status`。

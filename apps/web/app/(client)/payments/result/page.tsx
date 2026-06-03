@@ -3,37 +3,45 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  isExpiredPaymentStatus,
+  isPaidPaymentStatus,
+  isPendingPaymentLikeStatus,
+  normalizePaymentStatus,
+  type ClientPaymentStatus,
+} from "@/components/client/payment-ui";
 import { Button } from "@/components/ui/button";
 import { clientHttp } from "@/lib/client/api-client";
 import { getApiErrorMessage } from "@/lib/client/api-error";
 
-type PaymentStatusResp = {
+type PaymentStatusResp = ClientPaymentStatus & {
   status: string;
-  orderStatus?: string;
-  paymentStatus?: string;
-  paid?: boolean;
-  expired?: boolean;
-  remainingSeconds?: number;
-  message?: string;
-  paidAt?: string | null;
-  orderNo?: string;
 };
 
 function statusText(status?: string): string {
   if (!status) return "未知状态";
+  const normalized = normalizePaymentStatus(status);
   return (
     {
       PENDING: "待支付",
       PENDING_PAYMENT: "待支付",
       PAID: "已支付",
+      SUCCEEDED: "已支付",
       COMPLETED: "已完成",
       CANCELLED: "已取消",
       CLOSED: "已过期",
       EXPIRED: "已过期",
       REFUNDING: "退款中",
       REFUNDED: "已退款",
-    }[status] ?? status
+    }[normalized] ?? status
   );
+}
+
+function displayStatus(data: PaymentStatusResp | null): string | undefined {
+  if (!data) return undefined;
+  if (isExpiredPaymentStatus(data)) return "EXPIRED";
+  if (isPaidPaymentStatus(data)) return normalizePaymentStatus(data.status || data.orderStatus || "PAID");
+  return normalizePaymentStatus(data.status || data.orderStatus || data.paymentStatus);
 }
 
 export default function PaymentResultPage() {
@@ -46,13 +54,11 @@ export default function PaymentResultPage() {
   const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
-  const shouldPoll = useMemo(
-    () =>
-      data?.status === "PENDING" ||
-      data?.status === "PENDING_PAYMENT" ||
-      data === null,
-    [data],
-  );
+  const shouldPoll = useMemo(() => {
+    if (data === null) return true;
+    if (isExpiredPaymentStatus(data) || isPaidPaymentStatus(data)) return false;
+    return isPendingPaymentLikeStatus(data.status || data.orderStatus || data.paymentStatus);
+  }, [data]);
 
   const refresh = useCallback(async () => {
     if (!orderId) {
@@ -67,7 +73,7 @@ export default function PaymentResultPage() {
       );
       setData(s);
       setError(null);
-      if (s.status === "PAID" || s.status === "COMPLETED") {
+      if (isPaidPaymentStatus(s)) {
         router.replace("/account");
       }
     } catch (e: unknown) {
@@ -110,7 +116,7 @@ export default function PaymentResultPage() {
       <div className="rounded-md border p-4">
         <div className="text-sm text-slate-500">当前状态</div>
         <div className="mt-1 text-lg font-semibold">
-          {loading ? "加载中..." : statusText(data?.status)}
+          {loading ? "加载中..." : statusText(displayStatus(data))}
         </div>
       </div>
 
