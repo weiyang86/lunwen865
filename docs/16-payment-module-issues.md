@@ -268,3 +268,9 @@
 - **问题**：待支付订单列表/支付弹框倒计时不明显，且状态混用时可能出现取消/过期订单仍显示完成文案。
 - **修复范围**：用户端订单列表、订单详情、支付结果页、扫码页和支付状态工具函数。
 - **验收重点**：列表和弹框显示 `剩余 MM:SS`，倒计时归零后显示已过期并禁用支付，只有 paid/succeeded/completed 状态显示“已完成”。
+
+## Issue：fix(payment-wechat): settle local order when WeChat reports ORDERPAID
+
+- **问题**：微信侧已支付但本地回调未及时生效时，再次 Native 下单返回 `ORDERPAID`，前端长期显示错误且本地订单未结算。
+- **修复范围**：微信 prepay `ORDERPAID` 捕获、主动查单归一化、refresh 查单结算、统一到账调用、前端 paid=true 响应处理。
+- **验收重点**：`ORDERPAID + SUCCESS` 能触发统一 settlement 并返回 paid=true；非成功查单不入账；重复点击不重复充值。

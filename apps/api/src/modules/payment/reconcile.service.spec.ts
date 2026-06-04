@@ -5,7 +5,7 @@ import type { AlipayProvider } from './providers/alipay.provider';
 import type { WechatPayProvider } from './providers/wechat-pay.provider';
 
 describe('ReconcileService', () => {
-  it('漏单补偿：provider.query 返回 PAID -> 调用 markPaid', async () => {
+  it('漏单补偿：provider.query 返回 PAID -> 调用统一 PaymentCallbackService', async () => {
     const prisma = {
       order: {
         findMany: jest.fn(() =>
@@ -37,11 +37,11 @@ describe('ReconcileService', () => {
       query: jest.fn(() => Promise.resolve({ status: 'PENDING' })),
     } as unknown as AlipayProvider;
 
-    const markPaidMock = jest.fn(() => Promise.resolve({ alreadyPaid: false }));
-    const orderService = { markPaid: markPaidMock } as unknown as OrderService;
+    const orderService = {} as unknown as OrderService;
 
+    const processMock = jest.fn(() => Promise.resolve({ processed: true }));
     const callbackService = {
-      process: jest.fn(() => Promise.resolve({ processed: true })),
+      process: processMock,
     } as never;
     const service = new ReconcileService(
       prisma,
@@ -53,6 +53,14 @@ describe('ReconcileService', () => {
     await service.reconcilePending();
 
     expect(queryMock).toHaveBeenCalledWith('PAY_1');
-    expect(markPaidMock).toHaveBeenCalledTimes(1);
+    expect(processMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: 'wechat',
+        providerOrderNo: 'PAY_1',
+        providerTradeNo: 'TX_1',
+        amount: 1990,
+        success: true,
+      }),
+    );
   });
 });

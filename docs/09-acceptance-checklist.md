@@ -95,3 +95,11 @@
 - [ ] 倒计时归零后订单显示“已过期”，支付按钮不可点击。
 - [ ] `pending/cancelled/expired/closed` 不显示“已完成”，只有已支付订单显示“已完成”。
 - [ ] 前端兼容后端返回大小写不同的 `orderStatus/paymentStatus/status`。
+
+## fix(payment-wechat)：ORDERPAID 主动查单结算验收
+
+- [ ] 微信 Native prepay 返回 `ORDERPAID` 时，后端主动调用微信查单而不是长期展示错误。
+- [ ] 查单 `SUCCESS` 后通过 `PaymentCallbackService` 统一结算，订单 paid、PaymentRecord succeeded、脑细胞到账、产生 recharge 流水。
+- [ ] 查单 `NOTPAY/USERPAYING/CLOSED/PAYERROR` 不入账，返回 paid=false 与明确提示。
+- [ ] “我已完成支付”调用 `POST /api/orders/:id/payment-status/refresh`，查单成功后 0.8 秒跳转。
+- [ ] 重复 refresh / 重复点击去支付不重复到账，不串用 providerTradeNo。

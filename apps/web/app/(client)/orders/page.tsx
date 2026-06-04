@@ -313,7 +313,7 @@ export default function OrdersPage() {
           await refreshAll();
         }
       } catch (e: unknown) {
-        const msg = getApiErrorMessage(e, "查询支付状态失败，请稍后再试");
+        const msg = getApiErrorMessage(e, "暂未查询到支付结果，请稍后再试");
         setPayHint(msg);
         return;
       }
@@ -352,6 +352,17 @@ export default function OrdersPage() {
         },
       );
 
+      const paymentStatus = res as unknown as ClientPaymentStatus;
+      if (isPaidPaymentStatus(paymentStatus)) {
+        setPayHint('已检测到支付成功，正在跳转...');
+        await handlePaidSuccess(paymentStatus);
+        return;
+      }
+      if (paymentStatus.paid === false && typeof paymentStatus.message === 'string') {
+        setPayHint(paymentStatus.message);
+        return;
+      }
+
       const qr = readPaymentQrValue(res);
       const jumpUrl = readPaymentJumpUrl(res);
       startPolling(opts.orderId);
@@ -372,7 +383,7 @@ export default function OrdersPage() {
       setPayHint(msg);
       if (msg.includes("ORDERPAID") || msg.includes("已支付")) {
         try {
-          const s = await queryPaymentStatusOnce(opts.orderId);
+          const s = await refreshPaymentStatusOnce(opts.orderId);
           if (isPaidPaymentStatus(s)) {
             if (pollRef.current) {
               window.clearInterval(pollRef.current);
@@ -650,7 +661,7 @@ export default function OrdersPage() {
                         );
                       } catch (e: unknown) {
                         setPayHint(
-                          getApiErrorMessage(e, "查询支付状态失败，请稍后再试"),
+                          getApiErrorMessage(e, "暂未查询到支付结果，请稍后再试"),
                         );
                       }
                     }}

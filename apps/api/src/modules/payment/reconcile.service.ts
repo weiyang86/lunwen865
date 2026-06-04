@@ -48,14 +48,19 @@ export class ReconcileService {
           paidAt.getTime() <=
             (o.expiresAt?.getTime() ?? Number.MAX_SAFE_INTEGER)
         ) {
-          this.logger.warn(`[Reconcile] 发现漏单 ${o.orderNo}，执行补偿`);
-          await this.orderService.markPaid({
-            orderId: o.id,
-            transactionId: r.transactionId,
-            paidAmountCents: r.paidAmountCents,
-            method: o.method,
-            channel: o.channel,
+          this.logger.warn(
+            `[Reconcile] 发现漏单 ${o.orderNo}，执行统一到账补偿`,
+          );
+          await this.callbackService.process({
+            channel: o.channel === PaymentChannel.WECHAT ? 'wechat' : 'alipay',
+            providerOrderNo: o.outTradeNo,
+            providerTradeNo: r.transactionId,
+            amount: r.paidAmountCents,
             paidAt,
+            tradeStatus:
+              o.channel === PaymentChannel.WECHAT ? 'SUCCESS' : 'TRADE_SUCCESS',
+            success: true,
+            raw: { query: r, source: 'RECONCILE_CRON' },
           });
         }
       } catch (e: unknown) {

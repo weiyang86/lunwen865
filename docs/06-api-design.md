@@ -169,3 +169,10 @@
 - 用户订单列表 `GET /api/orders` / `GET /api/orders/my` 返回的每个订单应包含 `expiredAt`、`remainingSeconds`、`expired`、`canPay`、`paid`、`orderStatus`、`paymentStatus`。
 - 前端展示倒计时必须以后端 `expiredAt` / `remainingSeconds` 为准，并将大小写不同的 `pending/PENDING`、`expired/EXPIRED` 等状态归一化后展示。
 - 订单列表和支付弹框中，只有归一化后 paid/succeeded/completed 的订单可以显示“已完成”；`pending/cancelled/expired/closed` 不得显示“已完成”。
+
+## 微信 ORDERPAID 主动查单结算（fix-payment-wechat）
+
+- `POST /api/payment/prepay` / `POST /api/payments/create` 在微信 Native 下单遇到 `ORDERPAID` 时，不再把该错误直接透传给前端；后端会使用同一个 `outTradeNo/providerOrderNo` 调用微信查单。
+- `POST /api/orders/:id/payment-status/refresh` 与 `POST /api/payment/orders/:id/status/refresh` 会在本地订单未 paid 时主动读取最新支付记录/订单 `outTradeNo`，对微信订单调用查单；仅 `trade_state=SUCCESS` 会进入统一 `PaymentCallbackService` 结算。
+- 微信查单归一化字段包括 `channel=wechat`、`providerOrderNo`、`providerTradeNo/transaction_id`、`amount`、`paidAt`、`tradeStatus`、`success`、`raw`；`NOTPAY/USERPAYING/CLOSED/PAYERROR` 均不入账。
+- `refresh/prepay` 若查单成功并完成结算，返回 `paid=true`、`paymentStatus=SUCCEEDED` 和站内 `redirectUrl`；若微信提示已支付但查单未成功，返回 `paid=false` 与明确 message，前端继续提示用户稍后刷新。

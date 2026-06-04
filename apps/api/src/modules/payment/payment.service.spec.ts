@@ -10,6 +10,7 @@ import type { OrderService } from '../order/order.service';
 import type { QuotaService } from '../quota/quota.service';
 import type { SettingsService } from '../settings/settings.service';
 import { PaymentService } from './payment.service';
+import type { PaymentCallbackService } from './payment-callback.service';
 import type { AlipayProvider } from './providers/alipay.provider';
 import type { WechatPayProvider } from './providers/wechat-pay.provider';
 
@@ -61,18 +62,24 @@ describe('PaymentService', () => {
   const paymentLogs: Array<{ orderId: string; type: string }> = [];
 
   let prisma: PrismaService;
-  let orderService: Pick<OrderService, 'markPaid'>;
+  let orderService: Pick<OrderService, 'markPaid' | 'getPaymentStatus'>;
   let quotaService: Pick<QuotaService, 'refund'>;
   let settingsService: Pick<SettingsService, 'getPaymentSettings'>;
   let config: Pick<ConfigService, 'get'>;
   let wechat: Pick<
     WechatPayProvider,
-    'nativePrepay' | 'h5Prepay' | 'query' | 'refund' | 'verifyAndParsePayNotify'
+    | 'nativePrepay'
+    | 'h5Prepay'
+    | 'query'
+    | 'queryPayment'
+    | 'refund'
+    | 'verifyAndParsePayNotify'
   >;
   let alipay: Pick<
     AlipayProvider,
     'pagePay' | 'refund' | 'verifyAndParsePayNotify'
   >;
+  let callbackService: Pick<PaymentCallbackService, 'process'>;
   let service: PaymentService;
 
   beforeEach(() => {
@@ -98,6 +105,19 @@ describe('PaymentService', () => {
         Promise.resolve({ mwebUrl: `https://wx.example/mweb?o=${outTradeNo}` }),
       ),
       query: jest.fn(() => Promise.resolve({ status: 'PENDING' as const })),
+      queryPayment: jest.fn(() =>
+        Promise.resolve({
+          channel: 'wechat' as const,
+          providerOrderNo: 'PAY1',
+          providerTradeNo: '',
+          amount: 0,
+          paidAt: null,
+          tradeStatus: 'NOTPAY',
+          success: false,
+          raw: {},
+          status: 'PENDING' as const,
+        }),
+      ),
       refund: jest.fn(({ outRefundNo }: { outRefundNo: string }) =>
         Promise.resolve({ outRefundNo, refundId: 'WX_REF_1' }),
       ),
@@ -137,10 +157,26 @@ describe('PaymentService', () => {
           alreadyPaid: false,
         }),
       ),
-    } as unknown as Pick<OrderService, 'markPaid'>;
+      getPaymentStatus: jest.fn((_requester: unknown, orderId: string) => {
+        const order = orders.get(orderId);
+        return Promise.resolve({
+          orderId,
+          orderNo: order?.orderNo ?? 'PAY1',
+          status: order?.status ?? 'PENDING',
+          orderStatus: order?.status ?? 'PENDING',
+          paymentStatus: order?.status === 'PAID' ? 'SUCCEEDED' : 'PENDING',
+          paid: order?.status === 'PAID',
+          redirectUrl: '/account',
+        });
+      }),
+    } as unknown as Pick<OrderService, 'markPaid' | 'getPaymentStatus'>;
 
     quotaService = {
       refund: jest.fn(() => Promise.resolve()),
+    };
+
+    callbackService = {
+      process: jest.fn(() => Promise.resolve({ processed: true })),
     };
 
     settingsService = {
@@ -400,6 +436,7 @@ describe('PaymentService', () => {
         createPayment: jest.fn(),
         handleNotify: jest.fn(),
       } as never,
+      callbackService as PaymentCallbackService,
     );
   });
 
@@ -514,6 +551,175 @@ describe('PaymentService', () => {
     expect(typeof codeUrl).toBe('string');
     expect(String(codeUrl)).toContain('weixin://mock');
     expect(paymentLogs.some((l) => l.type === 'PREPAY')).toBe(true);
+  });
+
+  it('prepay：WECHAT_NATIVE 遇到 ORDERPAID 会查单并通过统一 settlement 返回 paid=true', async () => {
+    products.set('p1', { id: 'p1', name: '体验包' });
+    orders.set('o1', {
+      id: 'o1',
+      orderNo: 'PAY1',
+      userId: 'u1',
+      productId: 'p1',
+      productSnapshot: { brainCellAmount: 10 },
+      amountCents: 100,
+      paidAmountCents: null,
+      status: 'PENDING',
+      channel: PaymentChannel.WECHAT,
+      method: PaymentMethod.WECHAT_NATIVE,
+      outTradeNo: 'PAY1',
+      transactionId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      quotaGranted: false,
+    });
+    (wechat.nativePrepay as jest.Mock).mockRejectedValueOnce(
+      new BadRequestException('微信 Native 下单失败：ORDERPAID - 该订单已支付'),
+    );
+    (wechat.queryPayment as jest.Mock).mockResolvedValueOnce({
+      channel: 'wechat',
+      providerOrderNo: 'PAY1',
+      providerTradeNo: 'WX_TX_1',
+      amount: 100,
+      paidAt: new Date(),
+      tradeStatus: 'SUCCESS',
+      success: true,
+      raw: { trade_state: 'SUCCESS' },
+      status: 'PAID',
+    });
+
+    const res = await service.prepay(
+      'u1',
+      {
+        orderId: 'o1',
+        channel: PaymentChannel.WECHAT,
+        method: PaymentMethod.WECHAT_NATIVE,
+      },
+      '127.0.0.1',
+    );
+
+    expect(wechat.queryPayment).toHaveBeenCalledWith('PAY1');
+    expect(callbackService.process).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: 'wechat',
+        providerOrderNo: 'PAY1',
+        providerTradeNo: 'WX_TX_1',
+        amount: 100,
+        success: true,
+      }),
+    );
+    expect((res as Record<string, unknown>)['paid']).toBe(true);
+  });
+
+  it('prepay：ORDERPAID 但微信查单 NOTPAY 时不入账', async () => {
+    products.set('p1', { id: 'p1', name: '体验包' });
+    orders.set('o1', {
+      id: 'o1',
+      orderNo: 'PAY1',
+      userId: 'u1',
+      productId: 'p1',
+      productSnapshot: { brainCellAmount: 10 },
+      amountCents: 100,
+      paidAmountCents: null,
+      status: 'PENDING',
+      channel: PaymentChannel.WECHAT,
+      method: PaymentMethod.WECHAT_NATIVE,
+      outTradeNo: 'PAY1',
+      transactionId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      quotaGranted: false,
+    });
+    (wechat.nativePrepay as jest.Mock).mockRejectedValueOnce(
+      new BadRequestException('微信 Native 下单失败：ORDERPAID - 该订单已支付'),
+    );
+    (wechat.queryPayment as jest.Mock).mockResolvedValueOnce({
+      channel: 'wechat',
+      providerOrderNo: 'PAY1',
+      providerTradeNo: '',
+      amount: 0,
+      paidAt: null,
+      tradeStatus: 'NOTPAY',
+      success: false,
+      raw: { trade_state: 'NOTPAY' },
+      status: 'PENDING',
+    });
+
+    const res = await service.prepay(
+      'u1',
+      {
+        orderId: 'o1',
+        channel: PaymentChannel.WECHAT,
+        method: PaymentMethod.WECHAT_NATIVE,
+      },
+      '127.0.0.1',
+    );
+
+    expect(wechat.queryPayment).toHaveBeenCalledWith('PAY1');
+    expect(callbackService.process).not.toHaveBeenCalled();
+    expect((res as Record<string, unknown>)['paid']).toBe(false);
+  });
+
+  it('refresh：pending 微信订单查单 SUCCESS 后调用统一 settlement', async () => {
+    orders.set('o1', {
+      id: 'o1',
+      orderNo: 'PAY1',
+      userId: 'u1',
+      productId: 'p1',
+      productSnapshot: { brainCellAmount: 10 },
+      amountCents: 100,
+      paidAmountCents: null,
+      status: 'PENDING',
+      channel: PaymentChannel.WECHAT,
+      method: PaymentMethod.WECHAT_NATIVE,
+      outTradeNo: 'PAY1',
+      transactionId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      quotaGranted: false,
+    });
+    (wechat.queryPayment as jest.Mock).mockResolvedValueOnce({
+      channel: 'wechat',
+      providerOrderNo: 'PAY1',
+      providerTradeNo: 'WX_TX_2',
+      amount: 100,
+      paidAt: new Date(),
+      tradeStatus: 'SUCCESS',
+      success: true,
+      raw: { trade_state: 'SUCCESS' },
+      status: 'PAID',
+    });
+
+    const res = await service.refreshOrderPaymentStatus(
+      { id: 'u1', role: UserRole.USER },
+      'o1',
+    );
+
+    expect(wechat.queryPayment).toHaveBeenCalledWith('PAY1');
+    expect(callbackService.process).toHaveBeenCalledTimes(1);
+    expect((res as Record<string, unknown>)['paid']).toBe(true);
+  });
+
+  it('refresh：用户不能刷新他人订单', async () => {
+    orders.set('o1', {
+      id: 'o1',
+      orderNo: 'PAY1',
+      userId: 'u2',
+      productId: 'p1',
+      productSnapshot: {},
+      amountCents: 100,
+      paidAmountCents: null,
+      status: 'PENDING',
+      channel: PaymentChannel.WECHAT,
+      method: PaymentMethod.WECHAT_NATIVE,
+      outTradeNo: 'PAY1',
+      transactionId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      quotaGranted: false,
+    });
+
+    await expect(
+      service.refreshOrderPaymentStatus(
+        { id: 'u1', role: UserRole.USER },
+        'o1',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('prepay：WECHAT_H5 返回 payUrl/mweb_url 并写 PREPAY 日志', async () => {

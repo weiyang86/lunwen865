@@ -486,3 +486,9 @@
 
 - 用户端订单列表、支付弹框、订单详情和支付结果页统一使用后端 `expiredAt` / `remainingSeconds` 推导倒计时和过期状态。
 - 前端状态展示增加大小写归一化，优先识别 `EXPIRED/CLOSED/CANCELLED/PENDING`，避免未支付或已取消订单被误显示为“已完成”。
+
+## fix(payment-wechat)：ORDERPAID 与主动查单补单
+
+- 微信 Native 下单出现 `ORDERPAID` 时视为“微信侧可能已支付、本地需补单”的信号，使用原 `outTradeNo/providerOrderNo` 查单。
+- 查单 `SUCCESS` 后统一构造成 `PaymentCallbackService` 入参，复用幂等 settlement；非成功状态仅返回提示，不修改余额。
+- 支付状态 refresh 由 `PaymentService` 完成鉴权、查单、结算和状态返回，避免前端只轮询本地状态导致真实已付款但本地未 paid。
