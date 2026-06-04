@@ -16,6 +16,7 @@ export const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = 
     label: '已完成',
     cls: 'bg-green-50 text-green-700 ring-green-600/20',
   },
+  EXPIRED: { label: '已过期', cls: 'bg-gray-100 text-gray-600 ring-gray-500/20' },
   CANCELLED: { label: '已取消', cls: 'bg-gray-100 text-gray-600 ring-gray-500/20' },
   REFUNDING: {
     label: '退款中',

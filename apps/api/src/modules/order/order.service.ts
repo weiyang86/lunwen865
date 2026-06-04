@@ -39,6 +39,109 @@ export class OrderService {
     private readonly settings: SettingsService,
   ) {}
 
+  private isPendingPaymentStatus(status: OrderStatus): boolean {
+    return (
+      status === OrderStatus.PENDING || status === OrderStatus.PENDING_PAYMENT
+    );
+  }
+
+  private isPaidStatus(status: OrderStatus): boolean {
+    return (
+      status === OrderStatus.PAID ||
+      status === OrderStatus.FULFILLING ||
+      status === OrderStatus.COMPLETED
+    );
+  }
+
+  private isExpiredOrder(
+    order: Pick<Order, 'status' | 'expiresAt'>,
+    now = new Date(),
+  ): boolean {
+    return (
+      order.status === OrderStatus.CLOSED ||
+      (this.isPendingPaymentStatus(order.status) &&
+        order.expiresAt.getTime() <= now.getTime())
+    );
+  }
+
+  private remainingSeconds(expiresAt: Date, now = new Date()): number {
+    return Math.max(
+      0,
+      Math.floor((expiresAt.getTime() - now.getTime()) / 1000),
+    );
+  }
+
+  private publicOrderStatus(
+    order: Pick<Order, 'status' | 'expiresAt'>,
+    now = new Date(),
+  ): string {
+    if (this.isPaidStatus(order.status)) return 'PAID';
+    if (this.isExpiredOrder(order, now)) return 'EXPIRED';
+    if (order.status === OrderStatus.CANCELLED) return 'CANCELLED';
+    if (this.isPendingPaymentStatus(order.status)) return 'PENDING';
+    return order.status;
+  }
+
+  private paymentStatus(
+    order: Pick<Order, 'status' | 'expiresAt'>,
+    now = new Date(),
+  ): string {
+    if (this.isPaidStatus(order.status)) return 'SUCCEEDED';
+    if (this.isExpiredOrder(order, now)) return 'CLOSED';
+    if (order.status === OrderStatus.CANCELLED) return 'CLOSED';
+    return 'PENDING';
+  }
+
+  async expirePendingOrderIfNeeded<T extends Order>(
+    order: T,
+    now = new Date(),
+  ): Promise<T> {
+    if (
+      !this.isPendingPaymentStatus(order.status) ||
+      order.expiresAt.getTime() > now.getTime()
+    ) {
+      return order;
+    }
+    const updated = await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: OrderStatus.CLOSED,
+        cancelledAt: now,
+        remark: order.remark ?? '支付超时自动过期',
+      },
+    });
+    const paymentRecordModel = (
+      this.prisma as unknown as Record<string, unknown>
+    )['paymentRecord'] as
+      | {
+          updateMany: (args: {
+            where: Record<string, unknown>;
+            data: Record<string, unknown>;
+          }) => Promise<unknown>;
+        }
+      | undefined;
+    await paymentRecordModel?.updateMany({
+      where: { orderId: order.id, status: 'PENDING' },
+      data: { status: 'CLOSED' },
+    });
+    return { ...order, ...updated };
+  }
+
+  private withPaymentExpiryView<T extends Order>(order: T, now = new Date()) {
+    const publicStatus = this.publicOrderStatus(order, now);
+    const remainingSeconds = this.remainingSeconds(order.expiresAt, now);
+    return {
+      ...order,
+      orderStatus: publicStatus,
+      paymentStatus: this.paymentStatus(order, now),
+      paid: this.isPaidStatus(order.status),
+      expired: publicStatus === 'EXPIRED',
+      canPay: publicStatus === 'PENDING' && remainingSeconds > 0,
+      expiredAt: order.expiresAt,
+      remainingSeconds,
+    };
+  }
+
   async create(userId: string, dto: CreateOrderDto, clientIp?: string) {
     const product = await this.prisma.product.findUnique({
       where: { id: dto.productId },
@@ -50,7 +153,7 @@ export class OrderService {
     const paymentSettings = await this.settings.getPaymentSettings();
     const expireMinutes =
       paymentSettings.orderExpireMinutes ||
-      this.config.get<number>('payment.orderExpireMinutes', 30);
+      this.config.get<number>('payment.orderExpireMinutes', 10);
     const expiresAt = dayjs().add(expireMinutes, 'minute').toDate();
 
     const productSnapshot: Prisma.InputJsonValue = {
@@ -111,6 +214,8 @@ export class OrderService {
       };
     }
 
+    await this.closeExpired();
+
     const [items, total] = await Promise.all([
       this.prisma.order.findMany({
         where,
@@ -122,7 +227,11 @@ export class OrderService {
       this.prisma.order.count({ where }),
     ]);
 
-    return { items, total, page, pageSize };
+    const now = new Date();
+    const normalizedItems = items.map((item) =>
+      this.withPaymentExpiryView(item, now),
+    );
+    return { items: normalizedItems, total, page, pageSize };
   }
 
   async findOne(userId: string, id: string) {
@@ -170,20 +279,21 @@ export class OrderService {
       });
       if (!order) throw new NotFoundException('订单不存在');
 
-      if (
-        order.status === OrderStatus.PAID ||
-        order.status === OrderStatus.FULFILLING ||
-        order.status === OrderStatus.COMPLETED
-      ) {
+      if (this.isPaidStatus(order.status)) {
         return { order, alreadyPaid: true };
       }
-      if (
-        order.status !== OrderStatus.PENDING &&
-        order.status !== OrderStatus.PENDING_PAYMENT
-      ) {
+      const orderExpiresAt = order.expiresAt ?? new Date(Date.now() + 60_000);
+      const paidBeforeExpiry =
+        params.paidAt.getTime() <= orderExpiresAt.getTime();
+      const canSettleExpired =
+        order.status === OrderStatus.CLOSED && paidBeforeExpiry;
+      if (!this.isPendingPaymentStatus(order.status) && !canSettleExpired) {
         throw new BadRequestException(
           `订单状态 ${order.status}，无法标记为已支付`,
         );
+      }
+      if (this.isPendingPaymentStatus(order.status) && !paidBeforeExpiry) {
+        throw new BadRequestException('订单已过期，支付成功时间晚于订单有效期');
       }
 
       if (params.paidAmountCents !== order.amountCents) {
@@ -261,19 +371,22 @@ export class OrderService {
 
   async closeExpired(): Promise<number> {
     const expired = await this.prisma.order.findMany({
-      where: { status: OrderStatus.PENDING, expiresAt: { lt: new Date() } },
+      where: {
+        status: { in: [OrderStatus.PENDING, OrderStatus.PENDING_PAYMENT] },
+        expiresAt: { lt: new Date() },
+      },
       select: { id: true },
     });
     if (!expired.length) return 0;
     await this.prisma.order.updateMany({
       where: { id: { in: expired.map((e) => e.id) } },
       data: {
-        status: OrderStatus.CANCELLED,
+        status: OrderStatus.CLOSED,
         cancelledAt: new Date(),
-        remark: '超时未支付自动关闭',
+        remark: '支付超时自动过期',
       },
     });
-    this.logger.log(`[OrderCleanup] 关闭过期订单 ${expired.length} 条`);
+    this.logger.log(`[OrderCleanup] 标记过期订单 ${expired.length} 条`);
     return expired.length;
   }
 
@@ -294,42 +407,55 @@ export class OrderService {
       throw new ForbiddenException('无权访问该订单');
     }
 
+    const latest = await this.expirePendingOrderIfNeeded(order);
+
     const quota = await this.prisma.userQuota.findUnique({
       where: {
         userId_quotaType: {
-          userId: order.userId,
+          userId: latest.userId,
           quotaType: QuotaType.BRAIN_CELL,
         },
       },
       select: { balance: true },
     });
-    const paid =
-      order.status === OrderStatus.PAID ||
-      order.status === OrderStatus.FULFILLING ||
-      order.status === OrderStatus.COMPLETED;
-    const taskId = order.taskId ?? order.task?.id ?? null;
+    const now = new Date();
+    const publicStatus = this.publicOrderStatus(latest, now);
+    const paid = this.isPaidStatus(latest.status);
+    const expired = publicStatus === 'EXPIRED';
+    const taskId = latest.taskId ?? latest.task?.id ?? null;
     const redirectUrl = taskId
       ? `/tasks?taskId=${encodeURIComponent(taskId)}`
       : paid
         ? '/account'
         : '/orders';
+    const remainingSeconds = this.remainingSeconds(latest.expiresAt, now);
+    const message = paid
+      ? '已支付'
+      : expired
+        ? '订单已过期，请重新下单'
+        : '待支付';
 
     return {
-      orderId: order.id,
-      orderNo: order.orderNo,
-      orderStatus: order.status,
-      paymentStatus: paid ? 'PAID' : order.status,
-      status: order.status,
+      orderId: latest.id,
+      orderNo: latest.orderNo,
+      orderStatus: publicStatus,
+      paymentStatus: this.paymentStatus(latest, now),
+      status: publicStatus,
       paid,
-      paidAt: order.paidAt,
-      paidAmountCents: order.paidAmountCents,
-      channel: order.channel,
-      method: order.method,
-      outTradeNo: order.outTradeNo,
-      transactionId: order.transactionId,
-      expiresAt: order.expiresAt,
+      expired,
+      canPay: publicStatus === 'PENDING' && remainingSeconds > 0,
+      paidAt: latest.paidAt,
+      paidAmountCents: latest.paidAmountCents,
+      channel: latest.channel,
+      method: latest.method,
+      outTradeNo: latest.outTradeNo,
+      transactionId: latest.transactionId,
+      expiredAt: latest.expiresAt,
+      expiresAt: latest.expiresAt,
+      remainingSeconds,
       taskId,
       redirectUrl,
+      message,
       brainCellBalance: quota?.balance ?? 0,
     };
   }

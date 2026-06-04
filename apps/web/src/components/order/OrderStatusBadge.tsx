@@ -20,6 +20,10 @@ const META: Record<ThesisOrderStatus, { label: string; className: string }> = {
     label: '已完成',
     className: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100',
   },
+  expired: {
+    label: '已过期',
+    className: 'bg-slate-100 text-slate-700 hover:bg-slate-100',
+  },
   cancelled: {
     label: '已取消',
     className: 'bg-slate-100 text-slate-700 hover:bg-slate-100',

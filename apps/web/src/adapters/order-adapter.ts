@@ -39,7 +39,8 @@ export function mapOrderStatus(raw: string): ThesisOrderStatus {
   if (raw === 'PENDING' || raw === 'PENDING_PAYMENT') return 'pending_deposit';
   if (raw === 'PAID' || raw === 'FULFILLING') return 'in_progress';
   if (raw === 'COMPLETED') return 'completed';
-  if (raw === 'CANCELLED' || raw === 'CLOSED') return 'cancelled';
+  if (raw === 'CLOSED' || raw === 'EXPIRED') return 'expired';
+  if (raw === 'CANCELLED') return 'cancelled';
   if (raw === 'REFUNDING') return 'refunding';
   if (raw === 'REFUNDED') return 'refunded';
   console.warn('[ORD-2] unknown order status:', raw);

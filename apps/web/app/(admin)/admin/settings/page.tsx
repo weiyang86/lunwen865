@@ -563,7 +563,7 @@ export default function AdminSettingsPage() {
                                   prev ? { ...prev, alipayNotifyUrl: e.target.value } : prev,
                                 )
                               }
-                              placeholder="https://<domain>/api/payment/notify/alipay"
+                              placeholder="https://<domain>/api/payments/alipay/notify"
                               disabled={savingPayment}
                             />
                           </div>

@@ -462,3 +462,33 @@
 - “切换支付宝支付”作为次要操作保留；“沙箱一键支付”仅管理员且 `NEXT_PUBLIC_ENABLE_MOCK_PAY=true` 时显示。
 - 支付成功判断统一以后端 `GET /api/orders/:id/payment-status` 为准，轮询间隔 2 秒，最长 3 分钟，paid 后 0.8 秒跳转。
 - mock / sandbox 支付入账接口限制为 development/test 环境 + 管理员，避免普通用户绕过真实支付链路。
+
+## fix-payment-alipay：Page/Wap 正式支付落地说明
+
+- `AlipayProvider` 使用已安装的 `alipay-sdk`，从 `ALIPAY_APP_ID`、`ALIPAY_GATEWAY`、`ALIPAY_PRIVATE_KEY_PATH`、`ALIPAY_PUBLIC_KEY_PATH`、`ALIPAY_NOTIFY_URL`、`ALIPAY_RETURN_URL`、`ALIPAY_SELLER_ID`、`ALIPAY_SIGN_TYPE`、`ALIPAY_CHARSET` 读取配置。
+- 支付宝 Page/Wap 不再根据 sandbox 生成 mock 链接；mock 支付仅保留在 mock channel 或管理员开发测试入口。
+- Page Pay 使用 `alipay.trade.page.pay` + `FAST_INSTANT_TRADE_PAY`，Wap Pay 使用 `alipay.trade.wap.pay` + `QUICK_WAP_WAY`，订单金额从系统分单位转换为支付宝元字符串。
+- 异步通知与主动查单统一归一化为 `PaymentCallbackService` 输入，到账、订单 paid、PaymentRecord succeeded、脑细胞流水均复用统一幂等 settlement 流程。
+
+### AlipayCtor 兼容修复
+
+`alipay-sdk@4.x` 在 CommonJS/ESM 转译下可能导出为 `{ AlipaySdk }` 而不是默认构造函数。`AlipayProvider` 解析 SDK 构造函数时必须按 `module.AlipaySdk`、`module.default.AlipaySdk`、`module.default` 顺序兼容，并在解析失败时仅暴露安全 export keys 供排障。
+
+## fix(payment-expiry)：支付超时与状态机加固
+
+- 默认支付 TTL 固定为 10 分钟，配置项 `ORDER_PAYMENT_TTL_MINUTES`，兼容读取旧 `ORDER_EXPIRE_MINUTES`。
+- 本 PR 不新增数据表或字段，复用 `Order.expiresAt`；对外支付状态响应增加 `expiredAt`、`remainingSeconds`、`paid`、`expired`、`canPay`。
+- 采用懒过期策略：查询支付状态、创建支付、主动 refresh 时检查超时；超时待支付订单落库为 `CLOSED`，对外展示为 `EXPIRED`。
+- 渠道成功必须继续走 `PaymentCallbackService`/订单 `markPaid`，并校验支付成功时间不晚于订单有效期；重复通知/重复查单仍依赖统一幂等结算避免重复到账。
+- 历史已错误标记为 paid 的调试订单不在本 PR 批量处理，需管理员按渠道流水人工核对。
+
+## fix(payment-expiry-ui)：倒计时展示加固
+
+- 用户端订单列表、支付弹框、订单详情和支付结果页统一使用后端 `expiredAt` / `remainingSeconds` 推导倒计时和过期状态。
+- 前端状态展示增加大小写归一化，优先识别 `EXPIRED/CLOSED/CANCELLED/PENDING`，避免未支付或已取消订单被误显示为“已完成”。
+
+## fix(payment-wechat)：ORDERPAID 与主动查单补单
+
+- 微信 Native 下单出现 `ORDERPAID` 时视为“微信侧可能已支付、本地需补单”的信号，使用原 `outTradeNo/providerOrderNo` 查单。
+- 查单 `SUCCESS` 后统一构造成 `PaymentCallbackService` 入参，复用幂等 settlement；非成功状态仅返回提示，不修改余额。
+- 支付状态 refresh 由 `PaymentService` 完成鉴权、查单、结算和状态返回，避免前端只轮询本地状态导致真实已付款但本地未 paid。

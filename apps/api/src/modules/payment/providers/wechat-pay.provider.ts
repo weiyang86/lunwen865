@@ -13,6 +13,20 @@ import { SettingsService } from '../../settings/settings.service';
 type WechatNativePrepayResult = { codeUrl: string; rawResponse: unknown };
 type WechatH5PrepayResult = { mwebUrl: string; rawResponse: unknown };
 
+export type WechatQueryPaymentResult = {
+  channel: 'wechat';
+  providerOrderNo: string;
+  providerTradeNo: string;
+  amount: number;
+  paidAt: Date | null;
+  tradeStatus: string;
+  success: boolean;
+  raw: Record<string, unknown>;
+  status: 'PENDING' | 'PAID';
+  transactionId?: string;
+  paidAmountCents?: number;
+};
+
 export type WechatNotifyNormalizedResult = {
   channel: 'wechat';
   providerOrderNo: string;
@@ -1126,13 +1140,34 @@ export class WechatPayProvider {
     return this.applyRefund(params);
   }
 
-  query(outTradeNo: string): Promise<{
+  async query(outTradeNo: string): Promise<{
     status: 'PENDING' | 'PAID';
     transactionId?: string;
     paidAmountCents?: number;
     paidAt?: Date;
+    tradeStatus?: string;
+    raw?: Record<string, unknown>;
   }> {
     return this.queryTrade(outTradeNo);
+  }
+
+  async queryPayment(outTradeNo: string): Promise<WechatQueryPaymentResult> {
+    const result = await this.queryTrade(outTradeNo);
+    const success = result.status === 'PAID';
+    const tradeStatus = result.tradeStatus ?? (success ? 'SUCCESS' : 'NOTPAY');
+    return {
+      channel: 'wechat',
+      providerOrderNo: outTradeNo,
+      providerTradeNo: result.transactionId ?? '',
+      amount: result.paidAmountCents ?? 0,
+      paidAt: result.paidAt ?? null,
+      tradeStatus,
+      success,
+      raw: result.raw ?? { query: result },
+      status: result.status,
+      transactionId: result.transactionId,
+      paidAmountCents: result.paidAmountCents,
+    };
   }
 
   private async directQueryTrade(outTradeNo: string): Promise<{
@@ -1140,6 +1175,8 @@ export class WechatPayProvider {
     transactionId?: string;
     paidAmountCents?: number;
     paidAt?: Date;
+    tradeStatus?: string;
+    raw?: Record<string, unknown>;
   }> {
     await this.assertWechatConfigReady();
     if (await this.isSandbox()) {
@@ -1154,7 +1191,7 @@ export class WechatPayProvider {
         '',
     );
     if (!serialNo || !privateKeyRaw) {
-      return { status: 'PENDING' as const };
+      return { status: 'PENDING' as const, tradeStatus: 'CONFIG_MISSING' };
     }
     const privateKey = this.loadSecretContent(
       privateKeyRaw,
@@ -1205,7 +1242,11 @@ export class WechatPayProvider {
       this.logger.warn(
         `[wechat] directQueryTrade http=${rsp.status} summary=${this.safeJson(summary)}`,
       );
-      return { status: 'PENDING' as const };
+      return {
+        status: 'PENDING' as const,
+        tradeStatus: 'PAYERROR',
+        raw: { response: normalized },
+      };
     }
 
     const body =
@@ -1218,7 +1259,11 @@ export class WechatPayProvider {
         : null;
     const tradeState = this.toScalarString(bodyObj?.['trade_state']);
     if (tradeState !== 'SUCCESS') {
-      return { status: 'PENDING' as const };
+      return {
+        status: 'PENDING' as const,
+        tradeStatus: tradeState || 'NOTPAY',
+        raw: { response: normalized },
+      };
     }
 
     const amountRaw =
@@ -1236,6 +1281,8 @@ export class WechatPayProvider {
       paidAt: this.toScalarString(successTime)
         ? new Date(this.toScalarString(successTime))
         : undefined,
+      tradeStatus: 'SUCCESS',
+      raw: { response: normalized },
     };
   }
 
@@ -1244,9 +1291,11 @@ export class WechatPayProvider {
     transactionId?: string;
     paidAmountCents?: number;
     paidAt?: Date;
+    tradeStatus?: string;
+    raw?: Record<string, unknown>;
   }> {
     if (await this.isSandbox()) {
-      return { status: 'PENDING' as const };
+      return { status: 'PENDING' as const, tradeStatus: 'NOTPAY' };
     }
     return this.directQueryTrade(outTradeNo);
   }

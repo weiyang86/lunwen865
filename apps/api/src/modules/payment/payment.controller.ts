@@ -80,11 +80,45 @@ export class PaymentController {
     });
   }
 
+  @Get('orders/:orderId/payment-status')
+  getOrderPaymentStatusAlias(
+    @CurrentUser('id') uid: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.paymentService.getOrderPaymentStatus(uid, orderId, role);
+  }
+
+  @Post('orders/:orderId/payment-status/refresh')
+  refreshOrderPaymentStatusAlias(
+    @CurrentUser('id') uid: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.paymentService.refreshOrderPaymentStatus(
+      { id: uid, role },
+      orderId,
+    );
+  }
+
+  @Post('payment/orders/:orderId/status/refresh')
+  refreshOrderPaymentStatus(
+    @CurrentUser('id') uid: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.paymentService.refreshOrderPaymentStatus(
+      { id: uid, role },
+      orderId,
+    );
+  }
+
   @Get('payment/orders/:orderId/status')
   getOrderPaymentStatus(
     @CurrentUser('id') uid: string,
+    @CurrentUser('role') role: UserRole,
     @Param('orderId') orderId: string,
   ) {
-    return this.paymentService.getOrderPaymentStatus(uid, orderId);
+    return this.paymentService.getOrderPaymentStatus(uid, orderId, role);
   }
 }

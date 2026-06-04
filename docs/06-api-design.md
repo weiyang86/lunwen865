@@ -113,3 +113,66 @@
 - `POST /api/payment/sandbox/simulate-paid`
 
 以上接口仅允许 `development` / `test` 环境中的 `ADMIN` / `SUPER_ADMIN` 使用；普通用户直接调用必须返回 `403`。生产环境不得使用 mock / sandbox 支付入账接口。
+
+## 支付宝 Page/Wap 正式支付（fix-payment-alipay）
+
+- `POST /api/payments/create` 当 `channel=alipay` 时仅支持真实支付宝跳转能力，不再返回 `mock-page-pay`：
+  - PC 端传 `method=page`，后端调用 `alipay.trade.page.pay`，`product_code=FAST_INSTANT_TRADE_PAY`。
+  - 手机浏览器传 `method=wap`，后端调用 `alipay.trade.wap.pay`，`product_code=QUICK_WAP_WAY`。
+  - 返回体优先包含 `payUrl/paymentUrl`；若后续 SDK 返回表单 HTML，前端按受信后端响应提交表单，不以 `return_url` 作为支付成功依据。
+- `POST /api/payments/alipay/notify` 为支付宝异步通知入口，兼容旧入口 `POST /api/payment/notify/alipay`；生产环境 `ALIPAY_NOTIFY_URL` 应配置为 `/api/payments/alipay/notify`。
+  - 通知处理必须使用支付宝公钥验签，校验 `out_trade_no`、`trade_no`、`total_amount`、`trade_status`、`app_id` 与可选 `seller_id`。
+  - 仅 `TRADE_SUCCESS` / `TRADE_FINISHED` 归一化为支付成功，成功后调用统一 `PaymentCallbackService` 做幂等到账。
+  - 验签失败、金额不一致或支付记录不存在不得入账，并写入 `PaymentCallbackLog`。
+- `POST /api/payment/orders/:orderId/status/refresh` 与 `POST /api/orders/:orderId/payment-status/refresh` 主动查单；支付宝订单通过 `alipay.trade.query` 归一化后走同一 `PaymentCallbackService`，重复查单不重复到账。
+
+### Alipay SDK 初始化兼容说明（fix AlipayCtor）
+
+- 后端初始化 `alipay-sdk` 时兼容 `module.AlipaySdk`、`module.default.AlipaySdk`、`module.default` 三种导出形态；若无法解析构造函数，仅返回安全的 export key 诊断信息，不输出应用私钥或支付宝公钥内容。
+
+## 支付有效期与状态接口补充（fix-payment-expiry）
+
+### 订单支付有效期
+
+- 新建订单默认 `expiresAt = createdAt + 10 分钟`，配置项为 `ORDER_PAYMENT_TTL_MINUTES`，默认值 10。
+- `POST /api/payments/create` 仅允许 `pending/PENDING_PAYMENT` 且未过期订单发起支付；已过期返回“订单已过期，请重新下单”，已支付订单直接返回已支付状态，不重新拉起渠道支付。
+- `alipay.return_url` 仅用于前端回到结果页，不直接改变订单状态；支付宝入账只能来自验签成功的异步通知或主动查单确认 `TRADE_SUCCESS / TRADE_FINISHED`。
+
+### `GET /api/orders/:id/payment-status`
+
+返回新增/统一字段：
+
+```json
+{
+  "orderId": "xxx",
+  "orderNo": "PAYxxx",
+  "orderStatus": "PENDING | PAID | EXPIRED | CANCELLED",
+  "paymentStatus": "PENDING | SUCCEEDED | CLOSED",
+  "paid": false,
+  "expired": false,
+  "canPay": true,
+  "expiredAt": "2026-06-02T00:10:00.000Z",
+  "remainingSeconds": 520,
+  "paidAt": null,
+  "taskId": null,
+  "redirectUrl": "/account",
+  "message": "待支付"
+}
+```
+
+- 普通用户只能查询自己的订单，管理员可查询任意订单。
+- 若订单仍为待支付且当前时间超过 `expiresAt`，接口会懒标记为 `EXPIRED/CLOSED` 并返回 `expired=true`、`canPay=false`。
+- `POST /api/orders/:id/payment-status/refresh` 会先尝试支付渠道主动查单；渠道未确认成功时，超时订单会被标记为已过期。
+
+### 支付倒计时 UI 展示补充（fix-payment-expiry-ui）
+
+- 用户订单列表 `GET /api/orders` / `GET /api/orders/my` 返回的每个订单应包含 `expiredAt`、`remainingSeconds`、`expired`、`canPay`、`paid`、`orderStatus`、`paymentStatus`。
+- 前端展示倒计时必须以后端 `expiredAt` / `remainingSeconds` 为准，并将大小写不同的 `pending/PENDING`、`expired/EXPIRED` 等状态归一化后展示。
+- 订单列表和支付弹框中，只有归一化后 paid/succeeded/completed 的订单可以显示“已完成”；`pending/cancelled/expired/closed` 不得显示“已完成”。
+
+## 微信 ORDERPAID 主动查单结算（fix-payment-wechat）
+
+- `POST /api/payment/prepay` / `POST /api/payments/create` 在微信 Native 下单遇到 `ORDERPAID` 时，不再把该错误直接透传给前端；后端会使用同一个 `outTradeNo/providerOrderNo` 调用微信查单。
+- `POST /api/orders/:id/payment-status/refresh` 与 `POST /api/payment/orders/:id/status/refresh` 会在本地订单未 paid 时主动读取最新支付记录/订单 `outTradeNo`，对微信订单调用查单；仅 `trade_state=SUCCESS` 会进入统一 `PaymentCallbackService` 结算。
+- 微信查单归一化字段包括 `channel=wechat`、`providerOrderNo`、`providerTradeNo/transaction_id`、`amount`、`paidAt`、`tradeStatus`、`success`、`raw`；`NOTPAY/USERPAYING/CLOSED/PAYERROR` 均不入账。
+- `refresh/prepay` 若查单成功并完成结算，返回 `paid=true`、`paymentStatus=SUCCEEDED` 和站内 `redirectUrl`；若微信提示已支付但查单未成功，返回 `paid=false` 与明确 message，前端继续提示用户稍后刷新。

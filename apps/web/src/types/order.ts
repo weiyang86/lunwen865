@@ -47,6 +47,7 @@ export type ThesisOrderStatus =
   | 'in_progress'
   | 'pending_final_payment'
   | 'completed'
+  | 'expired'
   | 'cancelled'
   | 'after_sale'
   | 'refunding'
