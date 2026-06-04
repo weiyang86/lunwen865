@@ -111,6 +111,16 @@ export function ClientTopicWorkbench({
     return parts.join('、');
   }, [preferredStyleCustom, preferredStyleSelected]);
 
+  const isFailedStateError = useCallback((err: unknown) => {
+    const msg = getApiErrorMessage(err, '');
+    return msg.includes('状态 FAILED');
+  }, []);
+
+  const retryTaskIfFailed = useCallback(async () => {
+    if (!taskId) return;
+    await clientHttp.post(`/tasks/${taskId}/retry`);
+  }, [taskId]);
+
   const emptyReason = useMemo(() => {
     if (!taskId) return '请先提供 taskId（例如：/tasks?taskId=xxx）';
     if (!items.length) return '当前任务还没有题目候选，先提交一次生成。';
@@ -190,7 +200,13 @@ export function ClientTopicWorkbench({
       setSubmitting(true);
       setError(null);
       startProgress();
-      await clientHttp.post(`/tasks/${taskId}/topics/generate`, payload);
+      try {
+        await clientHttp.post(`/tasks/${taskId}/topics/generate`, payload);
+      } catch (err: unknown) {
+        if (!isFailedStateError(err)) throw err;
+        await retryTaskIfFailed();
+        await clientHttp.post(`/tasks/${taskId}/topics/generate`, payload);
+      }
       setViewMode('latest');
       await loadCandidates('latest');
       finishProgress();
@@ -228,7 +244,13 @@ export function ClientTopicWorkbench({
       setRegenerating(true);
       setError(null);
       startProgress();
-      await clientHttp.post(`/tasks/${taskId}/topics/regenerate`, payload);
+      try {
+        await clientHttp.post(`/tasks/${taskId}/topics/regenerate`, payload);
+      } catch (err: unknown) {
+        if (!isFailedStateError(err)) throw err;
+        await retryTaskIfFailed();
+        await clientHttp.post(`/tasks/${taskId}/topics/regenerate`, payload);
+      }
       setViewMode('latest');
       await loadCandidates('latest');
       finishProgress();
@@ -276,9 +298,18 @@ export function ClientTopicWorkbench({
     try {
       setSelectingId(candidate.id);
       setError(null);
-      const updated = await clientHttp.post<TopicCandidate>(
-        `/tasks/${taskId}/topics/${candidate.id}/select`,
-      );
+      let updated: TopicCandidate;
+      try {
+        updated = await clientHttp.post<TopicCandidate>(
+          `/tasks/${taskId}/topics/${candidate.id}/select`,
+        );
+      } catch (err: unknown) {
+        if (!isFailedStateError(err)) throw err;
+        await retryTaskIfFailed();
+        updated = await clientHttp.post<TopicCandidate>(
+          `/tasks/${taskId}/topics/${candidate.id}/select`,
+        );
+      }
       await loadCandidates(viewMode);
       onTopicConfirmed?.(updated);
     } catch (err: unknown) {
@@ -303,14 +334,25 @@ export function ClientTopicWorkbench({
     try {
       setCustomSubmitting(true);
       setError(null);
-      const updated = await clientHttp.post<TopicCandidate>(
-        `/tasks/${taskId}/topics/custom-select`,
-        {
-          title,
-          type: customType,
-          note: customNote.trim() ? customNote.trim() : undefined,
-        },
-      );
+      let updated: TopicCandidate;
+      const body = {
+        title,
+        type: customType,
+        note: customNote.trim() ? customNote.trim() : undefined,
+      };
+      try {
+        updated = await clientHttp.post<TopicCandidate>(
+          `/tasks/${taskId}/topics/custom-select`,
+          body,
+        );
+      } catch (err: unknown) {
+        if (!isFailedStateError(err)) throw err;
+        await retryTaskIfFailed();
+        updated = await clientHttp.post<TopicCandidate>(
+          `/tasks/${taskId}/topics/custom-select`,
+          body,
+        );
+      }
       setViewMode('latest');
       await loadCandidates('latest');
       onTopicConfirmed?.(updated);

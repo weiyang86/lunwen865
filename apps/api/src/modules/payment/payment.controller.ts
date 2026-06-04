@@ -16,11 +16,15 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PrepayDto } from './dto/prepay.dto';
 import { PaymentService } from './payment.service';
+import { ReconcileService } from './reconcile.service';
 
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) {}
+  constructor(
+    private readonly paymentService: PaymentService,
+    private readonly reconcileService: ReconcileService,
+  ) {}
 
   @Post('payments/create')
   createPayment(
