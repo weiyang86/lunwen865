@@ -6,6 +6,7 @@ import {
   Sparkles,
   Store,
   Package,
+  School,
   Rocket,
   Settings,
   type LucideIcon,
@@ -35,6 +36,16 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Prompt 模板', href: '/admin/prompts', icon: Sparkles },
   { label: '门店管理', href: '/admin/stores', icon: Store },
   { label: '商品管理', href: '/admin/products', icon: Package },
+  {
+    label: '学术基础数据',
+    icon: School,
+    children: [
+      { label: '高校管理', href: '/admin/academic/schools' },
+      { label: '学院管理', href: '/admin/academic/colleges' },
+      { label: '专业管理', href: '/admin/academic/majors' },
+      { label: '学科目录', href: '/admin/academic/disciplines' },
+    ],
+  },
   {
     label: '部署中心',
     icon: Rocket,

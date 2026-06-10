@@ -265,6 +265,12 @@ enum ExportTemplate {
   CUSTOM
 }
 
+// ============ 学术基础数据 ============
+enum AcademicStatus {
+  ACTIVE
+  INACTIVE
+}
+
 // ============ 配额 ============
 enum QuotaType {
   BRAIN_CELL
@@ -418,6 +424,165 @@ model User {
   @@index([email])
   @@index([role, status])
   @@index([createdAt])
+}
+
+//////////////////////////////////////////////////////
+// Academic（学术基础数据）
+//////////////////////////////////////////////////////
+
+model AcademicProvince {
+  id        String         @id @default(cuid())
+  name      String         @db.VarChar(100)
+  code      String         @unique @db.VarChar(50)
+  sortOrder Int            @default(0)
+  status    AcademicStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  cities  AcademicCity[]
+  schools AcademicSchool[]
+
+  @@index([status, sortOrder])
+}
+
+model AcademicCity {
+  id         String         @id @default(cuid())
+  provinceId String
+  name       String         @db.VarChar(100)
+  code       String         @db.VarChar(50)
+  sortOrder  Int            @default(0)
+  status     AcademicStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  province AcademicProvince @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  schools  AcademicSchool[]
+
+  @@unique([provinceId, code])
+  @@index([provinceId, status, sortOrder])
+}
+
+model AcademicSchool {
+  id              String         @id @default(cuid())
+  provinceId      String
+  cityId          String
+  name            String         @db.VarChar(150)
+  code            String?        @unique @db.VarChar(50)
+  schoolType      String?        @db.VarChar(50)
+  educationLevels String[]       @default([])
+  status          AcademicStatus @default(ACTIVE)
+  sortOrder       Int            @default(0)
+  remark          String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  province AcademicProvince  @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  city     AcademicCity      @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  colleges AcademicCollege[]
+  majors   AcademicMajor[]
+
+  @@index([provinceId, status, sortOrder])
+  @@index([cityId, status, sortOrder])
+  @@index([name])
+}
+
+model AcademicCollege {
+  id        String         @id @default(cuid())
+  schoolId  String
+  name      String         @db.VarChar(150)
+  code      String?        @db.VarChar(50)
+  status    AcademicStatus @default(ACTIVE)
+  sortOrder Int            @default(0)
+  remark    String?        @db.Text
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  school AcademicSchool  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  majors AcademicMajor[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, code])
+  @@index([schoolId, status, sortOrder])
+}
+
+model AcademicMajor {
+  id                   String         @id @default(cuid())
+  schoolId             String
+  collegeId            String?
+  disciplineCategoryId String?
+  disciplineLevelOneId String?
+  disciplineLevelTwoId String?
+  name                 String         @db.VarChar(150)
+  code                 String?        @db.VarChar(50)
+  educationLevel       String?        @db.VarChar(40)
+  status               AcademicStatus @default(ACTIVE)
+  sortOrder            Int            @default(0)
+  remark               String?        @db.Text
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  school             AcademicSchool      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  college            AcademicCollege?    @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  disciplineCategory DisciplineCategory? @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
+  disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
+  disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, collegeId, name, educationLevel])
+  @@index([schoolId, status, sortOrder])
+  @@index([collegeId, status, sortOrder])
+  @@index([disciplineCategoryId])
+  @@index([disciplineLevelOneId])
+  @@index([disciplineLevelTwoId])
+}
+
+model DisciplineCategory {
+  id        String         @id @default(cuid())
+  name      String         @db.VarChar(100)
+  code      String         @unique @db.VarChar(50)
+  sortOrder Int            @default(0)
+  status    AcademicStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  levelOnes DisciplineLevelOne[]
+  majors    AcademicMajor[]
+
+  @@index([status, sortOrder])
+}
+
+model DisciplineLevelOne {
+  id         String         @id @default(cuid())
+  categoryId String
+  name       String         @db.VarChar(100)
+  code       String         @db.VarChar(50)
+  sortOrder  Int            @default(0)
+  status     AcademicStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  category  DisciplineCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  levelTwos DisciplineLevelTwo[]
+  majors    AcademicMajor[]
+
+  @@unique([categoryId, code])
+  @@index([categoryId, status, sortOrder])
+}
+
+model DisciplineLevelTwo {
+  id         String         @id @default(cuid())
+  levelOneId String
+  name       String         @db.VarChar(100)
+  code       String         @db.VarChar(50)
+  sortOrder  Int            @default(0)
+  status     AcademicStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  levelOne DisciplineLevelOne @relation(fields: [levelOneId], references: [id], onDelete: Restrict)
+  majors   AcademicMajor[]
+
+  @@unique([levelOneId, code])
+  @@index([levelOneId, status, sortOrder])
 }
 
 //////////////////////////////////////////////////////

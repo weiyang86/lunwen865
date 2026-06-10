@@ -320,3 +320,22 @@
 - 机构端仅能访问所属机构订单/任务，并且不能跨机构读取学校模板中的非公开配置。
 - 管理端高危动作（回滚版本、禁用模板、发布 Skill）必须写审计日志。
 - 新增错误码建议：`ACADEMIC_*`, `SKILL_*`, `WORKBENCH_*`, `FORMAT_TEMPLATE_*`, `COMPLIANCE_*`。
+
+## Academic-01 学术基础数据接口（Issue #137 已实现）
+
+### 公开查询 API（用于论文任务创建表单联动）
+- `GET /api/academic/provinces`：查询启用省份。
+- `GET /api/academic/cities?provinceId=`：按省份查询启用城市。
+- `GET /api/academic/schools?provinceId=&cityId=&keyword=&page=&pageSize=`：查询启用高校。
+- `GET /api/academic/colleges?schoolId=&page=&pageSize=`：按高校查询启用学院。
+- `GET /api/academic/majors?schoolId=&collegeId=&educationLevel=&keyword=&page=&pageSize=`：按高校/学院/学历层次查询启用专业。
+- `GET /api/academic/disciplines/categories`：查询启用学科门类。
+- `GET /api/academic/disciplines/level-ones?categoryId=`：按门类查询启用一级学科。
+- `GET /api/academic/disciplines/level-twos?levelOneId=`：按一级学科查询启用二级学科/具体专业。
+
+### 后台管理 API
+- 高校：`GET /api/admin/academic/schools`、`POST /api/admin/academic/schools`、`PATCH /api/admin/academic/schools/:id`、`DELETE /api/admin/academic/schools/:id`。
+- 学院：`GET /api/admin/academic/colleges`、`POST /api/admin/academic/colleges`、`PATCH /api/admin/academic/colleges/:id`、`DELETE /api/admin/academic/colleges/:id`。
+- 专业：`GET /api/admin/academic/majors`、`POST /api/admin/academic/majors`、`PATCH /api/admin/academic/majors/:id`、`DELETE /api/admin/academic/majors/:id`。
+- 学科目录：`GET /api/admin/academic/disciplines`、`POST/PATCH/DELETE /api/admin/academic/disciplines/categories`、`POST/PATCH/DELETE /api/admin/academic/disciplines/level-ones`、`POST/PATCH/DELETE /api/admin/academic/disciplines/level-twos`。
+- `DELETE` 接口为软禁用，实际将 `status` 更新为 `INACTIVE`；重新启用通过对应 `PATCH` 接口传 `status=ACTIVE`。

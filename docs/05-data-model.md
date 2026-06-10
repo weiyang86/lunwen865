@@ -191,3 +191,13 @@
 - `Task.schoolId` 等既有字段需先梳理实际类型和使用位置；若名称含义与新 `University` 不一致，优先新增 `TaskAcademicProfile`，避免破坏旧任务。
 - 历史任务缺少学校/专业时，工作台显示“待补充”，AI 生成仍可使用现有任务标题与用户输入兜底。
 - 导出升级需保留旧 `ExportTask` 调用路径，新增版本化导出参数后再逐步迁移前端。
+
+### 补充（Academic-01 / Issue #137）：学术基础数据落地模型
+- 新增 `AcademicStatus`：`ACTIVE`、`INACTIVE`，用于学术基础数据启停用和软删除。
+- 新增 `AcademicProvince`：`id`、`name`、`code`、`sortOrder`、`status`、`createdAt`、`updatedAt`；与 `AcademicCity`、`AcademicSchool` 为 1:N。
+- 新增 `AcademicCity`：`id`、`provinceId`、`name`、`code`、`sortOrder`、`status`、`createdAt`、`updatedAt`；与 `AcademicSchool` 为 1:N。
+- 新增 `AcademicSchool`：`id`、`provinceId`、`cityId`、`name`、`code`、`schoolType`、`educationLevels`、`status`、`sortOrder`、`remark`、时间字段；与 `AcademicCollege`、`AcademicMajor` 为 1:N。
+- 新增 `AcademicCollege`：`id`、`schoolId`、`name`、`code`、`status`、`sortOrder`、`remark`、时间字段；与 `AcademicMajor` 为 1:N。
+- 新增 `DisciplineCategory`、`DisciplineLevelOne`、`DisciplineLevelTwo`，分别承载学科门类、一级学科、二级学科/具体专业目录，关系为 `DisciplineCategory 1:N DisciplineLevelOne 1:N DisciplineLevelTwo`。
+- 新增 `AcademicMajor`：关联 `AcademicSchool`、可选关联 `AcademicCollege`，并可选关联 `DisciplineCategory`、`DisciplineLevelOne`、`DisciplineLevelTwo`；同时记录专业名称、编码、学历层次、排序、状态和备注。
+- 本次 migration 名称：`20260610090000_add_academic_data`。本 Issue 不改造 `Task` 结构，后续 Task-01 再将任务创建流程接入学术基础数据。
