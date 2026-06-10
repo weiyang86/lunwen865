@@ -176,3 +176,166 @@
 - `POST /api/orders/:id/payment-status/refresh` 与 `POST /api/payment/orders/:id/status/refresh` 会在本地订单未 paid 时主动读取最新支付记录/订单 `outTradeNo`，对微信订单调用查单；仅 `trade_state=SUCCESS` 会进入统一 `PaymentCallbackService` 结算。
 - 微信查单归一化字段包括 `channel=wechat`、`providerOrderNo`、`providerTradeNo/transaction_id`、`amount`、`paidAt`、`tradeStatus`、`success`、`raw`；`NOTPAY/USERPAYING/CLOSED/PAYERROR` 均不入账。
 - `refresh/prepay` 若查单成功并完成结算，返回 `paid=true`、`paymentStatus=SUCCEEDED` 和站内 `redirectUrl`；若微信提示已支付但查单未成功，返回 `paid=false` 与明确 message，前端继续提示用户稍后刷新。
+
+## 论文交付工作台升级建议 API（规划）
+
+> 本节为后续 Issue 的接口契约草案。当前不要求一次性实现，落地时需保持现有订单、支付、任务、导出接口兼容。
+
+### Academic Data：学术基础数据
+#### C/B/管理通用查询
+- `GET /api/academic/provinces`
+  - Query：`keyword?`, `status?`
+  - 返回：省份列表。
+- `GET /api/academic/cities?provinceId=...`
+  - 返回：城市列表。
+- `GET /api/academic/universities`
+  - Query：`provinceId?`, `cityId?`, `keyword?`, `page`, `pageSize`
+  - 返回：高校分页列表。
+- `GET /api/academic/universities/:id/colleges`
+  - 返回：高校下学院/系列表。
+- `GET /api/academic/disciplines/categories`
+  - 返回：学科门类列表。
+- `GET /api/academic/disciplines/first-level?categoryId=...`
+  - 返回：一级学科列表。
+- `GET /api/academic/majors`
+  - Query：`firstLevelId?`, `universityId?`, `collegeId?`, `keyword?`, `page`, `pageSize`
+  - 返回：专业/二级学科列表。
+
+#### 管理端维护
+- `POST /api/admin/academic/provinces`
+- `PATCH /api/admin/academic/provinces/:id`
+- `POST /api/admin/academic/cities`
+- `PATCH /api/admin/academic/cities/:id`
+- `POST /api/admin/academic/universities`
+- `PATCH /api/admin/academic/universities/:id`
+- `POST /api/admin/academic/universities/:id/colleges`
+- `PATCH /api/admin/academic/colleges/:id`
+- `POST /api/admin/academic/disciplines/categories`
+- `PATCH /api/admin/academic/disciplines/categories/:id`
+- `POST /api/admin/academic/disciplines/first-level`
+- `PATCH /api/admin/academic/disciplines/first-level/:id`
+- `POST /api/admin/academic/majors`
+- `PATCH /api/admin/academic/majors/:id`
+- `POST /api/admin/academic/import`
+  - 用途：批量导入学校、学院、专业。
+  - 要求：必须返回成功数、失败数、失败行原因；不得静默丢弃错误。
+
+### Task Academic Profile：任务学术上下文
+- `GET /api/tasks/:taskId/academic-profile`
+  - 权限：任务所有者、所属机构成员、任务 assignee、管理员。
+  - 返回：学校、学院、专业、学历层次、论文类型、研究方向、导师要求、格式要求。
+- `PUT /api/tasks/:taskId/academic-profile`
+  - Body：`provinceId?`, `cityId?`, `universityId?`, `collegeId?`, `majorId?`, `universityMajorId?`, `educationLevel`, `thesisType`, `researchDirection?`, `advisorRequirements?`, `formatRequirementText?`
+  - 要求：写入快照字段；更新后记录审计日志。
+- `PUT /api/admin/tasks/:taskId/academic-profile`
+  - 管理端纠偏接口，可修改任意任务但必须提交 `reason`。
+- `PUT /api/agency/tasks/:taskId/academic-profile`
+  - 机构端仅允许修改所属机构任务，并受任务状态限制。
+
+### Thesis Skill：论文 Skill 中心
+#### 管理端
+- `GET /api/admin/thesis-skills`
+  - Query：`stage?`, `status?`, `keyword?`, `page`, `pageSize`。
+- `POST /api/admin/thesis-skills`
+  - Body：`code`, `name`, `description?`, `stage`。
+- `PATCH /api/admin/thesis-skills/:id`
+- `POST /api/admin/thesis-skills/:id/versions`
+  - Body：`version`, `inputSchema`, `outputSchema`, `qualityRules`, `modelConfig`, `promptRefId?`, `releaseNote?`。
+- `POST /api/admin/thesis-skill-versions/:versionId/publish`
+- `POST /api/admin/thesis-skill-versions/:versionId/disable`
+- `POST /api/admin/thesis-skill-versions/:versionId/scopes`
+  - Body：学历层次、论文类型、学校、专业、阶段、优先级等适用范围。
+
+#### 运行与查询
+- `POST /api/tasks/:taskId/skills/:stage/run`
+  - Body：`skillVersionId?`, `input`, `idempotencyKey`。
+  - 返回：`skillRunId`, `status`, `estimatedCost?`。
+  - 要求：如不传 `skillVersionId`，后端按任务上下文和 Scope 匹配；必须写入运行记录。
+- `GET /api/tasks/:taskId/skill-runs`
+  - Query：`stage?`, `status?`。
+- `GET /api/admin/skill-runs/:id`
+  - 管理端排障查看输入摘要、输出摘要、质量检查结果和错误信息；敏感字段需脱敏。
+
+### Thesis Workbench：论文文档工作台
+- `GET /api/tasks/:taskId/workbench`
+  - 返回：任务基础信息、学术上下文、阶段文档列表、当前阶段、合规提示、可用导出模板摘要。
+- `GET /api/tasks/:taskId/documents`
+  - Query：`stage?`。
+- `POST /api/tasks/:taskId/documents`
+  - Body：`stage`, `title`, `source?`。
+- `GET /api/tasks/:taskId/documents/:documentId`
+  - 返回：文档元信息、章节树、当前版本、导师意见状态。
+- `POST /api/tasks/:taskId/documents/:documentId/chapters`
+  - Body：`parentId?`, `title`, `content?`, `sortOrder?`。
+- `PATCH /api/tasks/:taskId/documents/:documentId/chapters/:chapterId`
+  - Body：`title?`, `content?`, `sortOrder?`, `status?`, `expectedVersion`。
+  - 要求：使用乐观锁或更新时间校验，避免覆盖他人修改。
+- `POST /api/tasks/:taskId/documents/:documentId/merge`
+  - 用途：按大纲/章节内容生成合稿。
+- `POST /api/tasks/:taskId/documents/:documentId/versions`
+  - Body：`source`, `changeSummary?`。
+- `GET /api/tasks/:taskId/documents/:documentId/versions`
+- `POST /api/tasks/:taskId/documents/:documentId/versions/:versionId/rollback`
+  - Body：`reason`。
+
+### Advisor Revision：导师意见修改记录
+- `POST /api/tasks/:taskId/advisor-revisions`
+  - Body：`documentId?`, `chapterId?`, `advisorComment`, `attachments?`。
+- `GET /api/tasks/:taskId/advisor-revisions`
+  - Query：`status?`, `documentId?`。
+- `POST /api/tasks/:taskId/advisor-revisions/:id/resolve`
+  - Body：`changeSummary`, `afterSnapshot?`, `documentVersionId?`。
+- `POST /api/tasks/:taskId/advisor-revisions/:id/reopen`
+  - Body：`reason`。
+
+### Format Template：格式模板引擎
+#### 管理端
+- `GET /api/admin/format-templates`
+  - Query：`type?`, `stage?`, `status?`, `universityId?`, `majorId?`, `page`, `pageSize`。
+- `POST /api/admin/format-templates`
+  - Body：`code`, `name`, `type`, `stage?`, `formatRules`, `fileTemplateUrl?`, `description?`。
+- `PATCH /api/admin/format-templates/:id`
+- `POST /api/admin/format-templates/:id/scopes`
+- `POST /api/admin/format-templates/:id/disable`
+- `POST /api/admin/format-templates/parse-requirements`
+  - Body：`formatRequirementText`, `taskId?`。
+  - 返回：`formatRequirementJson`, `confidence`, `unresolvedItems`。
+
+#### 导出接入
+- `GET /api/tasks/:taskId/export-templates`
+  - Query：`stage?`。
+  - 返回：按优先级排序的可用模板，标记默认模板。
+- `POST /api/tasks/:taskId/exports`
+  - Body 扩展：`documentVersionId`, `stage`, `templateId?`, `formatRequirementText?`, `formatRequirementJson?`, `format`。
+  - 要求：保留旧导出参数兼容；新参数存在时以文档版本和模板规则生成导出任务。
+
+### Compliance：合规提示与引用核验
+- `GET /api/tasks/:taskId/compliance-notices`
+- `POST /api/tasks/:taskId/compliance-notices/:noticeId/acknowledge`
+- `GET /api/tasks/:taskId/references/verification-summary`
+  - 返回：已核验、待核验、缺失字段、疑似伪造风险项数量。
+
+### 权限与错误码补充
+- 学生端仅能访问自己的任务工作台。
+- 机构端仅能访问所属机构订单/任务，并且不能跨机构读取学校模板中的非公开配置。
+- 管理端高危动作（回滚版本、禁用模板、发布 Skill）必须写审计日志。
+- 新增错误码建议：`ACADEMIC_*`, `SKILL_*`, `WORKBENCH_*`, `FORMAT_TEMPLATE_*`, `COMPLIANCE_*`。
+
+## Academic-01 学术基础数据接口（Issue #137 已实现）
+
+### 公开查询 API（用于论文任务创建表单联动）
+- `GET /api/academic/provinces`：查询启用省份。
+- `GET /api/academic/cities?provinceId=`：按省份查询启用城市。
+- `GET /api/academic/schools?provinceId=&cityId=&keyword=&page=&pageSize=`：查询启用高校。
+- `GET /api/academic/colleges?schoolId=&page=&pageSize=`：按高校查询启用学院。
+- `GET /api/academic/majors?schoolId=&collegeId=&educationLevel=&keyword=&page=&pageSize=`：按高校/学院/学历层次查询启用专业。
+- `GET /api/academic/disciplines/categories`：查询启用学科门类。
+- `GET /api/academic/disciplines/level-ones?categoryId=`：按门类查询启用一级学科。
+- `GET /api/academic/disciplines/level-twos?levelOneId=`：按一级学科查询启用二级学科/具体专业。
+
+### 后台管理 API
+- 高校：`GET /api/admin/academic/schools`、`POST /api/admin/academic/schools`、`PATCH /api/admin/academic/schools/:id`、`DELETE /api/admin/academic/schools/:id`。
+- 学院：`GET /api/admin/academic/colleges`、`POST /api/admin/academic/colleges`、`PATCH /api/admin/academic/colleges/:id`、`DELETE /api/admin/academic/colleges/:id`。
+- 专业：`GET /api/admin/academic/majors`、`POST /api/admin/academic/majors`、`PATCH /api/admin/academic/majors/:id`、`DELETE /api/admin/academic/majors/:id`。
+- 学科目录：`GET /api/admin/academic/disciplines`、`POST/PATCH/DELETE /api/admin/academic/disciplines/categories`、`POST/PATCH/DELETE /api/admin/academic/disciplines/level-ones`、`POST/PATCH/DELETE /api/admin/academic/disciplines/level-twos`。
+- `DELETE` 接口为软禁用，实际将 `status` 更新为 `INACTIVE`；重新启用通过对应 `PATCH` 接口传 `status=ACTIVE`。
