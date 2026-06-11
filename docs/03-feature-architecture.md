@@ -103,3 +103,10 @@
 - `/student/tasks/[taskId]/compose-format` 复用原论文文档能力，仅调整为合稿与格式语义，不改变 `ThesisDocument`、章节、导师意见或版本记录数据模型。
 - `/student/tasks/[taskId]/word-editor` 为 ONLYOFFICE 接入前占位页；`/student/tasks/[taskId]/delivery` 首期复用下载中心和既有导出记录。
 - 旧 `/student/tasks/[taskId]/workbench` 通过 redirect 兼容到 `/student/tasks/[taskId]/compose-format`，避免破坏历史链接。
+
+## Workbench-Format-01 合稿与格式：预设论文格式模板应用
+- 合稿与格式中的 `ThesisDocument` 是生成 Word 初稿前的结构化主版本；论文内容生成产物仍作为阶段素材，需合并进 `ThesisDocument` 后才进入最终论文文档链路。
+- 格式模板能力复用 Export-01 已建立的 `ThesisFormatTemplate` 与 `ThesisFormatRule`，模板可按 Academic-01 的高校、学院、专业，以及 Task-01 的学历层次、论文类型、阶段上下文进行匹配。
+- 新增 `ThesisDocumentFormatSetting` 保存某篇论文当前应用的模板、局部覆盖规则、预览模式和自定义格式要求；应用模板只写入排版配置，不修改 `ThesisDocumentSection.content`，避免在正文中写入 inline style。
+- 学生端通过 `/thesis-tasks/:taskId/format-templates` 获取推荐模板，通过 `/thesis-documents/:documentId/format-setting` 读取/保存当前配置，通过 `/thesis-documents/:documentId/apply-format-template` 明确应用模板。
+- 后续 Export-DOCX-01 生成 Word 初稿时应读取 `ThesisDocument`、`ThesisDocumentSection`、`ThesisFormatTemplate`、`ThesisFormatRule` 与 `ThesisDocumentFormatSetting`，按“模板规则 + overrideRules + customRequirement”的优先级形成 DOCX 样式输入。

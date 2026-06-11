@@ -231,3 +231,18 @@
 - 新增 `ThesisExportFile`：导出文件表，一个导出任务可关联多个文件；首期只生成 DOCX 文件，保存 `fileName`、`fileUrl`、`fileType`、`fileSize` 和 `storageProvider`。
 - 模板匹配规则：专业模板 > 学院模板 > 学校模板 > 学历/论文类型/阶段通用模板 > 全局默认模板；同级按 `isDefault=true`、`sortOrder` 小、`version` 新排序；只匹配 `ENABLED` 模板。
 - migration：`20260611150000_add_thesis_export_engine`。旧 `ExportTask` 保留用于历史导出记录和旧下载链接兼容。
+
+## Workbench-Format-01 论文格式模板与文档格式配置
+
+### ThesisFormatTemplate
+- 保存预设论文格式模板，字段包括 `name`、`code`、`description`、`schoolId`、`collegeId`、`majorId`、`educationLevel`、`thesisType`、`stage`、`templateType`、`isDefault`、`status`、`version`、`sortOrder`。
+- `schoolId`、`collegeId`、`majorId` 均可为空；为空表示更通用的模板范围。示例高校模板必须标注“示例/非官方”，不得描述为官方模板。
+
+### ThesisFormatRule
+- 保存模板下的具体格式规则，字段包括 `templateId`、`ruleType`、`ruleKey`、`ruleValue`、`description`、`sortOrder`。
+- `ruleValue` 使用 JSON，用于表达页面、封面、标题、摘要、关键词、正文、标题层级、目录、参考文献、页眉页脚等格式配置。
+
+### ThesisDocumentFormatSetting
+- 保存某篇 `ThesisDocument` 当前应用的格式配置，字段包括 `documentId`、`templateId`、`overrideRules`、`customRequirement`、`previewMode`。
+- `documentId` 唯一，首期一篇论文只保留一条当前格式配置；`templateId` 可为空，以支持暂无模板时先保存自定义格式要求。
+- `overrideRules` 与 `customRequirement` 只影响后续导出排版配置，不直接修改 `ThesisDocumentSection` 正文内容。

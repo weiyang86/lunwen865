@@ -1,12 +1,25 @@
-import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import * as fs from 'node:fs';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
+  ApplyFormatTemplateDto,
   CreateThesisExportJobDto,
   ExportOptionsQueryDto,
+  GetTaskFormatTemplatesDto,
+  UpdateThesisDocumentFormatSettingDto,
 } from './dto/thesis-format-template.dto';
 import { ThesisExportService } from './thesis-export.service';
+import { ThesisExportTemplateService } from './thesis-export-template.service';
 
 function actor(id?: unknown, role?: unknown) {
   const roleText = typeof role === 'string' ? role : undefined;
@@ -22,7 +35,65 @@ function actor(id?: unknown, role?: unknown) {
 
 @Controller()
 export class ThesisExportController {
-  constructor(private readonly service: ThesisExportService) {}
+  constructor(
+    private readonly service: ThesisExportService,
+    private readonly templates: ThesisExportTemplateService,
+  ) {}
+
+  @Get('thesis-tasks/:taskId/format-templates')
+  formatTemplates(
+    @Param('taskId') taskId: string,
+    @Query() query: GetTaskFormatTemplatesDto,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.templates.getTaskFormatTemplates(
+      taskId,
+      query,
+      actor(userId, role),
+    );
+  }
+
+  @Get('thesis-documents/:documentId/format-setting')
+  getFormatSetting(
+    @Param('documentId') documentId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.templates.getDocumentFormatSetting(
+      documentId,
+      actor(userId, role),
+    );
+  }
+
+  @Patch('thesis-documents/:documentId/format-setting')
+  saveFormatSetting(
+    @Param('documentId') documentId: string,
+    @Body() dto: UpdateThesisDocumentFormatSettingDto,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.templates.saveDocumentFormatSetting(
+      documentId,
+      dto,
+      actor(userId, role),
+    );
+  }
+
+  @Post('thesis-documents/:documentId/apply-format-template')
+  applyFormatTemplate(
+    @Param('documentId') documentId: string,
+    @Body() dto: ApplyFormatTemplateDto,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.templates.applyFormatTemplate(
+      documentId,
+      dto.templateId,
+      dto.keepOverrides,
+      actor(userId, role),
+    );
+  }
 
   @Get('thesis-tasks/:taskId/export-options')
   exportOptions(

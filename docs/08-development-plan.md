@@ -163,3 +163,10 @@
 - 兼容策略：旧 `/student/tasks/[taskId]/workbench` redirect 到 `/student/tasks/[taskId]/compose-format`；旧 `/tasks?taskId=...` 仍保留为论文内容生成的兼容入口。
 - 文案策略：原“阶段生成”统一展示为“论文内容生成”，原“文档工作台”统一展示为“合稿与格式”。
 - 验证重点：四阶段导航可访问；原生成能力、原论文文档能力、下载与导出入口可继续使用；订单、支付、AI 生成、导出功能不受影响。
+
+## Workbench-Format-01（Issue #148）实现记录
+- 已复用 `ThesisFormatTemplate` 与 `ThesisFormatRule`，新增 `ThesisDocumentFormatSetting` 记录当前论文应用模板、局部覆盖规则、自定义格式要求和预览模式。
+- 已补充默认 seed：通用本科毕业论文、通用专升本毕业论文、通用开题报告、通用论文大纲、通用课程论文、通用案例分析模板；示例高校模板继续标注“示例/非官方”。
+- 已新增学生端格式配置 API：任务模板推荐、文档格式配置读取/保存、应用模板到当前论文。格式配置不写入章节正文。
+- 已在合稿与格式右侧面板增加“格式设置”Tab，支持当前模板、模板切换、规则摘要、局部微调、自定义格式要求和近似预览提示。
+- 后续 Export-DOCX-01 将基于当前格式配置生成 Word 初稿；OnlyOffice-01 将基于生成的 Word 文件进行在线精修；Final-Delivery-01 将以 Word 文件版本作为最终交付依据。

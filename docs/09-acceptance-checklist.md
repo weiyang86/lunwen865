@@ -236,3 +236,17 @@
 - [ ] `/student/tasks/[taskId]/delivery` 可访问，首期可引导用户打开现有下载中心。
 - [ ] 旧 `/student/tasks/[taskId]/workbench` 可 redirect 到 `/student/tasks/[taskId]/compose-format`，旧 `/tasks?taskId=...` 兼容访问论文内容生成。
 - [ ] 订单、支付、AI 生成、导出功能不因 Task-UX-01 改变接口路径、数据结构或状态流转。
+
+## Workbench-Format-01 合稿与格式模板应用验收项
+- [ ] Prisma migration `20260611170000_add_thesis_document_format_setting` 可执行，历史任务、历史文档和历史导出记录不受影响。
+- [ ] seed 后存在通用本科毕业论文、通用专升本毕业论文、通用开题报告、通用论文大纲、通用课程论文、通用案例分析模板。
+- [ ] 后台 `/admin/thesis-format-templates` 可按关键词、学校、专业、学历、论文类型、阶段、状态、模板类型筛选模板。
+- [ ] 后台可以新建、编辑、启用/禁用模板，并新增/删除 JSON 格式规则；JSON 错误时有明确提示。
+- [ ] `GET /thesis-tasks/:taskId/format-templates` 仅返回 `ENABLED` 模板，并按专业、学院、学校、通用、全局默认优先级推荐。
+- [ ] `GET/PATCH /thesis-documents/:documentId/format-setting` 可读取和保存当前文档 `templateId`、`overrideRules`、`customRequirement`、`previewMode`。
+- [ ] `POST /thesis-documents/:documentId/apply-format-template` 可应用模板，且 `keepOverrides=false` 会清空局部调整。
+- [ ] 合稿与格式页面可看到“格式设置”Tab，展示当前模板、推荐模板、规则摘要、局部微调、自定义格式要求和近似预览提示。
+- [ ] 格式模板应用不修改 `ThesisDocumentSection.content`，章节正文保持干净。
+- [ ] 无可用模板时页面不崩溃，并提示联系管理员配置模板。
+- [ ] 学生不能读取或保存他人论文文档的格式配置；普通用户不能访问后台模板管理接口。
+- [ ] 原论文内容生成、合稿编辑、导师意见、版本记录、订单、支付、下载/导出基础能力不受影响。

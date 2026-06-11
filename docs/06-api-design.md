@@ -441,3 +441,27 @@
 ### 兼容说明
 - 旧版 `/api/export`、`/api/export/:id/download` 和 `ExportTask` 不删除，下载中心继续展示旧版下载记录。
 - 新版导出中心默认使用 `ThesisDocument`，后续 Export-02 可扩展 PDF 真实导出、模板 DOCX 上传、自动目录、页眉页脚和图表目录。
+
+## Workbench-Format-01 格式模板与文档格式配置 API
+
+### 后台模板管理 API
+- `GET /admin/thesis-format-templates`：模板列表，支持 `keyword`、`schoolId`、`collegeId`、`majorId`、`educationLevel`、`thesisType`、`stage`、`status`、`templateType` 筛选。
+- `POST /admin/thesis-format-templates`：创建模板。
+- `GET /admin/thesis-format-templates/:id`：模板详情，包含适用范围和规则。
+- `PATCH /admin/thesis-format-templates/:id`：更新模板，可启用/禁用、设置默认、调整版本和排序。
+- `DELETE /admin/thesis-format-templates/:id`：软删除语义，当前实现为将模板状态更新为 `DISABLED`。
+
+### 后台规则管理 API
+- `GET /admin/thesis-format-templates/:id/rules`：查询模板规则。
+- `POST /admin/thesis-format-templates/:id/rules`：新增规则，`ruleValue` 必须是合法 JSON。
+- `PATCH /admin/thesis-format-rules/:ruleId`：更新规则，`ruleValue` 必须是合法 JSON。
+- `DELETE /admin/thesis-format-rules/:ruleId`：删除规则。
+
+### 学生端模板推荐 API
+- `GET /thesis-tasks/:taskId/format-templates`：返回 `matchedTemplates`、`defaultTemplate`、`currentSetting`、`taskContext`、`warningMessages`。
+- 推荐优先级：专业精确匹配 > 学院精确匹配 > 学校精确匹配 > 学历/论文类型/阶段匹配的通用模板 > 全局通用默认模板；同级按 `isDefault`、`sortOrder`、`version` 排序，且仅推荐 `ENABLED` 模板。
+
+### 文档格式配置 API
+- `GET /thesis-documents/:documentId/format-setting`：返回当前文档格式配置；未配置时返回 `currentSetting: null` 和推荐 `defaultTemplate`。
+- `PATCH /thesis-documents/:documentId/format-setting`：保存 `templateId`、`overrideRules`、`customRequirement`、`previewMode`。
+- `POST /thesis-documents/:documentId/apply-format-template`：应用模板到当前论文；`keepOverrides=true` 保留局部调整，`false` 清空局部调整。该接口不修改章节正文。
