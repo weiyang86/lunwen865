@@ -305,6 +305,37 @@ enum ThesisSkillRunStatus {
   FAILED
 }
 
+// ============ 论文文档工作台 ============
+enum ThesisDocumentStatus {
+  DRAFT
+  EDITING
+  REVIEWING
+  FINALIZED
+}
+
+enum ThesisDocumentSectionType {
+  TITLE
+  ABSTRACT
+  KEYWORDS
+  CHAPTER
+  SECTION
+  REFERENCE
+  ACKNOWLEDGEMENT
+  APPENDIX
+}
+
+enum ThesisAdvisorCommentStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+enum ThesisDocumentMergeMode {
+  APPEND
+  REPLACE_SECTION
+  SMART_MERGE
+}
+
 // ============ 配额 ============
 enum QuotaType {
   BRAIN_CELL
@@ -452,6 +483,7 @@ model User {
   orders        Order[]
   primaryTutorOrders Order[] @relation("OrderPrimaryTutor")
   taskAdminLogs TaskAdminLog[] @relation("TaskAdminLogOperator")
+  thesisDocumentRevisions ThesisDocumentRevision[] @relation("ThesisDocumentRevisionOperator")
 // 新增这一行
   paymentRecords PaymentRecord[]
   @@index([phone])
@@ -861,6 +893,8 @@ model Task {
   adminLogs       TaskAdminLog[]
   order           Order?
   thesisSkillRuns ThesisSkillRun[]
+  thesisDocument ThesisDocument?
+  thesisAdvisorComments ThesisAdvisorComment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -883,6 +917,104 @@ model Task {
   @@index([title])
   @@index([createdAt])
   @@index([updatedAt])
+}
+
+
+//////////////////////////////////////////////////////
+// ThesisDocument（论文文档工作台）
+//////////////////////////////////////////////////////
+
+model ThesisDocument {
+  id             String               @id @default(cuid())
+  taskId         String               @unique
+  title          String               @db.VarChar(200)
+  abstract       String?              @db.Text
+  keywords       Json?
+  status         ThesisDocumentStatus @default(DRAFT)
+  currentVersion Int                  @default(1)
+  wordCount      Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  task            Task                     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sections        ThesisDocumentSection[]
+  revisions       ThesisDocumentRevision[]
+  advisorComments ThesisAdvisorComment[]
+
+  @@index([taskId])
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model ThesisDocumentSection {
+  id                    String                    @id @default(cuid())
+  documentId            String
+  parentId              String?
+  sectionType           ThesisDocumentSectionType @default(SECTION)
+  title                 String                    @db.VarChar(200)
+  content               String?                   @db.Text
+  plainText             String?                   @db.Text
+  sortOrder             Int                       @default(0)
+  level                 Int                       @default(1)
+  wordCount             Int                       @default(0)
+  sourceStage           String?                   @db.VarChar(40)
+  sourceGenerationRunId String?
+  deletedAt             DateTime?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  parent   ThesisDocumentSection?  @relation("ThesisDocumentSectionChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children ThesisDocumentSection[] @relation("ThesisDocumentSectionChildren")
+  revisions ThesisDocumentRevision[]
+  advisorComments ThesisAdvisorComment[]
+
+  @@index([documentId, parentId, sortOrder])
+  @@index([documentId, deletedAt])
+  @@index([sourceStage])
+  @@index([sourceGenerationRunId])
+}
+
+model ThesisDocumentRevision {
+  id            String   @id @default(cuid())
+  documentId    String
+  sectionId     String?
+  version       Int
+  beforeContent String?  @db.Text
+  afterContent  String?  @db.Text
+  changeSummary String?  @db.Text
+  operatorId    String?
+  operatorRole  String?  @db.VarChar(40)
+  createdAt     DateTime @default(now())
+
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  section  ThesisDocumentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  operator User? @relation("ThesisDocumentRevisionOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+  @@index([sectionId, createdAt])
+  @@index([operatorId])
+}
+
+model ThesisAdvisorComment {
+  id          String                     @id @default(cuid())
+  taskId      String
+  documentId  String
+  sectionId   String?
+  commentText String                     @db.Text
+  status      ThesisAdvisorCommentStatus @default(OPEN)
+  resolvedAt  DateTime?
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  section  ThesisDocumentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, status])
+  @@index([documentId, status])
+  @@index([sectionId])
+  @@index([createdAt])
 }
 
 enum AbstractStatus {

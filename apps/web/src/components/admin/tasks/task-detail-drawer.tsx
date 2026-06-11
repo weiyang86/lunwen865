@@ -585,6 +585,24 @@ export function TaskDetailDrawer({
                 </Field>
               </div>
 
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+                <div className="mb-2 text-sm font-medium text-slate-900">论文文档</div>
+                {data?.thesisDocument ? (
+                  <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                    <Field label="文档标题">{data.thesisDocument.title ?? '—'}</Field>
+                    <Field label="状态">{data.thesisDocument.status ?? '—'}</Field>
+                    <Field label="当前版本">v{data.thesisDocument.currentVersion ?? 1}</Field>
+                    <Field label="总字数">{data.thesisDocument.wordCount ?? 0}</Field>
+                    <Field label="章节数">{data.thesisDocument._count?.sections ?? 0}</Field>
+                    <Field label="导师意见">{data.thesisDocument._count?.advisorComments ?? 0}</Field>
+                    <Field label="最近修改">{data.thesisDocument.updatedAt ? formatDateTime(data.thesisDocument.updatedAt) : '—'}</Field>
+                    <Field label="学生端入口"><span className="font-mono text-xs text-slate-500">/student/tasks/{taskId}/workbench</span></Field>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">尚未初始化论文文档。学生可在文档工作台初始化。</div>
+                )}
+              </div>
+
               <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="text-sm font-medium text-slate-900">学术上下文维护</div>

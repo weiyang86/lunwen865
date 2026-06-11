@@ -599,9 +599,22 @@ export class AdminTasksService {
           assignee: { select: { id: true, nickname: true, email: true } },
         },
       });
+      const thesisDocument = await this.prisma.thesisDocument.findUnique({
+        where: { taskId: id },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          currentVersion: true,
+          wordCount: true,
+          updatedAt: true,
+          _count: { select: { sections: true, advisorComments: true } },
+        },
+      });
 
       return {
         ...detail,
+        thesisDocument,
         orders: order
           ? [
               {

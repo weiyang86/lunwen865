@@ -141,3 +141,10 @@
 - 已升级任务创建/编辑/详情接口：创建时校验启用学校、学院、专业和学科关系；专业可自动回填学科字段；详情返回 `academicContext` 与名称摘要。
 - 已升级后台任务列表与详情：列表展示学校/专业/学历/论文类型，后台详情可维护学术上下文；首期后台维护使用 ID 输入兼容，后续可抽取学生端联动选择器复用。
 - 已新增 `TaskService.buildGenerationContext`，为后续 AI 生成和 Skill 匹配接入提供统一上下文。后续 Task-02/AI-01 应将真实生成流程改为读取该上下文并调用 Skill-01 `resolveBestSkill`。
+
+## Workbench-01（Issue #140）实现记录
+- 已新增 `ThesisDocument`、`ThesisDocumentSection`、`ThesisDocumentRevision`、`ThesisAdvisorComment` 数据模型和 migration `20260611130000_add_thesis_document_workbench`。
+- 已新增 `thesis-document` NestJS 模块，支持文档查询/初始化、章节新增/编辑/删除、阶段内容合并、版本记录、导师意见创建与状态更新。
+- 已新增学生端页面 `/student/tasks/[taskId]/workbench`，提供任务摘要、目录树、章节编辑、保存状态、修改记录、导师意见、合稿弹窗和 AI 操作台占位。
+- 已在任务列表提供“文档工作台”入口，并在后台任务详情返回 `thesisDocument` 摘要。
+- 后续 Export-01 应从 `ThesisDocument` 与章节树读取结构化内容，按学校/专业模板生成 Word/PDF；后续 Skill 接入应基于当前章节和导师意见创建 SkillRun。

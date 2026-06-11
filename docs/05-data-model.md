@@ -215,3 +215,11 @@
 - 新增外键关系：Task 可选关联 `AcademicProvince`、`AcademicCity`、`AcademicSchool`、`AcademicCollege`、`AcademicMajor`、`DisciplineCategory`、`DisciplineLevelOne`、`DisciplineLevelTwo`，外键均采用 `ON DELETE SET NULL`，保证基础数据停用/清理不破坏历史任务。
 - `formatTemplateId` 为 Export-01 预留字段，本阶段只持久化，不接入格式模板匹配。
 - migration：`20260611100000_add_task_academic_context`。
+
+### 补充（Workbench-01 / Issue #140）：论文文档工作台模型
+- 新增 `ThesisDocument`：任务主论文文档，`taskId` 唯一，包含 `title`、`abstract`、`keywords`、`status`、`currentVersion`、`wordCount`。首期一个任务一份主文档。
+- 新增 `ThesisDocumentSection`：文档章节树，支持 `parentId` 层级、`sectionType`、`title`、`content`、`plainText`、`sortOrder`、`level`、`wordCount`、`sourceStage`、`sourceGenerationRunId` 和 `deletedAt` 软删除。
+- 新增 `ThesisDocumentRevision`：章节版本记录，每次章节内容变化时写入 `beforeContent`、`afterContent`、`changeSummary`、`operatorId`、`operatorRole` 和文档版本号；内容未变化不重复生成 revision。
+- 新增 `ThesisAdvisorComment`：导师意见/线下修改要求，关联任务、文档和可选章节，支持 `OPEN`、`RESOLVED`、`IGNORED` 状态。
+- 关系：`Task 1-1 ThesisDocument`，`ThesisDocument 1-N ThesisDocumentSection`，`ThesisDocumentSection 1-N ThesisDocumentRevision`，`ThesisAdvisorComment` 可绑定整篇文档或具体章节。
+- migration：`20260611130000_add_thesis_document_workbench`。

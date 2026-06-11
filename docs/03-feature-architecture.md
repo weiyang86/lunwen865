@@ -78,3 +78,12 @@
 - 后台任务详情新增学术上下文展示与维护入口，后台列表返回 `schoolName`、`majorName`、`educationLevel`、`thesisType`，并支持按 Academic 高校、专业、学历层次和论文类型筛选。
 - TaskService 新增 `buildGenerationContext(taskId, stage?, userRequirement?)`，统一生成 `ThesisGenerationContext`，供后续 AI 生成与 Skill-01 的 `resolveBestSkill` 基于学校、专业、学科、学历、论文类型和阶段匹配 Skill。
 - 本次不改造订单、支付、任务状态流转、导出任务或完整 AI 生成主流程；仅提供统一上下文与兼容接入点。
+
+## Workbench-01 论文文档工作台实现说明
+- Issue #140 已新增学生端论文文档工作台，将任务从“阶段生成/下载”扩展为“结构化文档 + 章节编辑 + 版本记录 + 导师意见”的持续交付空间。
+- 工作台与论文任务一一关联：`Task 1-1 ThesisDocument`，文档继承 Task-01 的学校、专业、学历层次、论文类型、研究方向、导师要求等上下文，用于顶部摘要、后续 AI/Skill 输入和导出模板匹配。
+- 工作台与 Skill 中心关系：章节保留 `sourceStage`、`sourceGenerationRunId`，AI 操作台首期为占位提示，后续可基于 Skill-01 对当前章节执行优化、导师意见修改、格式检查等能力。
+- 工作台与 AI 生成关系：`merge-stage-content` 首期从已选题目、开题报告、大纲、正文、参考文献或指定 `AiGenerationRun` 读取内容并转为文档章节，不重构现有 AI 生成链路。
+- 工作台与下载导出关系：原下载页面保留；工作台导出入口首期跳转 `/downloads`，后续 Export-01 从 `ThesisDocument` 读取结构化内容生成 Word/PDF。
+- 工作台与导师意见/版本记录关系：章节保存时产生 `ThesisDocumentRevision`，导师线下反馈可记录为 `ThesisAdvisorComment` 并标记已解决或忽略。
+- 合规边界：页面提示 AI 生成与编辑内容仅作为学习和写作辅助，学生需自行核验学校规范、导师要求、事实、数据、案例和引用。

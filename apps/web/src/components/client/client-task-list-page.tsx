@@ -330,9 +330,14 @@ export function ClientTaskListPage() {
                   <p className="mt-1 text-xs text-slate-500">{task.schoolName || '未绑定学校'} / {task.majorName || task.major} / {task.educationLevel} / {task.thesisType || '未指定类型'}</p>
                   <p className="text-xs text-slate-500">状态：{task.status}</p>
                 </div>
-                <Link href={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="rounded bg-slate-900 px-3 py-2 text-xs text-white hover:bg-slate-800">
-                  进入论文工作台
-                </Link>
+                <div className="flex gap-2">
+                  <Link href={`/student/tasks/${encodeURIComponent(task.id)}/workbench`} className="rounded bg-slate-900 px-3 py-2 text-xs text-white hover:bg-slate-800">
+                    文档工作台
+                  </Link>
+                  <Link href={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="rounded border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
+                    阶段生成
+                  </Link>
+                </div>
               </div>
             </li>
           ))}

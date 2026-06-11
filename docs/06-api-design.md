@@ -387,3 +387,26 @@
 ### AI / Skill 上下文
 - `TaskService.buildGenerationContext(taskId, stage?, userRequirement?)` 返回统一 `ThesisGenerationContext`：`taskId`、`taskTitle`、地区/学校/学院/专业/学科名称、`educationLevel`、`thesisType`、`stage`、`researchDirection`、`advisorRequirement`、`userRequirement`。
 - 后续 Task/AI 接入 Skill-01 时，应将该上下文映射给 `resolveBestSkill` 的 stage、educationLevel、thesisType、schoolId、majorId、disciplineCategoryId、disciplineLevelOneId、disciplineLevelTwoId 条件。
+
+## Workbench-01 论文文档工作台接口（Issue #140 已实现）
+
+### 学生端文档 API
+- `GET /api/thesis-tasks/:taskId/document`：查询任务文档，返回任务学术上下文摘要、文档基础信息、章节树、导师意见；无文档时返回 `document=null`、`canInit=true`。
+- `POST /api/thesis-tasks/:taskId/document/init`：初始化任务主文档；已有文档时直接返回已有文档，避免重复创建。
+- `PATCH /api/thesis-documents/:documentId`：更新文档标题、摘要、关键词、状态。
+- `POST /api/thesis-documents/:documentId/sections`：新增章节，支持 `parentId`、`sectionType`、`title`、`content`、`sortOrder`、`level`、`sourceStage`、`sourceGenerationRunId`。
+- `PATCH /api/thesis-document-sections/:sectionId`：保存章节标题、类型、内容、排序、层级；内容变化时生成 revision、递增 `currentVersion` 并重算字数。
+- `DELETE /api/thesis-document-sections/:sectionId`：软删除章节；首期会同时软删除直接子章节并重算文档字数。
+- `POST /api/thesis-documents/:documentId/merge-stage-content`：合并阶段内容，支持 `stage`、`generationRunId`、`mode=APPEND|REPLACE_SECTION|SMART_MERGE`、`sectionId`；`SMART_MERGE` 首期按追加降级。
+- `GET /api/thesis-documents/:documentId/revisions`：分页查询修改记录，支持 `sectionId` 筛选。
+- `POST /api/thesis-documents/:documentId/advisor-comments`：新增导师修改要求，可绑定章节。
+- `PATCH /api/thesis-advisor-comments/:commentId`：更新导师意见文本或状态，支持 `RESOLVED`、`IGNORED`。
+
+### 后台文档 API
+- `GET /api/admin/thesis-documents/tasks/:taskId`：管理员/导师查看任务论文文档基础信息、章节树和导师意见。
+- `GET /api/admin/tasks/:id`：任务详情同步返回 `thesisDocument` 摘要，便于后台判断是否已初始化、文档字数、版本、最近更新时间和意见数量。
+
+### 权限与兼容
+- 学生端接口通过任务归属校验，学生只能访问自己的任务文档。
+- 后台接口使用 `JwtAuthGuard + RolesGuard`，允许 `ADMIN`、`SUPER_ADMIN`、`TUTOR` 查看。
+- 原 `/downloads` 下载页面保留，工作台导出按钮首期跳转下载中心；Export-01 再接入结构化文档导出。
