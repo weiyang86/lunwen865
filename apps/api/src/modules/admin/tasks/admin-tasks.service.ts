@@ -19,11 +19,15 @@ import type {
   ListAdminTasksDto,
 } from './dto/list-admin-tasks.dto';
 import type { BackendTaskStatus as OverrideStatus } from './dto/override-task-status.dto';
+import type { UpdateTaskDto } from '../../task/dto/update-task.dto';
 
 type ListAdminTasksItem = {
   id: string;
   title: string | null;
   educationLevel: string;
+  thesisType: string | null;
+  schoolName: string | null;
+  majorName: string | null;
   status: BackendTaskStatus;
   currentStage: BackendTaskStage;
   deadline: string | null;
@@ -210,6 +214,11 @@ export class AdminTasksService {
 
     if (dto.userId) and.push({ userId: dto.userId });
     if (dto.currentStage) and.push({ currentStage: dto.currentStage });
+    if (dto.academicSchoolId)
+      and.push({ academicSchoolId: dto.academicSchoolId });
+    if (dto.majorId) and.push({ majorId: dto.majorId });
+    if (dto.educationLevel) and.push({ educationLevel: dto.educationLevel });
+    if (dto.thesisType) and.push({ thesisType: dto.thesisType });
 
     if (dto.statuses && dto.statuses.length > 0) {
       and.push({
@@ -339,6 +348,9 @@ export class AdminTasksService {
             id: true,
             title: true,
             educationLevel: true,
+            thesisType: true,
+            academicSchool: { select: { name: true } },
+            academicMajor: { select: { name: true } },
             status: true,
             currentStage: true,
             deadline: true,
@@ -373,6 +385,9 @@ export class AdminTasksService {
           id: t.id,
           title: t.title ?? null,
           educationLevel: t.educationLevel,
+          thesisType: t.thesisType ?? null,
+          schoolName: t.academicSchool?.name ?? null,
+          majorName: t.academicMajor?.name ?? null,
           status:
             writingFixed.get(t.id)?.status ??
             fixedStatuses.get(t.id) ??
@@ -406,6 +421,9 @@ export class AdminTasksService {
         id: true,
         title: true,
         educationLevel: true,
+        thesisType: true,
+        academicSchool: { select: { name: true } },
+        academicMajor: { select: { name: true } },
         status: true,
         currentStage: true,
         deadline: true,
@@ -445,6 +463,9 @@ export class AdminTasksService {
         id: t.id,
         title: t.title ?? null,
         educationLevel: t.educationLevel,
+        thesisType: t.thesisType ?? null,
+        schoolName: t.academicSchool?.name ?? null,
+        majorName: t.academicMajor?.name ?? null,
         status:
           writingFixed.get(t.id)?.status ?? fixedStatuses.get(t.id) ?? t.status,
         currentStage:
@@ -578,9 +599,22 @@ export class AdminTasksService {
           assignee: { select: { id: true, nickname: true, email: true } },
         },
       });
+      const thesisDocument = await this.prisma.thesisDocument.findUnique({
+        where: { taskId: id },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          currentVersion: true,
+          wordCount: true,
+          updatedAt: true,
+          _count: { select: { sections: true, advisorComments: true } },
+        },
+      });
 
       return {
         ...detail,
+        thesisDocument,
         orders: order
           ? [
               {
@@ -645,6 +679,29 @@ export class AdminTasksService {
       if (e instanceof NotFoundException) throw e;
       throw e;
     }
+  }
+
+  async updateAcademicContext(
+    taskId: string,
+    dto: UpdateTaskDto,
+    operatorId: string,
+  ) {
+    if (!operatorId) throw new BadRequestException('缺少操作人');
+    const before = await this.assertTaskExists(taskId);
+    await this.taskService.updateTask(taskId, dto);
+    await this.prisma.taskAdminLog.create({
+      data: {
+        taskId,
+        action: TaskAdminAction.ADD_NOTE,
+        operatorId,
+        content: '更新任务学术上下文',
+        fromStatus: before.status,
+        toStatus: before.status,
+        meta: { fields: Object.keys(dto) },
+      },
+      select: { id: true },
+    });
+    return this.detail(taskId);
   }
 
   async timeline(id: string) {
@@ -1002,6 +1059,9 @@ export class AdminTasksService {
             id: true,
             title: true,
             educationLevel: true,
+            thesisType: true,
+            academicSchool: { select: { name: true } },
+            academicMajor: { select: { name: true } },
             status: true,
             currentStage: true,
             createdAt: true,

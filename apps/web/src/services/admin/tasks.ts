@@ -29,6 +29,9 @@ export type AdminTaskListItem = {
   id: string;
   title: string | null;
   educationLevel: string;
+  thesisType?: string | null;
+  schoolName?: string | null;
+  majorName?: string | null;
   status: BackendTaskStatus;
   currentStage: BackendTaskStage;
   deadline: string | null;
@@ -66,6 +69,10 @@ export type ListAdminTasksQuery = {
   unlinkedOnly?: boolean;
   limit?: number;
   cursor?: string;
+  academicSchoolId?: string;
+  majorId?: string;
+  educationLevel?: string;
+  thesisType?: string;
 };
 
 export type AdminTaskDetailResp = any;
@@ -98,6 +105,13 @@ export async function getAdminTaskById(id: string): Promise<AdminTaskDetailResp>
 
 export async function getAdminTaskTimeline(id: string): Promise<AdminTaskTimelineResp> {
   return adminHttp.get<AdminTaskTimelineResp>(`/admin/tasks/${id}/timeline`);
+}
+
+export async function updateAdminTaskAcademicContext(
+  id: string,
+  body: unknown,
+): Promise<AdminTaskDetailResp> {
+  return adminHttp.patch<AdminTaskDetailResp>(`/admin/tasks/${id}/academic-context`, body);
 }
 
 export async function assignAdminTask(
