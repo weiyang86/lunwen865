@@ -339,3 +339,34 @@
 - 专业：`GET /api/admin/academic/majors`、`POST /api/admin/academic/majors`、`PATCH /api/admin/academic/majors/:id`、`DELETE /api/admin/academic/majors/:id`。
 - 学科目录：`GET /api/admin/academic/disciplines`、`POST/PATCH/DELETE /api/admin/academic/disciplines/categories`、`POST/PATCH/DELETE /api/admin/academic/disciplines/level-ones`、`POST/PATCH/DELETE /api/admin/academic/disciplines/level-twos`。
 - `DELETE` 接口为软禁用，实际将 `status` 更新为 `INACTIVE`；重新启用通过对应 `PATCH` 接口传 `status=ACTIVE`。
+
+## Skill-01 论文 Skill 中心接口（Issue #138 已实现）
+
+### Skill 管理 API（后台）
+- `GET /api/admin/thesis-skills`：按 `keyword`、`stage`、`status` 分页查询 Skill。
+- `POST /api/admin/thesis-skills`：创建 Skill。
+- `GET /api/admin/thesis-skills/:id`：查询 Skill 详情，包含版本与绑定摘要。
+- `PATCH /api/admin/thesis-skills/:id`：更新 Skill。
+- `DELETE /api/admin/thesis-skills/:id`：软禁用 Skill（`status=DISABLED`）。
+
+### Skill 版本 API
+- `GET /api/admin/thesis-skills/:id/versions`：查询 Skill 版本列表。
+- `POST /api/admin/thesis-skills/:id/versions`：创建 Skill 版本，可传 `isActive=true` 直接激活。
+- `GET /api/admin/thesis-skills/versions/:versionId`：查询版本详情。
+- `PATCH /api/admin/thesis-skills/versions/:versionId`：更新版本。
+- `POST /api/admin/thesis-skills/versions/:versionId/activate`：激活版本；服务端会先取消同 Skill 下其它 active 版本。
+
+### Skill 绑定 API
+- `GET /api/admin/thesis-skills/:id/bindings`：查询 Skill 适用范围绑定。
+- `POST /api/admin/thesis-skills/:id/bindings`：创建适用范围绑定。
+- `PATCH /api/admin/thesis-skills/bindings/:bindingId`：更新绑定。
+- `DELETE /api/admin/thesis-skills/bindings/:bindingId`：软禁用绑定。
+
+### Skill 测试运行与运行记录 API
+- `POST /api/admin/thesis-skills/:id/test-run`：传入 `inputPayload`、阶段、学历层次、论文类型、学校/专业/学科条件，服务端匹配版本并生成 mock-preview 运行记录。
+- `GET /api/admin/thesis-skills/runs`：按 `skillId`、`stage`、`status` 分页查询运行记录。
+- `GET /api/admin/thesis-skills/runs/:id`：查询运行记录详情，包含输入、输出、质量检查、模型信息、token 估算和错误信息。
+
+### Skill 匹配规则
+- 首期 `resolveBestSkill` 根据 stage、educationLevel、thesisType、schoolId、majorId、disciplineCategoryId、disciplineLevelOneId、disciplineLevelTwoId 过滤可用绑定。
+- 匹配优先级：具体学校/专业/学科/学历/论文类型越多越优先；`priority` 越高越优先；无绑定命中时回退到对应 stage 的启用 Skill active 版本。

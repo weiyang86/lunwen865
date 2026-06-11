@@ -173,3 +173,15 @@
 - [ ] 后台 `/admin/academic/disciplines` 可维护学科门类、一级学科、二级学科。
 - [ ] 禁用操作为软禁用，不物理删除重要基础数据。
 - [ ] 现有订单、支付、任务、AI 生成、导出功能不因 Academic-01 变更而改变接口路径或数据结构。
+
+## Skill-01 论文 Skill 中心验收项
+- [ ] Prisma migration `20260610110000_add_thesis_skill_center` 可执行，新增 Skill、版本、绑定和运行记录表。
+- [ ] seed 后内置 10 个论文辅导 Skill，且每个 Skill 至少有一个 active version。
+- [ ] 后台 `/admin/thesis-skills` 可查询、新增、编辑、启用/禁用 Skill。
+- [ ] 后台 Skill 详情页可新增版本、查看版本、激活版本，且同一 Skill 不允许同时存在多个 active version。
+- [ ] 后台 Skill 详情页可创建适用范围 Binding，并支持学历层次、论文类型、学校、专业、学科门类、一级学科、二级学科和 priority。
+- [ ] 学校、专业和学科绑定选项来自 Academic-01 API，不在前端硬编码。
+- [ ] `POST /api/admin/thesis-skills/:id/test-run` 可生成 mock-preview 输出并写入 `ThesisSkillRun`。
+- [ ] 后台 `/admin/thesis-skills/runs` 可按 Skill、阶段、状态查看运行记录和详情。
+- [ ] 内置 Prompt 明确论文辅导合规边界：不代写、不伪造数据、不伪造引用、不承诺规避查重。
+- [ ] 本模块不改变现有订单、支付、任务、AI 生成和导出接口行为。

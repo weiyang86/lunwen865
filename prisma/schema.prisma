@@ -271,6 +271,40 @@ enum AcademicStatus {
   INACTIVE
 }
 
+
+// ============ 论文 Skill 中心 ============
+enum ThesisSkillStage {
+  TOPIC
+  PROPOSAL
+  OUTLINE
+  FULL_PAPER
+  REVISION
+  POLISHING
+  FORMAT_CHECK
+  REFERENCE
+  ABSTRACT
+  DEFENSE
+}
+
+enum ThesisSkillCategory {
+  GENERATION
+  REVISION
+  CHECK
+  EXPORT_ASSIST
+}
+
+enum ThesisSkillStatus {
+  ENABLED
+  DISABLED
+}
+
+enum ThesisSkillRunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
 // ============ 配额 ============
 enum QuotaType {
   BRAIN_CELL
@@ -480,6 +514,7 @@ model AcademicSchool {
   city     AcademicCity      @relation(fields: [cityId], references: [id], onDelete: Restrict)
   colleges AcademicCollege[]
   majors   AcademicMajor[]
+  thesisSkillBindings ThesisSkillBinding[]
 
   @@index([provinceId, status, sortOrder])
   @@index([cityId, status, sortOrder])
@@ -526,6 +561,7 @@ model AcademicMajor {
   disciplineCategory DisciplineCategory? @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
   disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
   disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
+  thesisSkillBindings ThesisSkillBinding[]
 
   @@unique([schoolId, collegeId, name, educationLevel])
   @@index([schoolId, status, sortOrder])
@@ -546,6 +582,7 @@ model DisciplineCategory {
 
   levelOnes DisciplineLevelOne[]
   majors    AcademicMajor[]
+  thesisSkillBindings ThesisSkillBinding[]
 
   @@index([status, sortOrder])
 }
@@ -563,6 +600,7 @@ model DisciplineLevelOne {
   category  DisciplineCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   levelTwos DisciplineLevelTwo[]
   majors    AcademicMajor[]
+  thesisSkillBindings ThesisSkillBinding[]
 
   @@unique([categoryId, code])
   @@index([categoryId, status, sortOrder])
@@ -580,9 +618,124 @@ model DisciplineLevelTwo {
 
   levelOne DisciplineLevelOne @relation(fields: [levelOneId], references: [id], onDelete: Restrict)
   majors   AcademicMajor[]
+  thesisSkillBindings ThesisSkillBinding[]
 
   @@unique([levelOneId, code])
   @@index([levelOneId, status, sortOrder])
+}
+
+
+//////////////////////////////////////////////////////
+// ThesisSkill（论文 Skill 中心）
+//////////////////////////////////////////////////////
+
+model ThesisSkill {
+  id          String              @id @default(cuid())
+  name        String              @db.VarChar(100)
+  code        String              @unique @db.VarChar(80)
+  description String?             @db.Text
+  stage       ThesisSkillStage
+  category    ThesisSkillCategory
+  status      ThesisSkillStatus   @default(ENABLED)
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  versions ThesisSkillVersion[]
+  bindings ThesisSkillBinding[]
+  runs     ThesisSkillRun[]
+
+  @@index([stage, status, sortOrder])
+  @@index([category])
+}
+
+model ThesisSkillVersion {
+  id             String   @id @default(cuid())
+  skillId        String
+  version        Int
+  promptTemplate String   @db.Text
+  inputSchema    Json
+  outputSchema   Json
+  qualityRules   Json
+  modelConfig    Json
+  isActive       Boolean  @default(false)
+  /// 仅用于保证同一 Skill 同时只有一个 active version（isActive=true 时写入 skillId，否则为 null）
+  activeKey      String?  @unique
+  changeLog      String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  skill    ThesisSkill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  bindings ThesisSkillBinding[]
+  runs     ThesisSkillRun[]
+
+  @@unique([skillId, version])
+  @@index([skillId, isActive])
+}
+
+model ThesisSkillBinding {
+  id                   String            @id @default(cuid())
+  skillId              String
+  skillVersionId       String?
+  educationLevel       String?           @db.VarChar(40)
+  thesisType           String?           @db.VarChar(60)
+  disciplineCategoryId String?
+  disciplineLevelOneId String?
+  disciplineLevelTwoId String?
+  schoolId             String?
+  majorId              String?
+  priority             Int               @default(0)
+  status               ThesisSkillStatus @default(ENABLED)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  skill              ThesisSkill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillVersion       ThesisSkillVersion?  @relation(fields: [skillVersionId], references: [id], onDelete: SetNull)
+  disciplineCategory DisciplineCategory?  @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
+  disciplineLevelOne DisciplineLevelOne?  @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
+  disciplineLevelTwo DisciplineLevelTwo?  @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
+  school             AcademicSchool?      @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  major              AcademicMajor?       @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  runs               ThesisSkillRun[]
+
+  @@index([skillId, status, priority])
+  @@index([skillVersionId])
+  @@index([schoolId])
+  @@index([majorId])
+  @@index([disciplineCategoryId])
+  @@index([disciplineLevelOneId])
+  @@index([disciplineLevelTwoId])
+}
+
+model ThesisSkillRun {
+  id             String                @id @default(cuid())
+  skillId        String
+  skillVersionId String
+  bindingId      String?
+  taskId         String?
+  stage          ThesisSkillStage
+  inputPayload   Json
+  outputPayload  Json?
+  qualityResult  Json?
+  modelName      String?               @db.VarChar(100)
+  tokenUsage     Json?
+  status         ThesisSkillRunStatus  @default(PENDING)
+  errorMessage   String?               @db.Text
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  skill        ThesisSkill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillVersion ThesisSkillVersion  @relation(fields: [skillVersionId], references: [id], onDelete: Restrict)
+  binding      ThesisSkillBinding? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
+  task         Task?               @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([skillId, createdAt])
+  @@index([skillVersionId])
+  @@index([bindingId])
+  @@index([taskId])
+  @@index([stage, status, createdAt])
 }
 
 //////////////////////////////////////////////////////
@@ -677,6 +830,7 @@ model Task {
   polishTasks     PolishTask[]
   adminLogs       TaskAdminLog[]
   order           Order?
+  thesisSkillRuns ThesisSkillRun[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

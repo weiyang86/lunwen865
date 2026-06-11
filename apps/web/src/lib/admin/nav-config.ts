@@ -7,6 +7,7 @@ import {
   Store,
   Package,
   School,
+  WandSparkles,
   Rocket,
   Settings,
   type LucideIcon,
@@ -44,6 +45,14 @@ export const NAV_ITEMS: NavItem[] = [
       { label: '学院管理', href: '/admin/academic/colleges' },
       { label: '专业管理', href: '/admin/academic/majors' },
       { label: '学科目录', href: '/admin/academic/disciplines' },
+    ],
+  },
+  {
+    label: '论文 Skill 中心',
+    icon: WandSparkles,
+    children: [
+      { label: 'Skill 列表', href: '/admin/thesis-skills' },
+      { label: '运行记录', href: '/admin/thesis-skills/runs' },
     ],
   },
   {

@@ -201,3 +201,10 @@
 - 新增 `DisciplineCategory`、`DisciplineLevelOne`、`DisciplineLevelTwo`，分别承载学科门类、一级学科、二级学科/具体专业目录，关系为 `DisciplineCategory 1:N DisciplineLevelOne 1:N DisciplineLevelTwo`。
 - 新增 `AcademicMajor`：关联 `AcademicSchool`、可选关联 `AcademicCollege`，并可选关联 `DisciplineCategory`、`DisciplineLevelOne`、`DisciplineLevelTwo`；同时记录专业名称、编码、学历层次、排序、状态和备注。
 - 本次 migration 名称：`20260610090000_add_academic_data`。本 Issue 不改造 `Task` 结构，后续 Task-01 再将任务创建流程接入学术基础数据。
+
+### 补充（Skill-01 / Issue #138）：论文 Skill 中心模型
+- 新增 `ThesisSkill`：Skill 基础信息，包含 `name`、`code`、`description`、`stage`、`category`、`status`、`sortOrder`、时间字段；`code` 唯一。
+- 新增 `ThesisSkillVersion`：Skill 版本，包含 `version`、`promptTemplate`、`inputSchema`、`outputSchema`、`qualityRules`、`modelConfig`、`isActive`、`activeKey`、`changeLog`；通过 `activeKey` 保证同一 Skill 同时只有一个 active 版本。
+- 新增 `ThesisSkillBinding`：适用范围绑定，可选绑定 `educationLevel`、`thesisType`、学科门类、一级学科、二级学科、学校、专业，并通过 `priority` 控制匹配优先级；`skillVersionId` 为空时使用 Skill 当前 active 版本。
+- 新增 `ThesisSkillRun`：运行记录，记录 `skillId`、`skillVersionId`、`bindingId`、`taskId`、`stage`、`inputPayload`、`outputPayload`、`qualityResult`、`modelName`、`tokenUsage`、`status`、错误信息和起止时间。
+- 本次 migration 名称：`20260610110000_add_thesis_skill_center`。首期 test-run 为 mock-preview，不改造现有 AI 生成、订单、支付、任务或导出数据模型。

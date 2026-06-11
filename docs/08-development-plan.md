@@ -127,3 +127,10 @@
 - 已新增管理后台“学术基础数据”入口，包含高校、学院、专业、学科目录维护页面。
 - 已新增 seed 样例数据：重庆、四川、重庆/成都/甘孜州、重庆师范大学、重庆建筑工程职业学院，以及工学/管理学/教育学/文学和示例专业。
 - 本次不改造论文任务创建流程；后续 Task-01 需要在任务创建/补资料表单中调用公开查询 API，并把学校、学院、专业、学历层次、论文类型写入任务学术上下文。
+
+## Skill-01（Issue #138）实现记录
+- 已建设论文 Skill 中心：Skill 基础管理、版本管理、适用范围绑定、测试运行、运行记录。
+- 已新增 Prisma migration `20260610110000_add_thesis_skill_center`，并在 seed 中内置 10 个论文辅导 Skill 及 active version。
+- 已新增后台页面 `/admin/thesis-skills`、`/admin/thesis-skills/[id]`、`/admin/thesis-skills/runs`。
+- 首期 test-run 使用 mock-preview：将 `promptTemplate` 与输入变量合成为 `resolvedPrompt` 并保存 `ThesisSkillRun`；不重构现有 AI 生成流程。
+- 后续 Task-01 需要在任务创建/AI 生成上下文中调用 `resolveBestSkill`，把任务学术上下文、论文类型、学校/专业/学科范围接入 Skill 匹配。

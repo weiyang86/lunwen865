@@ -63,3 +63,11 @@
 - 该模块为论文任务创建流程提供公开联动下拉 API，但本 Issue 不改造任务创建流程；后续 Task-01 将把 `AcademicSchool`、`AcademicCollege`、`AcademicMajor` 接入任务学术上下文。
 - 该模块为论文 Skill 中心提供学校、学历层次、专业和学科目录匹配依据，为格式模板引擎提供学校/学院/专业维度模板绑定依据，为 AI 生成上下文提供可追溯的学术标签。
 - 后台通过“学术基础数据”入口维护高校、学院、专业和学科目录；删除动作采用 `status=INACTIVE` 软禁用，不物理删除重要基础数据。
+
+## Skill-01 论文 Skill 中心实现说明
+- Issue #138 已新增论文 Skill 中心，覆盖 Skill 基础信息、版本、适用范围绑定、测试运行和运行记录。
+- Skill 中心不替换现有 AI 生成链路；首期通过 mock-preview 测试运行固化 `promptTemplate`、输入输出 schema、质量规则与模型配置，后续由 Task-01/AI 接入阶段调用 `resolveBestSkill` 匹配最合适版本。
+- Skill 与论文任务关系：`ThesisSkillRun.taskId` 可选关联任务，测试运行可不绑定任务；后续真实生成运行应写入任务与阶段上下文。
+- Skill 与学术基础数据关系：`ThesisSkillBinding` 可按学校、专业、学科门类、一级学科、二级学科、学历层次、论文类型设置适用范围和优先级。
+- Skill 与导出/格式检查关系：`FORMAT_CHECK`、`REFERENCE`、`DEFENSE` 等阶段 Skill 为后续格式模板、参考文献核验和答辩材料提供可版本化策略。
+- 合规边界：内置默认 Prompt 明确系统用于论文辅导、写作辅助、结构优化、格式检查和学习支持，不用于代写、伪造数据、伪造引用或承诺规避查重。

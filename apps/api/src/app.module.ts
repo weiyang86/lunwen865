@@ -29,6 +29,7 @@ import { PaymentModule } from './modules/payment/payment.module';
 import { PromptModule } from './modules/prompt/prompt.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AcademicModule } from './modules/academic/academic.module';
+import { ThesisSkillModule } from './modules/thesis-skill/thesis-skill.module';
 console.log('🔍 Redis ENV:', {
   host: process.env.REDIS_HOST,
   port: process.env.REDIS_PORT,
@@ -83,6 +84,7 @@ console.log('🔍 Redis ENV:', {
     PaymentModule,
     AdminModule,
     AcademicModule,
+    ThesisSkillModule,
   ],
   controllers: [AppController],
   providers: [
