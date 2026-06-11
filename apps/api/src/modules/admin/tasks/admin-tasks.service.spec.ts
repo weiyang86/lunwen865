@@ -70,9 +70,7 @@ describe('AdminTasksService (admin)', () => {
 
   function makeMockDetail(): Awaited<ReturnType<AdminTasksService['detail']>> {
     return {
-      task: {} as unknown as Awaited<
-        ReturnType<Pick<TaskService, 'findDetail'>['findDetail']>
-      >['task'],
+      task: {},
       progress: {} as unknown as Awaited<
         ReturnType<Pick<TaskService, 'findDetail'>['findDetail']>
       >['progress'],

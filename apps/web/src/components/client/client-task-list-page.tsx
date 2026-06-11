@@ -9,11 +9,16 @@ type TaskItem = {
   id: string;
   title: string | null;
   major: string;
+  majorName?: string | null;
+  schoolName?: string | null;
   educationLevel: string;
+  thesisType?: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
 };
+
+type OptionItem = { id: string; name: string; provinceId?: string; cityId?: string; schoolId?: string; collegeId?: string | null; educationLevel?: string | null; disciplineCategoryId?: string | null; disciplineLevelOneId?: string | null; disciplineLevelTwoId?: string | null };
 
 type TaskListResponse = {
   items: TaskItem[];
@@ -29,11 +34,21 @@ type CreateTaskPayload = {
   educationLevel: string;
   topic: string;
   schoolId?: string;
+  provinceId?: string;
+  cityId?: string;
+  academicSchoolId?: string;
+  collegeId?: string;
+  majorId?: string;
+  disciplineCategoryId?: string;
+  disciplineLevelOneId?: string;
+  disciplineLevelTwoId?: string;
+  thesisType?: string;
+  researchDirection?: string;
+  advisorRequirement?: string;
   wordCountTarget?: number;
 };
 
 const MAX_TITLE_LENGTH = 200;
-const MAX_SCHOOL_LENGTH = 100;
 const MAX_MAJOR_LENGTH = 200;
 const MAX_EDUCATION_LEVEL_LENGTH = 200;
 const MAX_TOPIC_LENGTH = 500;
@@ -50,6 +65,10 @@ export function buildTaskBootstrapPayload(values: CreateTaskPayload) {
 
   const trimmedSchool = values.schoolId?.trim();
   if (trimmedSchool) payload.schoolId = trimmedSchool;
+  for (const key of ['provinceId', 'cityId', 'academicSchoolId', 'collegeId', 'majorId', 'disciplineCategoryId', 'disciplineLevelOneId', 'disciplineLevelTwoId', 'thesisType', 'researchDirection', 'advisorRequirement'] as const) {
+    const value = values[key]?.trim();
+    if (value) payload[key] = value;
+  }
   if (typeof values.wordCountTarget === 'number') payload.wordCountTarget = values.wordCountTarget;
 
   return payload;
@@ -65,11 +84,22 @@ export function ClientTaskListPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [title, setTitle] = useState('');
-  const [schoolId, setSchoolId] = useState('');
+  const [provinceId, setProvinceId] = useState('');
+  const [cityId, setCityId] = useState('');
+  const [academicSchoolId, setAcademicSchoolId] = useState('');
+  const [collegeId, setCollegeId] = useState('');
+  const [majorId, setMajorId] = useState('');
   const [major, setMajor] = useState('');
-  const [educationLevel, setEducationLevel] = useState('');
+  const [educationLevel, setEducationLevel] = useState('UNDERGRADUATE');
+  const [thesisType, setThesisType] = useState('FULL_PAPER');
   const [topic, setTopic] = useState('');
+  const [advisorRequirement, setAdvisorRequirement] = useState('');
   const [wordCountTarget, setWordCountTarget] = useState('8000');
+  const [provinces, setProvinces] = useState<OptionItem[]>([]);
+  const [cities, setCities] = useState<OptionItem[]>([]);
+  const [schools, setSchools] = useState<OptionItem[]>([]);
+  const [colleges, setColleges] = useState<OptionItem[]>([]);
+  const [majors, setMajors] = useState<OptionItem[]>([]);
 
   const loadTasks = useCallback(async () => {
     try {
@@ -91,13 +121,56 @@ export function ClientTaskListPage() {
     void loadTasks();
   }, [loadTasks]);
 
+  useEffect(() => {
+    void clientHttp.get<OptionItem[]>('/academic/provinces').then(setProvinces).catch(() => setProvinces([]));
+  }, []);
+
+  useEffect(() => {
+    setCityId('');
+    setAcademicSchoolId('');
+    setCollegeId('');
+    setMajorId('');
+    if (!provinceId) { setCities([]); setSchools([]); setColleges([]); setMajors([]); return; }
+    void clientHttp.get<OptionItem[]>('/academic/cities', { provinceId }).then(setCities).catch(() => setCities([]));
+    void clientHttp.get<{ list: OptionItem[] }>('/academic/schools', { provinceId, pageSize: 100 }).then((r) => setSchools(r.list ?? [])).catch(() => setSchools([]));
+  }, [provinceId]);
+
+  useEffect(() => {
+    setAcademicSchoolId('');
+    setCollegeId('');
+    setMajorId('');
+    if (!cityId) return;
+    void clientHttp.get<{ list: OptionItem[] }>('/academic/schools', { provinceId: provinceId || undefined, cityId, pageSize: 100 }).then((r) => setSchools(r.list ?? [])).catch(() => setSchools([]));
+  }, [cityId, provinceId]);
+
+  useEffect(() => {
+    setCollegeId('');
+    setMajorId('');
+    if (!academicSchoolId) { setColleges([]); setMajors([]); return; }
+    void clientHttp.get<{ list: OptionItem[] }>('/academic/colleges', { schoolId: academicSchoolId, pageSize: 100 }).then((r) => setColleges(r.list ?? [])).catch(() => setColleges([]));
+    void clientHttp.get<{ list: OptionItem[] }>('/academic/majors', { schoolId: academicSchoolId, educationLevel, pageSize: 100 }).then((r) => setMajors(r.list ?? [])).catch(() => setMajors([]));
+  }, [academicSchoolId, educationLevel]);
+
+  useEffect(() => {
+    setMajorId('');
+    if (!academicSchoolId) return;
+    void clientHttp.get<{ list: OptionItem[] }>('/academic/majors', { schoolId: academicSchoolId, collegeId: collegeId || undefined, educationLevel, pageSize: 100 }).then((r) => setMajors(r.list ?? [])).catch(() => setMajors([]));
+  }, [academicSchoolId, collegeId, educationLevel]);
+
+  useEffect(() => {
+    const selected = majors.find((item) => item.id === majorId);
+    if (!selected) return;
+    setMajor(selected.name);
+    if (selected.educationLevel) setEducationLevel(selected.educationLevel);
+  }, [majorId, majors]);
+
   const totalPages = data?.totalPages ?? Math.max(1, Math.ceil((data?.total || 0) / (data?.pageSize || 10)));
 
   const formError = useMemo(() => {
     if (!title.trim()) return '请填写论文任务标题。';
     if (title.trim().length > MAX_TITLE_LENGTH) return `任务标题不能超过 ${MAX_TITLE_LENGTH} 个字符。`;
-    if (schoolId.trim().length > MAX_SCHOOL_LENGTH) return `学校信息不能超过 ${MAX_SCHOOL_LENGTH} 个字符。`;
-    if (!major.trim()) return '请填写专业信息。';
+    if (!academicSchoolId) return '请选择学校。';
+    if (!majorId && !major.trim()) return '请选择或填写专业信息。';
     if (major.trim().length > MAX_MAJOR_LENGTH) return `专业信息不能超过 ${MAX_MAJOR_LENGTH} 个字符。`;
     if (!educationLevel.trim()) return '请填写学历层次。';
     if (educationLevel.trim().length > MAX_EDUCATION_LEVEL_LENGTH) return `学历层次不能超过 ${MAX_EDUCATION_LEVEL_LENGTH} 个字符。`;
@@ -109,14 +182,20 @@ export function ClientTaskListPage() {
       return `请填写目标字数（${MIN_WORD_COUNT_TARGET}-${MAX_WORD_COUNT_TARGET}）。`;
     }
     return null;
-  }, [title, schoolId, major, educationLevel, topic, wordCountTarget]);
+  }, [title, academicSchoolId, majorId, major, educationLevel, topic, wordCountTarget]);
 
   const resetForm = () => {
     setTitle('');
-    setSchoolId('');
+    setProvinceId('');
+    setCityId('');
+    setAcademicSchoolId('');
+    setCollegeId('');
+    setMajorId('');
     setMajor('');
-    setEducationLevel('');
+    setEducationLevel('UNDERGRADUATE');
+    setThesisType('FULL_PAPER');
     setTopic('');
+    setAdvisorRequirement('');
     setWordCountTarget('8000');
   };
 
@@ -133,7 +212,14 @@ export function ClientTaskListPage() {
       major,
       educationLevel,
       topic,
-      schoolId,
+      provinceId,
+      cityId,
+      academicSchoolId,
+      collegeId,
+      majorId,
+      thesisType,
+      researchDirection: topic,
+      advisorRequirement,
       wordCountTarget: Number(wordCountTarget.trim()),
     });
 
@@ -175,20 +261,49 @@ export function ClientTaskListPage() {
         <label className="text-sm">任务标题（必填）
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：数字经济背景下中小企业融资问题研究" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} maxLength={MAX_TITLE_LENGTH} />
         </label>
-        <label className="text-sm">学校（选填）
-          <input value={schoolId} onChange={(event) => setSchoolId(event.target.value)} placeholder="例如：某某大学" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} maxLength={MAX_SCHOOL_LENGTH} />
+        <label className="text-sm">省份
+          <select value={provinceId} onChange={(event) => setProvinceId(event.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting}>
+            <option value="">请选择省份</option>{provinces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">城市
+          <select value={cityId} onChange={(event) => setCityId(event.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting || !provinceId}>
+            <option value="">请选择城市</option>{cities.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">学校（必填）
+          <select value={academicSchoolId} onChange={(event) => setAcademicSchoolId(event.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting}>
+            <option value="">请选择学校</option>{schools.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">学院
+          <select value={collegeId} onChange={(event) => setCollegeId(event.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting || !academicSchoolId}>
+            <option value="">不指定学院</option>{colleges.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
         </label>
         <label className="text-sm">专业（必填）
-          <input value={major} onChange={(event) => setMajor(event.target.value)} placeholder="例如：工商管理" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} maxLength={MAX_MAJOR_LENGTH} />
+          <select value={majorId} onChange={(event) => setMajorId(event.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting || !academicSchoolId}>
+            <option value="">请选择专业</option>{majors.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
         </label>
         <label className="text-sm">学历层次（必填）
-          <input value={educationLevel} onChange={(event) => setEducationLevel(event.target.value)} placeholder="例如：本科" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} maxLength={MAX_EDUCATION_LEVEL_LENGTH} />
+          <select value={educationLevel} onChange={(event) => setEducationLevel(event.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting}>
+            <option value="JUNIOR_COLLEGE">高职/专科</option><option value="UNDERGRADUATE">本科</option><option value="UPGRADE_UNDERGRADUATE">专升本</option><option value="MASTER">硕士</option><option value="COURSE_PAPER">课程论文</option>
+          </select>
+        </label>
+        <label className="text-sm">论文类型
+          <select value={thesisType} onChange={(event) => setThesisType(event.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting}>
+            <option value="FULL_PAPER">毕业论文</option><option value="PROPOSAL">开题报告</option><option value="OUTLINE">论文大纲</option><option value="RESEARCH_REPORT">研究报告</option><option value="CASE_ANALYSIS">案例分析</option><option value="GRADUATION_DESIGN">毕业设计</option>
+          </select>
         </label>
         <label className="text-sm">目标字数（必填）
           <input value={wordCountTarget} onChange={(event) => setWordCountTarget(event.target.value)} placeholder="例如：8000" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} inputMode="numeric" />
         </label>
-        <label className="text-sm md:col-span-2">论文方向描述（必填）
-          <textarea value={topic} onChange={(event) => setTopic(event.target.value)} rows={3} placeholder="例如：聚焦供应链金融场景，关注 2022-2025 年的政策与案例" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} maxLength={MAX_TOPIC_LENGTH} />
+        <label className="text-sm md:col-span-2">研究方向 / 题目描述（必填）
+          <textarea value={topic} onChange={(event) => setTopic(event.target.value)} rows={3} placeholder="例如：人工智能教育应用、工程造价全过程控制" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} maxLength={MAX_TOPIC_LENGTH} />
+        </label>
+        <label className="text-sm md:col-span-2">导师要求（选填）
+          <textarea value={advisorRequirement} onChange={(event) => setAdvisorRequirement(event.target.value)} rows={2} placeholder="例如：强调案例分析、结合某企业数据、一级标题按学校模板" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" disabled={submitting} maxLength={1000} />
         </label>
 
         {submitError ? <p className="md:col-span-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{submitError}</p> : null}
@@ -212,7 +327,7 @@ export function ClientTaskListPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-medium">{task.title || `任务 ${task.id.slice(0, 8)}`}</h2>
-                  <p className="mt-1 text-xs text-slate-500">{task.major} / {task.educationLevel}</p>
+                  <p className="mt-1 text-xs text-slate-500">{task.schoolName || '未绑定学校'} / {task.majorName || task.major} / {task.educationLevel} / {task.thesisType || '未指定类型'}</p>
                   <p className="text-xs text-slate-500">状态：{task.status}</p>
                 </div>
                 <Link href={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="rounded bg-slate-900 px-3 py-2 text-xs text-white hover:bg-slate-800">
