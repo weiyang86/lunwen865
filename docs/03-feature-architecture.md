@@ -71,3 +71,10 @@
 - Skill 与学术基础数据关系：`ThesisSkillBinding` 可按学校、专业、学科门类、一级学科、二级学科、学历层次、论文类型设置适用范围和优先级。
 - Skill 与导出/格式检查关系：`FORMAT_CHECK`、`REFERENCE`、`DEFENSE` 等阶段 Skill 为后续格式模板、参考文献核验和答辩材料提供可版本化策略。
 - 合规边界：内置默认 Prompt 明确系统用于论文辅导、写作辅助、结构优化、格式检查和学习支持，不用于代写、伪造数据、伪造引用或承诺规避查重。
+
+## Task-01 论文任务学术上下文接入（Issue #139 已实现）
+- 论文任务在保留 legacy `schoolId`（旧 `School` / `SchoolTemplate` 兼容字段）的同时，新增 Academic-01 上下文字段：省份、城市、Academic 高校、学院、专业、学科门类、一级学科、二级学科、学历层次、论文类型、研究方向、导师要求与预留格式模板 ID。
+- 学生端任务创建表单通过 `/academic/*` 公开查询接口完成省份→城市→高校→学院→专业联动，创建任务时写入标准化学术上下文；旧任务无这些字段时仍按原 `major`、`educationLevel`、`requirements` 展示与生成。
+- 后台任务详情新增学术上下文展示与维护入口，后台列表返回 `schoolName`、`majorName`、`educationLevel`、`thesisType`，并支持按 Academic 高校、专业、学历层次和论文类型筛选。
+- TaskService 新增 `buildGenerationContext(taskId, stage?, userRequirement?)`，统一生成 `ThesisGenerationContext`，供后续 AI 生成与 Skill-01 的 `resolveBestSkill` 基于学校、专业、学科、学历、论文类型和阶段匹配 Skill。
+- 本次不改造订单、支付、任务状态流转、导出任务或完整 AI 生成主流程；仅提供统一上下文与兼容接入点。

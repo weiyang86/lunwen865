@@ -7,8 +7,9 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { TaskAcademicContextDto } from './task-academic-context.dto';
 
-export class BootstrapTaskDto {
+export class BootstrapTaskDto extends TaskAcademicContextDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)

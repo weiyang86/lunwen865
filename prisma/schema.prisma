@@ -475,6 +475,7 @@ model AcademicProvince {
 
   cities  AcademicCity[]
   schools AcademicSchool[]
+  tasks   Task[]
 
   @@index([status, sortOrder])
 }
@@ -491,6 +492,7 @@ model AcademicCity {
 
   province AcademicProvince @relation(fields: [provinceId], references: [id], onDelete: Restrict)
   schools  AcademicSchool[]
+  tasks    Task[]
 
   @@unique([provinceId, code])
   @@index([provinceId, status, sortOrder])
@@ -515,6 +517,7 @@ model AcademicSchool {
   colleges AcademicCollege[]
   majors   AcademicMajor[]
   thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
 
   @@index([provinceId, status, sortOrder])
   @@index([cityId, status, sortOrder])
@@ -534,6 +537,7 @@ model AcademicCollege {
 
   school AcademicSchool  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   majors AcademicMajor[]
+  tasks  Task[]
 
   @@unique([schoolId, name])
   @@unique([schoolId, code])
@@ -562,6 +566,7 @@ model AcademicMajor {
   disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
   disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
   thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
 
   @@unique([schoolId, collegeId, name, educationLevel])
   @@index([schoolId, status, sortOrder])
@@ -583,6 +588,7 @@ model DisciplineCategory {
   levelOnes DisciplineLevelOne[]
   majors    AcademicMajor[]
   thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
 
   @@index([status, sortOrder])
 }
@@ -601,6 +607,7 @@ model DisciplineLevelOne {
   levelTwos DisciplineLevelTwo[]
   majors    AcademicMajor[]
   thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
 
   @@unique([categoryId, code])
   @@index([categoryId, status, sortOrder])
@@ -619,6 +626,7 @@ model DisciplineLevelTwo {
   levelOne DisciplineLevelOne @relation(fields: [levelOneId], references: [id], onDelete: Restrict)
   majors   AcademicMajor[]
   thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
 
   @@unique([levelOneId, code])
   @@index([levelOneId, status, sortOrder])
@@ -798,10 +806,24 @@ model Task {
   id             String  @id @default(cuid())
   userId         String
   assigneeId     String?
+  /// legacy School/SchoolTemplate 关联，保留用于兼容既有导出模板与历史任务
   schoolId       String
   major          String
   educationLevel String
   title          String?
+
+  provinceId            String?
+  cityId                String?
+  academicSchoolId      String?
+  collegeId             String?
+  majorId               String?
+  disciplineCategoryId  String?
+  disciplineLevelOneId  String?
+  disciplineLevelTwoId  String?
+  thesisType            String? @db.VarChar(60)
+  researchDirection     String? @db.Text
+  advisorRequirement    String? @db.Text
+  formatTemplateId      String?
 
   status       TaskStatus @default(INIT)
   currentStage TaskStage? @default(TOPIC)
@@ -815,6 +837,14 @@ model Task {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  province           AcademicProvince?  @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  city               AcademicCity?      @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  academicSchool     AcademicSchool?    @relation(fields: [academicSchoolId], references: [id], onDelete: SetNull)
+  college            AcademicCollege?   @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  academicMajor      AcademicMajor?     @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  disciplineCategory DisciplineCategory? @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
+  disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
+  disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
 
   topicCandidates TopicCandidate[]
   openingReports  OpeningReport[]
@@ -840,6 +870,16 @@ model Task {
   @@index([status])
   @@index([currentStage])
   @@index([schoolId])
+  @@index([provinceId])
+  @@index([cityId])
+  @@index([academicSchoolId])
+  @@index([collegeId])
+  @@index([majorId])
+  @@index([disciplineCategoryId])
+  @@index([disciplineLevelOneId])
+  @@index([disciplineLevelTwoId])
+  @@index([educationLevel])
+  @@index([thesisType])
   @@index([title])
   @@index([createdAt])
   @@index([updatedAt])

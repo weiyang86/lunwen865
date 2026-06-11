@@ -134,3 +134,10 @@
 - 已新增后台页面 `/admin/thesis-skills`、`/admin/thesis-skills/[id]`、`/admin/thesis-skills/runs`。
 - 首期 test-run 使用 mock-preview：将 `promptTemplate` 与输入变量合成为 `resolvedPrompt` 并保存 `ThesisSkillRun`；不重构现有 AI 生成流程。
 - 后续 Task-01 需要在任务创建/AI 生成上下文中调用 `resolveBestSkill`，把任务学术上下文、论文类型、学校/专业/学科范围接入 Skill 匹配。
+
+## Task-01（Issue #139）实现记录
+- 已为 `Task` 增加标准化 Academic-01 上下文字段与 migration `20260611100000_add_task_academic_context`，所有新增字段允许为空以兼容历史任务。
+- 已升级学生端 `/tasks` 创建表单，使用 `/academic/provinces`、`/academic/cities`、`/academic/schools`、`/academic/colleges`、`/academic/majors` 联动选择省份、城市、高校、学院和专业，并提交学历层次、论文类型、研究方向和导师要求。
+- 已升级任务创建/编辑/详情接口：创建时校验启用学校、学院、专业和学科关系；专业可自动回填学科字段；详情返回 `academicContext` 与名称摘要。
+- 已升级后台任务列表与详情：列表展示学校/专业/学历/论文类型，后台详情可维护学术上下文；首期后台维护使用 ID 输入兼容，后续可抽取学生端联动选择器复用。
+- 已新增 `TaskService.buildGenerationContext`，为后续 AI 生成和 Skill 匹配接入提供统一上下文。后续 Task-02/AI-01 应将真实生成流程改为读取该上下文并调用 Skill-01 `resolveBestSkill`。

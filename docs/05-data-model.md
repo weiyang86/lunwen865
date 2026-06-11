@@ -208,3 +208,10 @@
 - 新增 `ThesisSkillBinding`：适用范围绑定，可选绑定 `educationLevel`、`thesisType`、学科门类、一级学科、二级学科、学校、专业，并通过 `priority` 控制匹配优先级；`skillVersionId` 为空时使用 Skill 当前 active 版本。
 - 新增 `ThesisSkillRun`：运行记录，记录 `skillId`、`skillVersionId`、`bindingId`、`taskId`、`stage`、`inputPayload`、`outputPayload`、`qualityResult`、`modelName`、`tokenUsage`、`status`、错误信息和起止时间。
 - 本次 migration 名称：`20260610110000_add_thesis_skill_center`。首期 test-run 为 mock-preview，不改造现有 AI 生成、订单、支付、任务或导出数据模型。
+
+### 补充（Task-01 / Issue #139）：任务学术上下文字段
+- `Task` 保留既有 `schoolId` 关联 legacy `School`，用于兼容旧学校模板、导出和历史任务；Academic-01 高校关系新增为 `academicSchoolId`，避免同名字段破坏旧数据。
+- `Task` 新增 nullable 字段：`provinceId`、`cityId`、`academicSchoolId`、`collegeId`、`majorId`、`disciplineCategoryId`、`disciplineLevelOneId`、`disciplineLevelTwoId`、`thesisType`、`researchDirection`、`advisorRequirement`、`formatTemplateId`。
+- 新增外键关系：Task 可选关联 `AcademicProvince`、`AcademicCity`、`AcademicSchool`、`AcademicCollege`、`AcademicMajor`、`DisciplineCategory`、`DisciplineLevelOne`、`DisciplineLevelTwo`，外键均采用 `ON DELETE SET NULL`，保证基础数据停用/清理不破坏历史任务。
+- `formatTemplateId` 为 Export-01 预留字段，本阶段只持久化，不接入格式模板匹配。
+- migration：`20260611100000_add_task_academic_context`。

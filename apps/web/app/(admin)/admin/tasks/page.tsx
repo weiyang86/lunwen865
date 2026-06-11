@@ -906,7 +906,10 @@ export function AdminTasksPageView(props: { kind: 'consumer' | 'agency' }) {
                             {t.title || '—'}
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            <span>{t.schoolName || '未绑定学校'}</span>
+                            <span>{t.majorName || '未绑定专业'}</span>
                             <span>{t.educationLevel}</span>
+                            <span>{t.thesisType || '未指定类型'}</span>
                             <StageBadge stage={t.currentStage as any} />
                           </div>
                         </div>

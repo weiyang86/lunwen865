@@ -370,3 +370,20 @@
 ### Skill 匹配规则
 - 首期 `resolveBestSkill` 根据 stage、educationLevel、thesisType、schoolId、majorId、disciplineCategoryId、disciplineLevelOneId、disciplineLevelTwoId 过滤可用绑定。
 - 匹配优先级：具体学校/专业/学科/学历/论文类型越多越优先；`priority` 越高越优先；无绑定命中时回退到对应 stage 的启用 Skill active 版本。
+
+## Task-01 论文任务学术上下文接口（Issue #139 已实现）
+
+### 学生端任务接口
+- `POST /api/tasks/bootstrap`：在原 `title`、`topic`、`major`、`educationLevel`、`wordCountTarget` 基础上，新增可选 `provinceId`、`cityId`、`academicSchoolId`、`collegeId`、`majorId`、`disciplineCategoryId`、`disciplineLevelOneId`、`disciplineLevelTwoId`、`thesisType`、`researchDirection`、`advisorRequirement`、`formatTemplateId`。
+- `POST /api/tasks`：支持同样学术上下文字段；若传入 `majorId` 且未传学科字段，服务端会从 `AcademicMajor` 自动带出学科门类、一级学科和二级学科。
+- `PATCH /api/tasks/:id`：支持更新学术上下文字段、学历层次、研究方向和导师要求；旧任务缺失 Academic 字段不影响更新 title、topic、wordCountTarget。
+- `GET /api/tasks/:id`、`GET /api/tasks/:id/detail`：返回 `academicContext`、`schoolName`、`majorName`、`disciplineCategoryName`、`disciplineLevelOneName`、`disciplineLevelTwoName` 以及关联对象摘要。
+
+### 后台任务接口
+- `GET /api/admin/tasks`：列表返回 `schoolName`、`majorName`、`educationLevel`、`thesisType`，并支持 `academicSchoolId`、`majorId`、`educationLevel`、`thesisType` 筛选。
+- `PATCH /api/admin/tasks/:id/academic-context`：后台维护任务学术上下文，支持 Academic 高校、学院、专业、学科、学历层次、论文类型、研究方向、导师要求、格式模板 ID。
+- 兼容说明：API 入参采用 `academicSchoolId` 表示 Academic-01 高校；`Task.schoolId` 仍代表 legacy `School`，保留给历史导出模板和旧任务兼容。
+
+### AI / Skill 上下文
+- `TaskService.buildGenerationContext(taskId, stage?, userRequirement?)` 返回统一 `ThesisGenerationContext`：`taskId`、`taskTitle`、地区/学校/学院/专业/学科名称、`educationLevel`、`thesisType`、`stage`、`researchDirection`、`advisorRequirement`、`userRequirement`。
+- 后续 Task/AI 接入 Skill-01 时，应将该上下文映射给 `resolveBestSkill` 的 stage、educationLevel、thesisType、schoolId、majorId、disciplineCategoryId、disciplineLevelOneId、disciplineLevelTwoId 条件。

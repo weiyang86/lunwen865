@@ -185,3 +185,15 @@
 - [ ] 后台 `/admin/thesis-skills/runs` 可按 Skill、阶段、状态查看运行记录和详情。
 - [ ] 内置 Prompt 明确论文辅导合规边界：不代写、不伪造数据、不伪造引用、不承诺规避查重。
 - [ ] 本模块不改变现有订单、支付、任务、AI 生成和导出接口行为。
+
+## Task-01 论文任务学术上下文验收项
+- [ ] Prisma migration `20260611100000_add_task_academic_context` 可执行，历史任务在新增 nullable 字段后仍可查询、导出和推进状态。
+- [ ] 学生端 `/tasks` 创建表单通过 Academic-01 API 联动加载省份、城市、高校、学院、专业，不在前端硬编码学校/专业数据。
+- [ ] 创建任务时可保存 Academic 高校、学院、专业、学历层次、论文类型、研究方向、导师要求。
+- [ ] 传入 `majorId` 且未传学科字段时，服务端可从 `AcademicMajor` 自动回填学科门类、一级学科、二级学科。
+- [ ] 传入不存在、禁用或层级不一致的学校/学院/专业/学科 ID 时，服务端返回明确业务错误，不产生脏任务。
+- [ ] `GET /api/tasks/:id/detail` 与 `GET /api/admin/tasks/:id` 返回完整 `academicContext` 和学校/专业/学科名称摘要。
+- [ ] 后台任务列表可展示 `schoolName`、`majorName`、`educationLevel`、`thesisType`，并支持按 Academic 高校、专业、学历层次、论文类型筛选。
+- [ ] 后台任务详情可维护学术上下文，保存失败时不影响任务状态、订单关联和导出记录。
+- [ ] `TaskService.buildGenerationContext` 可从任务构建 AI/Skill 所需上下文，旧任务缺失 Academic 字段时使用旧 `major`、`educationLevel`、`requirements` 兜底。
+- [ ] 本模块不改变订单、支付、任务状态流转、AI 生成主流程和导出接口行为。
