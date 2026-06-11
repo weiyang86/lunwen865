@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { TaskStageNav } from '@/components/client/task-flow/task-stage-nav';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
 import { getApiErrorMessage } from '@/lib/client/api-error';
@@ -147,22 +148,24 @@ export function ThesisDocumentWorkbenchPage({ taskId }: { taskId: string }) {
     await load();
   }
 
-  if (loading && !data) return <div className="p-6 text-sm text-slate-600">加载论文工作台...</div>;
+  if (loading && !data) return <div className="p-6 text-sm text-slate-600">加载合稿与格式...</div>;
 
-  return <div className="min-h-screen bg-slate-50 p-4 text-slate-900 lg:p-6">
-    <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+  return <div className="min-h-screen space-y-4 bg-slate-50 p-4 text-slate-900 lg:p-6">
+    <TaskStageNav taskId={taskId} activeStage="compose-format" />
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">论文文档工作台</h1>
+          <h1 className="text-2xl font-semibold">合稿与格式</h1>
           <p className="mt-1 text-sm text-slate-600">AI 生成与编辑内容仅作为学习和写作辅助，请根据学校规范、导师要求和真实资料自行核验后使用。</p>
           <p className="mt-2 text-sm text-slate-500">{data?.task?.title ?? '未命名任务'} · {data?.task?.schoolName ?? '未绑定学校'} / {data?.task?.majorName ?? '未绑定专业'} / {data?.task?.educationLevel ?? '未指定学历'} / {data?.task?.thesisType ?? '未指定类型'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60" disabled={saving || !data?.canInit} onClick={() => void initDocument()}>{data?.document ? '已初始化' : '初始化论文文档'}</button>
           <button className="rounded border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60" disabled={!data?.document} onClick={() => setMergeOpen(true)}>合并阶段内容</button>
-          <Link href={`/downloads?taskId=${encodeURIComponent(taskId)}`} className="rounded border border-slate-300 bg-white px-3 py-2 text-sm">导出 / 下载</Link>
+          <Link href={`/student/tasks/${encodeURIComponent(taskId)}/delivery`} className="rounded border border-slate-300 bg-white px-3 py-2 text-sm">最终交付</Link>
         </div>
       </div>
+      <div className="mt-3 rounded border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm leading-6 text-indigo-800">合稿与格式用于整理最终论文内容、合并阶段素材、记录导师意见并配置论文格式。生成 Word 初稿前以本页面中的论文文档为准。</div>
       {message ? <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div> : null}
       {error ? <div className="mt-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
     </div>

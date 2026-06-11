@@ -9,6 +9,7 @@ import { ClientAbstractWorkbench } from '@/components/client/client-abstract-wor
 import { ClientOutlineWorkbench } from '@/components/client/client-outline-workbench';
 import { ClientTopicWorkbench } from '@/components/client/client-topic-workbench';
 import { ClientWritingWorkbench } from '@/components/client/client-writing-workbench';
+import { TaskStageNav } from '@/components/client/task-flow/task-stage-nav';
 import { clientHttp } from '@/lib/client/api-client';
 import { getApiErrorMessage } from '@/lib/client/api-error';
 
@@ -89,10 +90,15 @@ function resolveGenerationOrder(input: { status: string | null | undefined; curr
   return 0;
 }
 
-export function ClientTaskTopicWorkspacePage() {
+type ClientTaskTopicWorkspacePageProps = {
+  initialTaskId?: string;
+  routeMode?: 'query' | 'path';
+};
+
+export function ClientTaskTopicWorkspacePage({ initialTaskId, routeMode = 'query' }: ClientTaskTopicWorkspacePageProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const taskId = searchParams?.get('taskId') ?? null;
+  const taskId = initialTaskId ?? searchParams?.get('taskId') ?? null;
   const tab = searchParams?.get('tab') ?? null;
 
   const decodedTaskId = useMemo(() => resolveTaskIdFromQuery(taskId), [taskId]);
@@ -205,8 +211,11 @@ export function ClientTaskTopicWorkspacePage() {
     if (activeTab === requestedTab) return;
     const reason = blockingReasonForTab(requestedTab);
     if (reason) showToast(reason);
-    router.replace(`/tasks?taskId=${encodeURIComponent(decodedTaskId)}&tab=${activeTab}`);
-  }, [activeTab, blockingReasonForTab, decodedTaskId, requestedTab, router, showToast]);
+    const href = routeMode === 'path'
+      ? `/student/tasks/${encodeURIComponent(decodedTaskId)}/generate?tab=${activeTab}`
+      : `/tasks?taskId=${encodeURIComponent(decodedTaskId)}&tab=${activeTab}`;
+    router.replace(href);
+  }, [activeTab, blockingReasonForTab, decodedTaskId, requestedTab, routeMode, router, showToast]);
 
   const setTab = useCallback(
     (next: WorkspaceTab) => {
@@ -216,9 +225,12 @@ export function ClientTaskTopicWorkspacePage() {
         showToast(reason || '当前阶段未完成，暂时无法进入该节点。');
         return;
       }
-      router.replace(`/tasks?taskId=${encodeURIComponent(decodedTaskId)}&tab=${next}`);
+      const href = routeMode === 'path'
+        ? `/student/tasks/${encodeURIComponent(decodedTaskId)}/generate?tab=${next}`
+        : `/tasks?taskId=${encodeURIComponent(decodedTaskId)}&tab=${next}`;
+      router.replace(href);
     },
-    [blockingReasonForTab, canAccessTab, decodedTaskId, router, showToast],
+    [blockingReasonForTab, canAccessTab, decodedTaskId, routeMode, router, showToast],
   );
 
   const nextTab = useMemo((): WorkspaceTab | null => {
@@ -340,10 +352,11 @@ export function ClientTaskTopicWorkspacePage() {
 
   return (
     <div className="space-y-6 pb-24">
+      <TaskStageNav taskId={decodedTaskId} activeStage="generate" />
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold">论文工作台</h1>
+            <h1 className="text-xl font-semibold">论文内容生成</h1>
             <p className="text-sm text-slate-600">
               当前任务：{task?.title ?? '加载中...'}（{decodedTaskId}）
               {stageLabel ? `；阶段：${stageLabel}` : null}
@@ -365,7 +378,7 @@ export function ClientTaskTopicWorkspacePage() {
 
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm text-slate-700">流程节点（可切换已解锁节点，未完成上一阶段无法进入下一阶段）</div>
+            <div className="text-sm text-slate-700">内容生成节点（可切换已解锁节点，未完成上一阶段无法进入下一阶段）</div>
             <div className="text-xs text-slate-500">已解锁：{maxUnlockedIndex + 1}/{WORKSPACE_TABS.length}</div>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-5">
@@ -414,6 +427,10 @@ export function ClientTaskTopicWorkspacePage() {
             })}
           </div>
         </div>
+      </div>
+
+      <div className="rounded border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm leading-6 text-indigo-800">
+        论文内容生成用于产出题目、开题、大纲、摘要、正文等阶段素材。生成结果需导入合稿与格式后，才会进入最终论文文档。
       </div>
 
       {taskError ? (
