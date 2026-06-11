@@ -599,7 +599,7 @@ export function TaskDetailDrawer({
                     <Field label="学生端入口"><span className="font-mono text-xs text-slate-500">/student/tasks/{taskId}/workbench</span></Field>
                   </div>
                 ) : (
-                  <div className="text-sm text-slate-500">尚未初始化论文文档。学生可在文档工作台初始化。</div>
+                  <div className="text-sm text-slate-500">尚未初始化论文文档。学生可在合稿与格式初始化。</div>
                 )}
               </div>
 
