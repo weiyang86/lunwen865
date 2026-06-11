@@ -8,6 +8,7 @@ import {
   Package,
   School,
   WandSparkles,
+  FileText,
   Rocket,
   Settings,
   type LucideIcon,
@@ -53,6 +54,14 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: 'Skill 列表', href: '/admin/thesis-skills' },
       { label: '运行记录', href: '/admin/thesis-skills/runs' },
+    ],
+  },
+  {
+    label: '论文导出引擎',
+    icon: FileText,
+    children: [
+      { label: '格式模板', href: '/admin/thesis-format-templates' },
+      { label: '导出任务', href: '/admin/thesis-export-jobs' },
     ],
   },
   {

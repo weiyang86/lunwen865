@@ -148,3 +148,11 @@
 - 已新增学生端页面 `/student/tasks/[taskId]/workbench`，提供任务摘要、目录树、章节编辑、保存状态、修改记录、导师意见、合稿弹窗和 AI 操作台占位。
 - 已在任务列表提供“文档工作台”入口，并在后台任务详情返回 `thesisDocument` 摘要。
 - 后续 Export-01 应从 `ThesisDocument` 与章节树读取结构化内容，按学校/专业模板生成 Word/PDF；后续 Skill 接入应基于当前章节和导师意见创建 SkillRun。
+
+## Export-01（Issue #141）实现记录
+- 已新增 `ThesisFormatTemplate`、`ThesisFormatRule`、`ThesisExportJob`、`ThesisExportFile` 数据模型和 migration `20260611150000_add_thesis_export_engine`。
+- 已在 seed 中创建全局通用本科论文模板、通用开题报告模板、通用论文大纲模板，并在存在示例学校时创建“重庆师范大学本科论文示例模板（非官方）”。
+- 已在导出模块中新增后台模板/规则 API、新版导出任务 API、学生端导出选项与下载 API，并实现 DOCX 基础生成。
+- 已将学生端 `/downloads` 升级为论文导出中心，同时保留旧版 `ExportTask` 下载记录展示；工作台导出入口带 `taskId` 跳转导出中心。
+- 已新增后台 `/admin/thesis-format-templates`、`/admin/thesis-format-templates/[id]`、`/admin/thesis-export-jobs` 页面。
+- 后续增强：PDF 真实导出、模板上传 DOCX、高校官方模板解析、自定义格式要求自动解析、Word 自动目录、页眉页脚、图表目录、异步队列化新版导出任务。

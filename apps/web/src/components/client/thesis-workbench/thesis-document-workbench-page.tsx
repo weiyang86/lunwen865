@@ -160,7 +160,7 @@ export function ThesisDocumentWorkbenchPage({ taskId }: { taskId: string }) {
         <div className="flex flex-wrap gap-2">
           <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60" disabled={saving || !data?.canInit} onClick={() => void initDocument()}>{data?.document ? '已初始化' : '初始化论文文档'}</button>
           <button className="rounded border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60" disabled={!data?.document} onClick={() => setMergeOpen(true)}>合并阶段内容</button>
-          <Link href="/downloads" className="rounded border border-slate-300 bg-white px-3 py-2 text-sm">导出 / 下载</Link>
+          <Link href={`/downloads?taskId=${encodeURIComponent(taskId)}`} className="rounded border border-slate-300 bg-white px-3 py-2 text-sm">导出 / 下载</Link>
         </div>
       </div>
       {message ? <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div> : null}

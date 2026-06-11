@@ -336,6 +336,49 @@ enum ThesisDocumentMergeMode {
   SMART_MERGE
 }
 
+
+// ============ 论文格式模板与导出引擎 ============
+enum ThesisFormatTemplateStatus {
+  ENABLED
+  DISABLED
+}
+
+enum ThesisFormatTemplateType {
+  GENERAL
+  SCHOOL
+  COLLEGE
+  MAJOR
+  CUSTOM
+}
+
+enum ThesisFormatRuleType {
+  PAGE
+  TITLE
+  BODY
+  HEADING
+  ABSTRACT
+  KEYWORDS
+  TOC
+  REFERENCE
+  COVER
+  FOOTER
+  HEADER
+  CUSTOM
+}
+
+enum ThesisExportFormat {
+  DOCX
+  PDF
+}
+
+enum ThesisExportJobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
 // ============ 配额 ============
 enum QuotaType {
   BRAIN_CELL
@@ -484,6 +527,7 @@ model User {
   primaryTutorOrders Order[] @relation("OrderPrimaryTutor")
   taskAdminLogs TaskAdminLog[] @relation("TaskAdminLogOperator")
   thesisDocumentRevisions ThesisDocumentRevision[] @relation("ThesisDocumentRevisionOperator")
+  thesisExportJobs ThesisExportJob[]
 // 新增这一行
   paymentRecords PaymentRecord[]
   @@index([phone])
@@ -549,6 +593,7 @@ model AcademicSchool {
   colleges AcademicCollege[]
   majors   AcademicMajor[]
   thesisSkillBindings ThesisSkillBinding[]
+  formatTemplates     ThesisFormatTemplate[]
   tasks               Task[]
 
   @@index([provinceId, status, sortOrder])
@@ -569,6 +614,7 @@ model AcademicCollege {
 
   school AcademicSchool  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   majors AcademicMajor[]
+  formatTemplates ThesisFormatTemplate[]
   tasks  Task[]
 
   @@unique([schoolId, name])
@@ -598,6 +644,7 @@ model AcademicMajor {
   disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
   disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
   thesisSkillBindings ThesisSkillBinding[]
+  formatTemplates     ThesisFormatTemplate[]
   tasks               Task[]
 
   @@unique([schoolId, collegeId, name, educationLevel])
@@ -895,6 +942,7 @@ model Task {
   thesisSkillRuns ThesisSkillRun[]
   thesisDocument ThesisDocument?
   thesisAdvisorComments ThesisAdvisorComment[]
+  thesisExportJobs ThesisExportJob[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -940,6 +988,7 @@ model ThesisDocument {
   sections        ThesisDocumentSection[]
   revisions       ThesisDocumentRevision[]
   advisorComments ThesisAdvisorComment[]
+  exportJobs ThesisExportJob[]
 
   @@index([taskId])
   @@index([status])
@@ -1183,6 +1232,112 @@ model PolishSegment {
   updatedAt DateTime @updatedAt
 
   @@index([polishTaskId, segmentIndex])
+}
+
+
+//////////////////////////////////////////////////////
+// ThesisExport（论文格式模板与导出引擎）
+//////////////////////////////////////////////////////
+
+model ThesisFormatTemplate {
+  id             String                     @id @default(cuid())
+  name           String                     @db.VarChar(120)
+  code           String                     @unique @db.VarChar(80)
+  description    String?                    @db.Text
+  schoolId       String?
+  collegeId      String?
+  majorId        String?
+  educationLevel String?                    @db.VarChar(40)
+  thesisType     String?                    @db.VarChar(60)
+  stage          String?                    @db.VarChar(40)
+  templateType   ThesisFormatTemplateType   @default(GENERAL)
+  isDefault      Boolean                    @default(false)
+  status         ThesisFormatTemplateStatus @default(ENABLED)
+  version        Int                        @default(1)
+  sortOrder      Int                        @default(0)
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  school AcademicSchool?  @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  college AcademicCollege? @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  major AcademicMajor? @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  rules ThesisFormatRule[]
+  exportJobs ThesisExportJob[]
+
+  @@index([status, isDefault, sortOrder])
+  @@index([schoolId])
+  @@index([collegeId])
+  @@index([majorId])
+  @@index([educationLevel])
+  @@index([thesisType])
+  @@index([stage])
+}
+
+model ThesisFormatRule {
+  id          String               @id @default(cuid())
+  templateId  String
+  ruleType    ThesisFormatRuleType
+  ruleKey     String               @db.VarChar(80)
+  ruleValue   Json
+  description String?              @db.Text
+  sortOrder   Int                  @default(0)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  template ThesisFormatTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, ruleKey])
+  @@index([templateId, ruleType, sortOrder])
+}
+
+model ThesisExportJob {
+  id                String                @id @default(cuid())
+  taskId            String
+  documentId        String
+  templateId        String
+  userId            String
+  exportStage       String                @db.VarChar(40)
+  exportFormat      ThesisExportFormat    @default(DOCX)
+  customRequirement String?               @db.Text
+  status            ThesisExportJobStatus @default(PENDING)
+  progress          Int                   @default(0)
+  fileUrl           String?               @db.Text
+  fileName          String?               @db.VarChar(255)
+  fileSize          Int?
+  errorMessage      String?               @db.Text
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  template ThesisFormatTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files ThesisExportFile[]
+
+  @@index([taskId, createdAt])
+  @@index([documentId])
+  @@index([templateId])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([exportStage])
+}
+
+model ThesisExportFile {
+  id              String             @id @default(cuid())
+  exportJobId     String
+  fileName        String             @db.VarChar(255)
+  fileUrl         String             @db.Text
+  fileType        ThesisExportFormat
+  fileSize        Int?
+  storageProvider String             @default("local") @db.VarChar(40)
+  createdAt       DateTime           @default(now())
+
+  exportJob ThesisExportJob @relation(fields: [exportJobId], references: [id], onDelete: Cascade)
+
+  @@index([exportJobId])
+  @@index([fileType])
 }
 
 model ExportTask {

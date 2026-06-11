@@ -410,3 +410,34 @@
 - 学生端接口通过任务归属校验，学生只能访问自己的任务文档。
 - 后台接口使用 `JwtAuthGuard + RolesGuard`，允许 `ADMIN`、`SUPER_ADMIN`、`TUTOR` 查看。
 - 原 `/downloads` 下载页面保留，工作台导出按钮首期跳转下载中心；Export-01 再接入结构化文档导出。
+
+## Export-01 论文格式模板与导出 API（Issue #141 已实现）
+
+### 后台格式模板 API
+- `GET /api/admin/thesis-format-templates`：分页查询模板，支持 `keyword`、`schoolId`、`collegeId`、`majorId`、`educationLevel`、`thesisType`、`stage`、`status`。
+- `POST /api/admin/thesis-format-templates`：创建格式模板。
+- `GET /api/admin/thesis-format-templates/:id`：查看模板详情与规则。
+- `PATCH /api/admin/thesis-format-templates/:id`：更新模板基础信息、适用范围、默认状态、版本和启停状态。
+- `DELETE /api/admin/thesis-format-templates/:id`：软禁用模板，保留历史导出关联。
+
+### 后台模板规则 API
+- `GET /api/admin/thesis-format-templates/:id/rules`：查询模板规则。
+- `POST /api/admin/thesis-format-templates/:id/rules`：新增模板规则，`ruleValue` 为 Json。
+- `PATCH /api/admin/thesis-format-rules/:ruleId`：更新规则类型、key、Json 值、说明和排序。
+- `DELETE /api/admin/thesis-format-rules/:ruleId`：删除规则。
+
+### 学生端导出 API
+- `GET /api/thesis-tasks/:taskId/export-options`：返回任务摘要、文档状态、可导出阶段、可导出格式、匹配模板、默认模板和告警；无 `ThesisDocument` 时 `canExport=false`。
+- `POST /api/thesis-tasks/:taskId/export-jobs`：创建新版导出任务；DOCX 会从论文文档章节树生成 Word 文件；PDF 首期返回“PDF 导出将在后续版本开放”。
+- `GET /api/thesis-export-jobs/:jobId`：查询导出任务状态、进度、文件信息和失败原因。
+- `GET /api/thesis-export-jobs/:jobId/download`：下载生成文件，校验任务归属，不暴露服务器绝对路径。
+- `GET /api/thesis-tasks/:taskId/export-jobs`：查询当前任务新版导出历史。
+
+### 后台导出任务 API
+- `GET /api/admin/thesis-export-jobs`：分页查询新版导出任务，支持状态、用户、任务、阶段筛选。
+- `GET /api/admin/thesis-export-jobs/:id`：查看导出任务详情、模板、文档、用户和文件记录。
+- `POST /api/admin/thesis-export-jobs/:id/retry`：重试失败导出任务。
+
+### 兼容说明
+- 旧版 `/api/export`、`/api/export/:id/download` 和 `ExportTask` 不删除，下载中心继续展示旧版下载记录。
+- 新版导出中心默认使用 `ThesisDocument`，后续 Export-02 可扩展 PDF 真实导出、模板 DOCX 上传、自动目录、页眉页脚和图表目录。

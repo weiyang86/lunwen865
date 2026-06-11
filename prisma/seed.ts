@@ -1,4 +1,4 @@
-import { AcademicStatus, PrismaClient, ThesisSkillCategory, ThesisSkillStage, ThesisSkillStatus, UserRole, UserStatus } from '@prisma/client';
+import { AcademicStatus, PrismaClient, ThesisFormatRuleType, ThesisFormatTemplateStatus, ThesisFormatTemplateType, ThesisSkillCategory, ThesisSkillStage, ThesisSkillStatus, UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 
@@ -323,6 +323,88 @@ async function seedThesisSkills(prisma: PrismaClient) {
   console.log('[seed] thesis skills upserted:', skills.map((x) => x.code));
 }
 
+async function upsertTemplateRule(
+  prisma: PrismaClient,
+  templateId: string,
+  ruleKey: string,
+  ruleType: ThesisFormatRuleType,
+  ruleValue: object,
+  description: string,
+  sortOrder: number,
+) {
+  await prisma.thesisFormatRule.upsert({
+    where: { templateId_ruleKey: { templateId, ruleKey } },
+    update: { ruleType, ruleValue, description, sortOrder },
+    create: { templateId, ruleKey, ruleType, ruleValue, description, sortOrder },
+  });
+}
+
+async function seedThesisFormatTemplates(prisma: PrismaClient) {
+  const commonRules = [
+    ['page', ThesisFormatRuleType.PAGE, { paperSize: 'A4', marginTop: 2.54, marginBottom: 2.54, marginLeft: 3.0, marginRight: 2.5, orientation: 'portrait' }, 'A4 与常规论文页边距。', 10],
+    ['body', ThesisFormatRuleType.BODY, { fontFamily: '宋体', fontSize: 12, lineSpacing: 1.5, firstLineIndent: 2 }, '正文宋体小四，1.5 倍行距。', 20],
+    ['heading', ThesisFormatRuleType.HEADING, { heading1FontFamily: '黑体', heading1FontSize: 16, heading1Bold: true, heading1Alignment: 'center', heading2FontFamily: '黑体', heading2FontSize: 14, heading2Bold: true }, '一级标题黑体三号，二级标题黑体四号。', 30],
+    ['abstract', ThesisFormatRuleType.ABSTRACT, { abstractTitle: '摘要', abstractFontFamily: '宋体', abstractFontSize: 12 }, '摘要宋体小四。', 40],
+    ['keywords', ThesisFormatRuleType.KEYWORDS, { keywordsSeparator: '；', keywordsFontFamily: '宋体', keywordsFontSize: 12 }, '关键词以分号分隔。', 50],
+    ['reference', ThesisFormatRuleType.REFERENCE, { referenceStyle: 'GB/T 7714', referenceTitle: '参考文献', referenceFontFamily: '宋体', referenceFontSize: 12 }, '参考文献按 GB/T 7714 风格进行排版辅助，需学生自行核验真实性。', 60],
+  ] as const;
+
+  const fullPaper = await prisma.thesisFormatTemplate.upsert({
+    where: { code: 'global-undergraduate-full-paper' },
+    update: {
+      name: '全局通用本科论文模板',
+      description: '通用本科论文格式模板，用于论文辅导、格式整理和文档交付；导出文件需按学校正式模板和导师要求自行核验。',
+      templateType: ThesisFormatTemplateType.GENERAL,
+      educationLevel: 'UNDERGRADUATE',
+      thesisType: 'FULL_PAPER',
+      stage: null,
+      isDefault: true,
+      status: ThesisFormatTemplateStatus.ENABLED,
+      version: 1,
+      sortOrder: 10,
+    },
+    create: {
+      code: 'global-undergraduate-full-paper',
+      name: '全局通用本科论文模板',
+      description: '通用本科论文格式模板，用于论文辅导、格式整理和文档交付；导出文件需按学校正式模板和导师要求自行核验。',
+      templateType: ThesisFormatTemplateType.GENERAL,
+      educationLevel: 'UNDERGRADUATE',
+      thesisType: 'FULL_PAPER',
+      isDefault: true,
+      status: ThesisFormatTemplateStatus.ENABLED,
+      version: 1,
+      sortOrder: 10,
+    },
+  });
+  for (const [key, type, value, desc, sort] of commonRules) await upsertTemplateRule(prisma, fullPaper.id, key, type, value, desc, sort);
+
+  const proposal = await prisma.thesisFormatTemplate.upsert({
+    where: { code: 'global-proposal-template' },
+    update: { name: '通用开题报告模板', description: '通用开题报告阶段导出模板。', templateType: ThesisFormatTemplateType.GENERAL, stage: 'PROPOSAL', isDefault: true, status: ThesisFormatTemplateStatus.ENABLED, version: 1, sortOrder: 20 },
+    create: { code: 'global-proposal-template', name: '通用开题报告模板', description: '通用开题报告阶段导出模板。', templateType: ThesisFormatTemplateType.GENERAL, stage: 'PROPOSAL', isDefault: true, status: ThesisFormatTemplateStatus.ENABLED, version: 1, sortOrder: 20 },
+  });
+  for (const [key, type, value, desc, sort] of commonRules) await upsertTemplateRule(prisma, proposal.id, key, type, value, desc, sort);
+
+  const outline = await prisma.thesisFormatTemplate.upsert({
+    where: { code: 'global-outline-template' },
+    update: { name: '通用论文大纲模板', description: '通用论文大纲阶段导出模板。', templateType: ThesisFormatTemplateType.GENERAL, stage: 'OUTLINE', isDefault: true, status: ThesisFormatTemplateStatus.ENABLED, version: 1, sortOrder: 30 },
+    create: { code: 'global-outline-template', name: '通用论文大纲模板', description: '通用论文大纲阶段导出模板。', templateType: ThesisFormatTemplateType.GENERAL, stage: 'OUTLINE', isDefault: true, status: ThesisFormatTemplateStatus.ENABLED, version: 1, sortOrder: 30 },
+  });
+  for (const [key, type, value, desc, sort] of commonRules) await upsertTemplateRule(prisma, outline.id, key, type, value, desc, sort);
+
+  const cqNormal = await prisma.academicSchool.findFirst({ where: { name: '重庆师范大学' }, select: { id: true } });
+  if (cqNormal) {
+    const cq = await prisma.thesisFormatTemplate.upsert({
+      where: { code: 'demo-cqnu-undergraduate-template' },
+      update: { name: '重庆师范大学本科论文示例模板（非官方）', description: '示例模板，仅用于演示学校维度模板匹配，不代表该校真实官方要求。', schoolId: cqNormal.id, templateType: ThesisFormatTemplateType.SCHOOL, educationLevel: 'UNDERGRADUATE', thesisType: 'FULL_PAPER', isDefault: true, status: ThesisFormatTemplateStatus.ENABLED, version: 1, sortOrder: 5 },
+      create: { code: 'demo-cqnu-undergraduate-template', name: '重庆师范大学本科论文示例模板（非官方）', description: '示例模板，仅用于演示学校维度模板匹配，不代表该校真实官方要求。', schoolId: cqNormal.id, templateType: ThesisFormatTemplateType.SCHOOL, educationLevel: 'UNDERGRADUATE', thesisType: 'FULL_PAPER', isDefault: true, status: ThesisFormatTemplateStatus.ENABLED, version: 1, sortOrder: 5 },
+    });
+    for (const [key, type, value, desc, sort] of commonRules) await upsertTemplateRule(prisma, cq.id, key, type, value, desc, sort);
+  }
+
+  console.log('[seed] thesis format templates upserted');
+}
+
 async function main() {
   const prisma = new PrismaClient();
 
@@ -357,6 +439,7 @@ async function main() {
   console.log('[seed] created/updated super admin:', user);
   await seedAcademicData(prisma);
   await seedThesisSkills(prisma);
+  await seedThesisFormatTemplates(prisma);
   await prisma.$disconnect();
 }
 

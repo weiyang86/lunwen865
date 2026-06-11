@@ -223,3 +223,11 @@
 - 新增 `ThesisAdvisorComment`：导师意见/线下修改要求，关联任务、文档和可选章节，支持 `OPEN`、`RESOLVED`、`IGNORED` 状态。
 - 关系：`Task 1-1 ThesisDocument`，`ThesisDocument 1-N ThesisDocumentSection`，`ThesisDocumentSection 1-N ThesisDocumentRevision`，`ThesisAdvisorComment` 可绑定整篇文档或具体章节。
 - migration：`20260611130000_add_thesis_document_workbench`。
+
+### 补充（Export-01 / Issue #141）：论文格式模板与导出模型
+- 新增 `ThesisFormatTemplate`：格式模板主表，支持 `schoolId`、`collegeId`、`majorId`、`educationLevel`、`thesisType`、`stage` 适用范围，`templateType` 区分通用/学校/学院/专业/自定义模板，`isDefault`、`status`、`version`、`sortOrder` 控制匹配与启停。
+- 新增 `ThesisFormatRule`：模板规则表，`ruleType` 覆盖 PAGE、TITLE、BODY、HEADING、ABSTRACT、KEYWORDS、TOC、REFERENCE、COVER、FOOTER、HEADER、CUSTOM，`ruleValue` 使用 Json 保存可扩展格式参数。
+- 新增 `ThesisExportJob`：新版论文导出任务，关联 `Task`、`ThesisDocument`、`ThesisFormatTemplate`、`User`，记录 `exportStage`、`exportFormat`、`customRequirement`、`status`、`progress`、文件信息、失败原因和起止时间。
+- 新增 `ThesisExportFile`：导出文件表，一个导出任务可关联多个文件；首期只生成 DOCX 文件，保存 `fileName`、`fileUrl`、`fileType`、`fileSize` 和 `storageProvider`。
+- 模板匹配规则：专业模板 > 学院模板 > 学校模板 > 学历/论文类型/阶段通用模板 > 全局默认模板；同级按 `isDefault=true`、`sortOrder` 小、`version` 新排序；只匹配 `ENABLED` 模板。
+- migration：`20260611150000_add_thesis_export_engine`。旧 `ExportTask` 保留用于历史导出记录和旧下载链接兼容。

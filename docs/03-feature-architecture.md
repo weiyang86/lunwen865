@@ -87,3 +87,12 @@
 - 工作台与下载导出关系：原下载页面保留；工作台导出入口首期跳转 `/downloads`，后续 Export-01 从 `ThesisDocument` 读取结构化内容生成 Word/PDF。
 - 工作台与导师意见/版本记录关系：章节保存时产生 `ThesisDocumentRevision`，导师线下反馈可记录为 `ThesisAdvisorComment` 并标记已解决或忽略。
 - 合规边界：页面提示 AI 生成与编辑内容仅作为学习和写作辅助，学生需自行核验学校规范、导师要求、事实、数据、案例和引用。
+
+## Export-01 论文格式模板与导出引擎实现说明
+- Issue #141 新增论文格式模板与导出引擎，将原“下载与交付验收”升级为模板驱动的“论文导出中心”。
+- 与学术基础数据关系：`ThesisFormatTemplate` 可按 Academic-01 的高校、学院、专业绑定适用范围；没有学校模板时回退通用默认模板，避免导出失败。
+- 与论文任务关系：导出选项读取 Task-01 的学校、专业、学历层次、论文类型和阶段上下文，用于模板匹配与页面展示。
+- 与论文文档工作台关系：新版 `ThesisExportJob` 从 `ThesisDocument` 与章节树读取结构化内容生成 DOCX；没有文档时提示先进入工作台初始化。
+- 与文件下载关系：旧 `ExportTask`、`/api/export/*` 下载链路保留；新版导出使用 `ThesisExportJob` 与 `ThesisExportFile`，文件下载通过 `/api/thesis-export-jobs/:jobId/download` 完成。
+- PDF 策略：首期仅预留枚举、接口和前端选项；创建 PDF 任务时返回明确提示，不引入 LibreOffice/Chromium/Puppeteer 等高风险依赖。
+- 合规边界：导出页面与默认模板说明强调格式整理和学习支持，学生需按学校正式模板、导师要求、真实资料和引用自行核验。
