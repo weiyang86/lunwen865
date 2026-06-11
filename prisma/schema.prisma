@@ -265,6 +265,77 @@ enum ExportTemplate {
   CUSTOM
 }
 
+// ============ 学术基础数据 ============
+enum AcademicStatus {
+  ACTIVE
+  INACTIVE
+}
+
+
+// ============ 论文 Skill 中心 ============
+enum ThesisSkillStage {
+  TOPIC
+  PROPOSAL
+  OUTLINE
+  FULL_PAPER
+  REVISION
+  POLISHING
+  FORMAT_CHECK
+  REFERENCE
+  ABSTRACT
+  DEFENSE
+}
+
+enum ThesisSkillCategory {
+  GENERATION
+  REVISION
+  CHECK
+  EXPORT_ASSIST
+}
+
+enum ThesisSkillStatus {
+  ENABLED
+  DISABLED
+}
+
+enum ThesisSkillRunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+// ============ 论文文档工作台 ============
+enum ThesisDocumentStatus {
+  DRAFT
+  EDITING
+  REVIEWING
+  FINALIZED
+}
+
+enum ThesisDocumentSectionType {
+  TITLE
+  ABSTRACT
+  KEYWORDS
+  CHAPTER
+  SECTION
+  REFERENCE
+  ACKNOWLEDGEMENT
+  APPENDIX
+}
+
+enum ThesisAdvisorCommentStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+enum ThesisDocumentMergeMode {
+  APPEND
+  REPLACE_SECTION
+  SMART_MERGE
+}
+
 // ============ 配额 ============
 enum QuotaType {
   BRAIN_CELL
@@ -412,12 +483,299 @@ model User {
   orders        Order[]
   primaryTutorOrders Order[] @relation("OrderPrimaryTutor")
   taskAdminLogs TaskAdminLog[] @relation("TaskAdminLogOperator")
+  thesisDocumentRevisions ThesisDocumentRevision[] @relation("ThesisDocumentRevisionOperator")
 // 新增这一行
   paymentRecords PaymentRecord[]
   @@index([phone])
   @@index([email])
   @@index([role, status])
   @@index([createdAt])
+}
+
+//////////////////////////////////////////////////////
+// Academic（学术基础数据）
+//////////////////////////////////////////////////////
+
+model AcademicProvince {
+  id        String         @id @default(cuid())
+  name      String         @db.VarChar(100)
+  code      String         @unique @db.VarChar(50)
+  sortOrder Int            @default(0)
+  status    AcademicStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  cities  AcademicCity[]
+  schools AcademicSchool[]
+  tasks   Task[]
+
+  @@index([status, sortOrder])
+}
+
+model AcademicCity {
+  id         String         @id @default(cuid())
+  provinceId String
+  name       String         @db.VarChar(100)
+  code       String         @db.VarChar(50)
+  sortOrder  Int            @default(0)
+  status     AcademicStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  province AcademicProvince @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  schools  AcademicSchool[]
+  tasks    Task[]
+
+  @@unique([provinceId, code])
+  @@index([provinceId, status, sortOrder])
+}
+
+model AcademicSchool {
+  id              String         @id @default(cuid())
+  provinceId      String
+  cityId          String
+  name            String         @db.VarChar(150)
+  code            String?        @unique @db.VarChar(50)
+  schoolType      String?        @db.VarChar(50)
+  educationLevels String[]       @default([])
+  status          AcademicStatus @default(ACTIVE)
+  sortOrder       Int            @default(0)
+  remark          String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  province AcademicProvince  @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  city     AcademicCity      @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  colleges AcademicCollege[]
+  majors   AcademicMajor[]
+  thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
+
+  @@index([provinceId, status, sortOrder])
+  @@index([cityId, status, sortOrder])
+  @@index([name])
+}
+
+model AcademicCollege {
+  id        String         @id @default(cuid())
+  schoolId  String
+  name      String         @db.VarChar(150)
+  code      String?        @db.VarChar(50)
+  status    AcademicStatus @default(ACTIVE)
+  sortOrder Int            @default(0)
+  remark    String?        @db.Text
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  school AcademicSchool  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  majors AcademicMajor[]
+  tasks  Task[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, code])
+  @@index([schoolId, status, sortOrder])
+}
+
+model AcademicMajor {
+  id                   String         @id @default(cuid())
+  schoolId             String
+  collegeId            String?
+  disciplineCategoryId String?
+  disciplineLevelOneId String?
+  disciplineLevelTwoId String?
+  name                 String         @db.VarChar(150)
+  code                 String?        @db.VarChar(50)
+  educationLevel       String?        @db.VarChar(40)
+  status               AcademicStatus @default(ACTIVE)
+  sortOrder            Int            @default(0)
+  remark               String?        @db.Text
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  school             AcademicSchool      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  college            AcademicCollege?    @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  disciplineCategory DisciplineCategory? @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
+  disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
+  disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
+  thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
+
+  @@unique([schoolId, collegeId, name, educationLevel])
+  @@index([schoolId, status, sortOrder])
+  @@index([collegeId, status, sortOrder])
+  @@index([disciplineCategoryId])
+  @@index([disciplineLevelOneId])
+  @@index([disciplineLevelTwoId])
+}
+
+model DisciplineCategory {
+  id        String         @id @default(cuid())
+  name      String         @db.VarChar(100)
+  code      String         @unique @db.VarChar(50)
+  sortOrder Int            @default(0)
+  status    AcademicStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  levelOnes DisciplineLevelOne[]
+  majors    AcademicMajor[]
+  thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
+
+  @@index([status, sortOrder])
+}
+
+model DisciplineLevelOne {
+  id         String         @id @default(cuid())
+  categoryId String
+  name       String         @db.VarChar(100)
+  code       String         @db.VarChar(50)
+  sortOrder  Int            @default(0)
+  status     AcademicStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  category  DisciplineCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  levelTwos DisciplineLevelTwo[]
+  majors    AcademicMajor[]
+  thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
+
+  @@unique([categoryId, code])
+  @@index([categoryId, status, sortOrder])
+}
+
+model DisciplineLevelTwo {
+  id         String         @id @default(cuid())
+  levelOneId String
+  name       String         @db.VarChar(100)
+  code       String         @db.VarChar(50)
+  sortOrder  Int            @default(0)
+  status     AcademicStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  levelOne DisciplineLevelOne @relation(fields: [levelOneId], references: [id], onDelete: Restrict)
+  majors   AcademicMajor[]
+  thesisSkillBindings ThesisSkillBinding[]
+  tasks               Task[]
+
+  @@unique([levelOneId, code])
+  @@index([levelOneId, status, sortOrder])
+}
+
+
+//////////////////////////////////////////////////////
+// ThesisSkill（论文 Skill 中心）
+//////////////////////////////////////////////////////
+
+model ThesisSkill {
+  id          String              @id @default(cuid())
+  name        String              @db.VarChar(100)
+  code        String              @unique @db.VarChar(80)
+  description String?             @db.Text
+  stage       ThesisSkillStage
+  category    ThesisSkillCategory
+  status      ThesisSkillStatus   @default(ENABLED)
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  versions ThesisSkillVersion[]
+  bindings ThesisSkillBinding[]
+  runs     ThesisSkillRun[]
+
+  @@index([stage, status, sortOrder])
+  @@index([category])
+}
+
+model ThesisSkillVersion {
+  id             String   @id @default(cuid())
+  skillId        String
+  version        Int
+  promptTemplate String   @db.Text
+  inputSchema    Json
+  outputSchema   Json
+  qualityRules   Json
+  modelConfig    Json
+  isActive       Boolean  @default(false)
+  /// 仅用于保证同一 Skill 同时只有一个 active version（isActive=true 时写入 skillId，否则为 null）
+  activeKey      String?  @unique
+  changeLog      String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  skill    ThesisSkill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  bindings ThesisSkillBinding[]
+  runs     ThesisSkillRun[]
+
+  @@unique([skillId, version])
+  @@index([skillId, isActive])
+}
+
+model ThesisSkillBinding {
+  id                   String            @id @default(cuid())
+  skillId              String
+  skillVersionId       String?
+  educationLevel       String?           @db.VarChar(40)
+  thesisType           String?           @db.VarChar(60)
+  disciplineCategoryId String?
+  disciplineLevelOneId String?
+  disciplineLevelTwoId String?
+  schoolId             String?
+  majorId              String?
+  priority             Int               @default(0)
+  status               ThesisSkillStatus @default(ENABLED)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  skill              ThesisSkill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillVersion       ThesisSkillVersion?  @relation(fields: [skillVersionId], references: [id], onDelete: SetNull)
+  disciplineCategory DisciplineCategory?  @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
+  disciplineLevelOne DisciplineLevelOne?  @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
+  disciplineLevelTwo DisciplineLevelTwo?  @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
+  school             AcademicSchool?      @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  major              AcademicMajor?       @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  runs               ThesisSkillRun[]
+
+  @@index([skillId, status, priority])
+  @@index([skillVersionId])
+  @@index([schoolId])
+  @@index([majorId])
+  @@index([disciplineCategoryId])
+  @@index([disciplineLevelOneId])
+  @@index([disciplineLevelTwoId])
+}
+
+model ThesisSkillRun {
+  id             String                @id @default(cuid())
+  skillId        String
+  skillVersionId String
+  bindingId      String?
+  taskId         String?
+  stage          ThesisSkillStage
+  inputPayload   Json
+  outputPayload  Json?
+  qualityResult  Json?
+  modelName      String?               @db.VarChar(100)
+  tokenUsage     Json?
+  status         ThesisSkillRunStatus  @default(PENDING)
+  errorMessage   String?               @db.Text
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  skill        ThesisSkill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillVersion ThesisSkillVersion  @relation(fields: [skillVersionId], references: [id], onDelete: Restrict)
+  binding      ThesisSkillBinding? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
+  task         Task?               @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([skillId, createdAt])
+  @@index([skillVersionId])
+  @@index([bindingId])
+  @@index([taskId])
+  @@index([stage, status, createdAt])
 }
 
 //////////////////////////////////////////////////////
@@ -480,10 +838,24 @@ model Task {
   id             String  @id @default(cuid())
   userId         String
   assigneeId     String?
+  /// legacy School/SchoolTemplate 关联，保留用于兼容既有导出模板与历史任务
   schoolId       String
   major          String
   educationLevel String
   title          String?
+
+  provinceId            String?
+  cityId                String?
+  academicSchoolId      String?
+  collegeId             String?
+  majorId               String?
+  disciplineCategoryId  String?
+  disciplineLevelOneId  String?
+  disciplineLevelTwoId  String?
+  thesisType            String? @db.VarChar(60)
+  researchDirection     String? @db.Text
+  advisorRequirement    String? @db.Text
+  formatTemplateId      String?
 
   status       TaskStatus @default(INIT)
   currentStage TaskStage? @default(TOPIC)
@@ -497,6 +869,14 @@ model Task {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  province           AcademicProvince?  @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  city               AcademicCity?      @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  academicSchool     AcademicSchool?    @relation(fields: [academicSchoolId], references: [id], onDelete: SetNull)
+  college            AcademicCollege?   @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  academicMajor      AcademicMajor?     @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  disciplineCategory DisciplineCategory? @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
+  disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
+  disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
 
   topicCandidates TopicCandidate[]
   openingReports  OpeningReport[]
@@ -512,6 +892,9 @@ model Task {
   polishTasks     PolishTask[]
   adminLogs       TaskAdminLog[]
   order           Order?
+  thesisSkillRuns ThesisSkillRun[]
+  thesisDocument ThesisDocument?
+  thesisAdvisorComments ThesisAdvisorComment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -521,9 +904,117 @@ model Task {
   @@index([status])
   @@index([currentStage])
   @@index([schoolId])
+  @@index([provinceId])
+  @@index([cityId])
+  @@index([academicSchoolId])
+  @@index([collegeId])
+  @@index([majorId])
+  @@index([disciplineCategoryId])
+  @@index([disciplineLevelOneId])
+  @@index([disciplineLevelTwoId])
+  @@index([educationLevel])
+  @@index([thesisType])
   @@index([title])
   @@index([createdAt])
   @@index([updatedAt])
+}
+
+
+//////////////////////////////////////////////////////
+// ThesisDocument（论文文档工作台）
+//////////////////////////////////////////////////////
+
+model ThesisDocument {
+  id             String               @id @default(cuid())
+  taskId         String               @unique
+  title          String               @db.VarChar(200)
+  abstract       String?              @db.Text
+  keywords       Json?
+  status         ThesisDocumentStatus @default(DRAFT)
+  currentVersion Int                  @default(1)
+  wordCount      Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  task            Task                     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sections        ThesisDocumentSection[]
+  revisions       ThesisDocumentRevision[]
+  advisorComments ThesisAdvisorComment[]
+
+  @@index([taskId])
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model ThesisDocumentSection {
+  id                    String                    @id @default(cuid())
+  documentId            String
+  parentId              String?
+  sectionType           ThesisDocumentSectionType @default(SECTION)
+  title                 String                    @db.VarChar(200)
+  content               String?                   @db.Text
+  plainText             String?                   @db.Text
+  sortOrder             Int                       @default(0)
+  level                 Int                       @default(1)
+  wordCount             Int                       @default(0)
+  sourceStage           String?                   @db.VarChar(40)
+  sourceGenerationRunId String?
+  deletedAt             DateTime?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  parent   ThesisDocumentSection?  @relation("ThesisDocumentSectionChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children ThesisDocumentSection[] @relation("ThesisDocumentSectionChildren")
+  revisions ThesisDocumentRevision[]
+  advisorComments ThesisAdvisorComment[]
+
+  @@index([documentId, parentId, sortOrder])
+  @@index([documentId, deletedAt])
+  @@index([sourceStage])
+  @@index([sourceGenerationRunId])
+}
+
+model ThesisDocumentRevision {
+  id            String   @id @default(cuid())
+  documentId    String
+  sectionId     String?
+  version       Int
+  beforeContent String?  @db.Text
+  afterContent  String?  @db.Text
+  changeSummary String?  @db.Text
+  operatorId    String?
+  operatorRole  String?  @db.VarChar(40)
+  createdAt     DateTime @default(now())
+
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  section  ThesisDocumentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  operator User? @relation("ThesisDocumentRevisionOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+  @@index([sectionId, createdAt])
+  @@index([operatorId])
+}
+
+model ThesisAdvisorComment {
+  id          String                     @id @default(cuid())
+  taskId      String
+  documentId  String
+  sectionId   String?
+  commentText String                     @db.Text
+  status      ThesisAdvisorCommentStatus @default(OPEN)
+  resolvedAt  DateTime?
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  section  ThesisDocumentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, status])
+  @@index([documentId, status])
+  @@index([sectionId])
+  @@index([createdAt])
 }
 
 enum AbstractStatus {

@@ -16,6 +16,18 @@ export class QueryTaskDto {
   keyword?: string;
 
   @IsOptional()
+  @IsString()
+  academicSchoolId?: string;
+
+  @IsOptional()
+  @IsString()
+  majorId?: string;
+
+  @IsOptional()
+  @IsString()
+  thesisType?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
