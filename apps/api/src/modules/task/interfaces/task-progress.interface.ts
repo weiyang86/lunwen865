@@ -17,6 +17,6 @@ export interface PaginatedResult<T> {
 }
 
 export interface TaskDetail {
-  task: Task;
+  task: Task & Record<string, unknown>;
   progress: TaskProgress;
 }

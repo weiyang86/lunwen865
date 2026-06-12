@@ -46,4 +46,6 @@ export const clientHttp = {
     clientApi.post<T, { data: T }>(url, body).then((r) => r.data),
   patch: <T = unknown>(url: string, body?: unknown) =>
     clientApi.patch<T, { data: T }>(url, body).then((r) => r.data),
+  delete: <T = unknown>(url: string) =>
+    clientApi.delete<T, { data: T }>(url).then((r) => r.data),
 };

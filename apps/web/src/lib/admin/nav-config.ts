@@ -6,6 +6,9 @@ import {
   Sparkles,
   Store,
   Package,
+  School,
+  WandSparkles,
+  FileText,
   Rocket,
   Settings,
   type LucideIcon,
@@ -35,6 +38,32 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Prompt 模板', href: '/admin/prompts', icon: Sparkles },
   { label: '门店管理', href: '/admin/stores', icon: Store },
   { label: '商品管理', href: '/admin/products', icon: Package },
+  {
+    label: '学术基础数据',
+    icon: School,
+    children: [
+      { label: '高校管理', href: '/admin/academic/schools' },
+      { label: '学院管理', href: '/admin/academic/colleges' },
+      { label: '专业管理', href: '/admin/academic/majors' },
+      { label: '学科目录', href: '/admin/academic/disciplines' },
+    ],
+  },
+  {
+    label: '论文 Skill 中心',
+    icon: WandSparkles,
+    children: [
+      { label: 'Skill 列表', href: '/admin/thesis-skills' },
+      { label: '运行记录', href: '/admin/thesis-skills/runs' },
+    ],
+  },
+  {
+    label: '论文导出引擎',
+    icon: FileText,
+    children: [
+      { label: '格式模板', href: '/admin/thesis-format-templates' },
+      { label: '导出任务', href: '/admin/thesis-export-jobs' },
+    ],
+  },
   {
     label: '部署中心',
     icon: Rocket,

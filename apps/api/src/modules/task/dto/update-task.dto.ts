@@ -7,8 +7,9 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { TaskAcademicContextDto } from './task-academic-context.dto';
 
-export class UpdateTaskDto {
+export class UpdateTaskDto extends TaskAcademicContextDto {
   @IsOptional()
   @IsString()
   @MaxLength(200)
@@ -18,6 +19,11 @@ export class UpdateTaskDto {
   @IsString()
   @MaxLength(500)
   topic?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  educationLevel?: string;
 
   @IsOptional()
   @IsInt()
