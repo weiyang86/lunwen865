@@ -90,6 +90,22 @@ export class ListAdminTasksDto {
   orderNo?: string;
 
   @IsOptional()
+  @IsString()
+  academicSchoolId?: string;
+
+  @IsOptional()
+  @IsString()
+  majorId?: string;
+
+  @IsOptional()
+  @IsString()
+  educationLevel?: string;
+
+  @IsOptional()
+  @IsString()
+  thesisType?: string;
+
+  @IsOptional()
   @IsDateString()
   createdAtStart?: string;
 

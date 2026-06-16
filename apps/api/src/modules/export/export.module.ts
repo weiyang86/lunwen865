@@ -17,10 +17,21 @@ import { ContentBuilder } from './builders/content.builder';
 import { ReferenceBuilder } from './builders/reference.builder';
 import { RevisionBuilder } from './builders/revision.builder';
 import { ExportStatus } from '@prisma/client';
+import { TaskModule } from '../task/task.module';
+import { ThesisDocxExportService } from './thesis-docx-export.service';
+import { ThesisExportTemplateService } from './thesis-export-template.service';
+import { ThesisExportService } from './thesis-export.service';
+import { ThesisExportController } from './thesis-export.controller';
+import { AdminThesisFormatTemplateController } from './admin-thesis-format-template.controller';
 
 @Module({
-  imports: [PrismaModule, QuotaModule],
-  controllers: [ExportController, AdminExportController],
+  imports: [PrismaModule, QuotaModule, TaskModule],
+  controllers: [
+    ExportController,
+    AdminExportController,
+    ThesisExportController,
+    AdminThesisFormatTemplateController,
+  ],
   providers: [
     ExportService,
     AdminExportService,
@@ -34,8 +45,16 @@ import { ExportStatus } from '@prisma/client';
     ContentBuilder,
     ReferenceBuilder,
     RevisionBuilder,
+    ThesisExportService,
+    ThesisExportTemplateService,
+    ThesisDocxExportService,
   ],
-  exports: [ExportService],
+  exports: [
+    ExportService,
+    ThesisExportService,
+    ThesisExportTemplateService,
+    ThesisDocxExportService,
+  ],
 })
 export class ExportModule implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}

@@ -11,8 +11,9 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { TaskAcademicContextDto } from './task-academic-context.dto';
 
-export class CreateTaskDto {
+export class CreateTaskDto extends TaskAcademicContextDto {
   @IsString()
   @IsNotEmpty()
   schoolId!: string;
