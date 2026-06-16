@@ -509,9 +509,9 @@ model User {
   educationLevel EducationLevel?
   grade          String?
 
-  role      UserRole   @default(USER)
-  status    UserStatus @default(ACTIVE)
-  banReason String?
+  role        UserRole   @default(USER)
+  status      UserStatus @default(ACTIVE)
+  banReason   String?
   bannedUntil DateTime?
 
   totalWordsQuota Int @default(0)
@@ -520,8 +520,8 @@ model User {
   registerChannel String?
 
   inviterId String?
-  inviter   User?  @relation("Invitation", fields: [inviterId], references: [id])
-  invitees  User[] @relation("Invitation")
+  inviter   User?   @relation("Invitation", fields: [inviterId], references: [id])
+  invitees  User[]  @relation("Invitation")
 
   lastLoginAt DateTime?
   lastLoginIp String?
@@ -1109,9 +1109,9 @@ model TaskAbstract {
   abstractZh String? @db.Text
   abstractEn String? @db.Text
 
-  feedback     String?  @db.Text
-  errorMessage String?  @db.Text
-  retryCount   Int      @default(0)
+  feedback     String? @db.Text
+  errorMessage String? @db.Text
+  retryCount   Int     @default(0)
   durationMs   Int?
 
   llmModel String?
@@ -1137,8 +1137,8 @@ model TaskAbstractRevision {
   abstractId String?
   abstract   TaskAbstract? @relation(fields: [abstractId], references: [id], onDelete: SetNull)
 
-  type TaskAbstractRevisionType
-  feedback String? @db.Text
+  type     TaskAbstractRevisionType
+  feedback String?                  @db.Text
 
   fromVersion Int?
   toVersion   Int?
@@ -1193,10 +1193,10 @@ model PolishTask {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   taskId String?
-  task   Task?  @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   title        String?
-  originalText String @db.Text
+  originalText String  @db.Text
   polishedText String? @db.Text
 
   originalLength Int
@@ -1204,11 +1204,11 @@ model PolishTask {
 
   strength       PolishStrength
   mode           PolishMode
-  preserveQuotes Boolean  @default(true)
-  preserveTerms  String[] @default([])
+  preserveQuotes Boolean        @default(true)
+  preserveTerms  String[]       @default([])
 
   status       PolishStatus @default(PENDING)
-  progress     Int         @default(0)
+  progress     Int          @default(0)
   errorMessage String?
 
   aiScoreBefore Float?
@@ -1221,8 +1221,8 @@ model PolishTask {
 
   startedAt   DateTime?
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   segments PolishSegment[]
 
@@ -1243,7 +1243,7 @@ model PolishSegment {
   polishedText String? @db.Text
 
   status       PolishStatus @default(PENDING)
-  retryCount   Int         @default(0)
+  retryCount   Int          @default(0)
   errorMessage String?
   tokensUsed   Int?
 
@@ -1445,15 +1445,15 @@ model ExportTask {
 
   contentSnapshot Json?
 
-  status   ExportStatus @default(PENDING)
-  progress Int          @default(0)
-  filePath String?
-  fileName String? @db.VarChar(255)
-  fileSize Int?
-  downloadUrl String?
-  downloadCount Int @default(0)
+  status        ExportStatus @default(PENDING)
+  progress      Int          @default(0)
+  filePath      String?
+  fileName      String?      @db.VarChar(255)
+  fileSize      Int?
+  downloadUrl   String?
+  downloadCount Int          @default(0)
 
-  errorMessage String? @db.Text
+  errorMessage String?   @db.Text
   expiresAt    DateTime?
 
   createdAt DateTime @default(now())
@@ -1465,45 +1465,45 @@ model ExportTask {
 }
 
 model UserQuota {
-  id        String    @id @default(cuid())
+  id String @id @default(cuid())
 
-  userId    String
-  user      User      @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   quotaType QuotaType
 
-  balance   Int       @default(0)
-  totalIn   Int       @default(0)
-  totalOut  Int       @default(0)
+  balance  Int @default(0)
+  totalIn  Int @default(0)
+  totalOut Int @default(0)
 
-  updatedAt DateTime  @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, quotaType])
   @@index([userId])
 }
 
 model QuotaLog {
-  id           String            @id @default(cuid())
+  id String @id @default(cuid())
 
-  userId       String
-  user         User              @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   quotaType    QuotaType
   change       Int
   balanceAfter Int
   reason       QuotaChangeReason
 
-  orderId      String?
-  order        Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  relatedTaskId String?
-  relatedStageKey String?        @db.VarChar(40)
+  orderId                String?
+  order                  Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  relatedTaskId          String?
+  relatedStageKey        String? @db.VarChar(40)
   relatedGenerationRunId String? @db.VarChar(50)
-  idempotencyKey String?         @db.VarChar(100)
-  balanceBefore Int?
+  idempotencyKey         String? @db.VarChar(100)
+  balanceBefore          Int?
 
-  bizId        String?
-  remark       String?           @db.VarChar(255)
-  createdAt    DateTime          @default(now())
+  bizId     String?
+  remark    String?  @db.VarChar(255)
+  createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
   @@index([orderId])
@@ -1521,15 +1521,15 @@ model AiGenerationRun {
   taskId String
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  stageKey String @db.VarChar(40)
-  actionKey String @db.VarChar(50)
-  sceneKey  String @db.VarChar(80)
-  status    String @db.VarChar(30)
-  costBrainCells Int @default(0)
+  stageKey       String @db.VarChar(40)
+  actionKey      String @db.VarChar(50)
+  sceneKey       String @db.VarChar(80)
+  status         String @db.VarChar(30)
+  costBrainCells Int    @default(0)
 
-  inputSnapshot Json?
+  inputSnapshot  Json?
   outputSnapshot Json?
-  errorMessage String? @db.Text
+  errorMessage   String? @db.Text
   idempotencyKey String? @db.VarChar(100)
 
   createdAt DateTime @default(now())
@@ -1554,11 +1554,11 @@ model SystemSetting {
 }
 
 model Product {
-  id                 String        @id @default(cuid())
-  code               String        @unique @db.VarChar(50)
-  name               String        @db.VarChar(100)
-  description        String?       @db.Text
-  coverUrl           String?       @db.Text
+  id                 String  @id @default(cuid())
+  code               String  @unique @db.VarChar(50)
+  name               String  @db.VarChar(100)
+  description        String? @db.Text
+  coverUrl           String? @db.Text
   priceCents         Int
   originalPriceCents Int?
 
@@ -1569,13 +1569,13 @@ model Product {
   exportQuota Int @default(0)
   aiChatQuota Int @default(0)
 
-  status    ProductStatus @default(ACTIVE)
-  sortOrder Int           @default(0)
-  totalStock Int          @default(0)
-  soldCount  Int          @default(0)
+  status     ProductStatus @default(ACTIVE)
+  sortOrder  Int           @default(0)
+  totalStock Int           @default(0)
+  soldCount  Int           @default(0)
 
   categoryId String?
-  category   Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   deletedAt DateTime?
 
@@ -1590,14 +1590,14 @@ model Product {
 }
 
 model Category {
-  id       String   @id @default(cuid())
+  id       String     @id @default(cuid())
   parentId String?
-  parent   Category? @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: Cascade)
   children Category[] @relation("CategoryChildren")
 
-  name    String  @db.VarChar(50)
-  sort    Int     @default(0)
-  iconUrl String? @db.Text
+  name      String    @db.VarChar(50)
+  sort      Int       @default(0)
+  iconUrl   String?   @db.Text
   deletedAt DateTime?
 
   products Product[]
@@ -1632,35 +1632,35 @@ model Store {
 }
 
 model Order {
-  id          String  @id @default(cuid())
-  orderNo     String  @unique @db.VarChar(40)
+  id      String @id @default(cuid())
+  orderNo String @unique @db.VarChar(40)
 
-  userId      String
-  user        User    @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   primaryTutorId String?
   primaryTutor   User?   @relation("OrderPrimaryTutor", fields: [primaryTutorId], references: [id], onDelete: SetNull)
 
-  taskId      String? @unique
-  task        Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  taskId String? @unique
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
-  productId   String
-  product     Product @relation(fields: [productId], references: [id])
+  productId       String
+  product         Product @relation(fields: [productId], references: [id])
   productSnapshot Json
 
   amountCents     Int
   paidAmountCents Int?
-  discountCents   Int @default(0)
+  discountCents   Int  @default(0)
 
-  status      OrderStatus @default(PENDING)
-  sourceType  OrderSourceType @default(DIRECT)
-  agencyId    String? @db.VarChar(50)
+  status     OrderStatus     @default(PENDING)
+  sourceType OrderSourceType @default(DIRECT)
+  agencyId   String?         @db.VarChar(50)
 
-  channel     PaymentChannel?
-  method      PaymentMethod?
+  channel PaymentChannel?
+  method  PaymentMethod?
 
-  outTradeNo      String? @unique @db.VarChar(64)
-  transactionId   String? @db.VarChar(64)
+  outTradeNo    String? @unique @db.VarChar(64)
+  transactionId String? @db.VarChar(64)
 
   expiresAt   DateTime
   paidAt      DateTime?
@@ -1676,12 +1676,12 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  paymentLogs PaymentLog[]
-  paymentRecords PaymentRecord[]
+  paymentLogs         PaymentLog[]
+  paymentRecords      PaymentRecord[]
   paymentCallbackLogs PaymentCallbackLog[]
-  refunds     Refund[]
-  items       OrderItem[]
-  quotaLogs   QuotaLog[]
+  refunds             Refund[]
+  items               OrderItem[]
+  quotaLogs           QuotaLog[]
 
   @@index([userId, createdAt])
   @@index([primaryTutorId])
@@ -1692,36 +1692,36 @@ model Order {
 }
 
 model PaymentRecord {
-  id String @id @default(cuid())
+  id        String @id @default(cuid())
   paymentNo String @unique @db.VarChar(40)
 
   orderId String
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   userId String
-  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  channel PaymentChannel?
-  method  PaymentMethod?
+  channel     PaymentChannel?
+  method      PaymentMethod?
   amountCents Int
-  currency String @default("CNY") @db.VarChar(10)
-  status String @default("CREATED") @db.VarChar(30)
+  currency    String          @default("CNY") @db.VarChar(10)
+  status      String          @default("CREATED") @db.VarChar(30)
 
   providerTradeNo String? @db.VarChar(64)
   providerOrderNo String? @db.VarChar(64)
   providerBuyerId String? @db.VarChar(64)
 
-  payUrl String? @db.Text
-  qrCodeUrl String? @db.Text
-  clientPayload Json?
-  rawRequest Json?
-  rawResponse Json?
-  notifyRaw Json?
-  notifyVerified Boolean?
+  payUrl           String?   @db.Text
+  qrCodeUrl        String?   @db.Text
+  clientPayload    Json?
+  rawRequest       Json?
+  rawResponse      Json?
+  notifyRaw        Json?
+  notifyVerified   Boolean?
   notifyReceivedAt DateTime?
 
-  idempotencyKey String? @db.VarChar(100)
-  paidAt DateTime?
+  idempotencyKey String?   @db.VarChar(100)
+  paidAt         DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1748,56 +1748,55 @@ model OrderItem {
   @@index([orderId])
 }
 
-
 model PaymentCallbackLog {
   id String @id @default(cuid())
 
   orderId String?
-  order   Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
-  channel PaymentChannel
+  channel    PaymentChannel
   rawHeaders Json?
-  rawBody String? @db.Text
-  rawQuery Json?
+  rawBody    String?        @db.Text
+  rawQuery   Json?
 
-  verified Boolean @default(false)
+  verified         Boolean @default(false)
   normalizedStatus String? @db.VarChar(30)
-  processStatus String? @db.VarChar(30)
-  errorMessage String? @db.Text
+  processStatus    String? @db.VarChar(30)
+  errorMessage     String? @db.Text
 
-  receivedAt DateTime @default(now())
+  receivedAt  DateTime  @default(now())
   processedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([channel, createdAt])
   @@index([orderId, createdAt])
 }
 
 model PaymentLog {
-  id        String         @id @default(cuid())
+  id String @id @default(cuid())
 
-  orderId   String
-  order     Order          @relation(fields: [orderId], references: [id])
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
 
-  type      PaymentLogType
-  channel   PaymentChannel?
+  type    PaymentLogType
+  channel PaymentChannel?
 
-  request   Json?
-  response  Json?
-  message   String?        @db.Text
-  success   Boolean        @default(true)
+  request  Json?
+  response Json?
+  message  String? @db.Text
+  success  Boolean @default(true)
 
-  createdAt DateTime       @default(now())
+  createdAt DateTime @default(now())
 
   @@index([orderId, createdAt])
 }
 
 model Refund {
-  id           String       @id @default(cuid())
-  refundNo     String       @unique @db.VarChar(40)
+  id       String @id @default(cuid())
+  refundNo String @unique @db.VarChar(40)
 
-  orderId      String
-  order        Order        @relation(fields: [orderId], references: [id])
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
 
   amountCents  Int
   reason       String       @db.VarChar(255)
@@ -1805,13 +1804,13 @@ model Refund {
   rejectReason String?      @db.VarChar(255)
   resolvedAt   DateTime?
 
-  outRefundNo  String?      @unique @db.VarChar(64)
-  refundId     String?      @db.VarChar(64)
+  outRefundNo String? @unique @db.VarChar(64)
+  refundId    String? @db.VarChar(64)
 
-  operatorId   String
+  operatorId String
 
   finishedAt   DateTime?
-  errorMessage String?      @db.Text
+  errorMessage String?   @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1831,7 +1830,7 @@ model RefreshToken {
   userAgent String?
   ip        String?
 
-  revoked   Boolean  @default(false)
+  revoked   Boolean   @default(false)
   revokedAt DateTime?
 
   expiresAt DateTime
@@ -1846,7 +1845,7 @@ model LoginLog {
   id String @id @default(cuid())
 
   userId String?
-  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   loginType  LoginType
   identifier String
@@ -1870,9 +1869,9 @@ model VerifyCode {
   scene  VerifyScene
   code   String
 
-  used         Boolean  @default(false)
+  used         Boolean   @default(false)
   usedAt       DateTime?
-  attemptCount Int      @default(0)
+  attemptCount Int       @default(0)
 
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -1892,7 +1891,7 @@ model TopicCandidate {
   description String? @db.Text
   isSelected  Boolean @default(false)
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task      Task                     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   revisions TopicCandidateRevision[]
 
   createdAt DateTime @default(now())
@@ -1915,7 +1914,7 @@ model TopicCandidateRevision {
   candidate   TopicCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   type TopicCandidateRevisionType
-  note String? @db.Text
+  note String?                    @db.Text
 
   beforeTitle String? @db.Text
   afterTitle  String  @db.Text
@@ -1951,20 +1950,20 @@ model OpeningReport {
   /// }
   content Json
 
-  status            OpeningReportStatus @default(PENDING)
-  fullContent        String?            @db.Text
-  totalWordCount     Int                @default(0)
+  status              OpeningReportStatus @default(PENDING)
+  fullContent         String?             @db.Text
+  totalWordCount      Int                 @default(0)
   generationStartedAt DateTime?
   generationEndedAt   DateTime?
   durationMs          Int?
-  errorMessage        String?           @db.Text
-  retryCount          Int               @default(0)
+  errorMessage        String?             @db.Text
+  retryCount          Int                 @default(0)
 
   version        Int
   isApproved     Boolean @default(false)
   reviewComments String? @db.Text
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task     Task                   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   sections OpeningReportSection[]
 
   createdAt DateTime @default(now())
@@ -1988,12 +1987,12 @@ model OpeningReportSection {
   content   String?                    @db.Text
   wordCount Int                        @default(0)
 
-  durationMs  Int?
-  generatedAt DateTime?
-  errorMessage String?                 @db.Text
-  retryCount  Int                      @default(0)
+  durationMs   Int?
+  generatedAt  DateTime?
+  errorMessage String?   @db.Text
+  retryCount   Int       @default(0)
 
-  report OpeningReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report    OpeningReport                  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   revisions OpeningReportSectionRevision[]
 
   createdAt DateTime @default(now())
@@ -2016,8 +2015,8 @@ model OpeningReportSectionRevision {
   sectionId String
   section   OpeningReportSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
-  type OpeningReportSectionRevisionType
-  feedback String? @db.Text
+  type     OpeningReportSectionRevisionType
+  feedback String?                          @db.Text
 
   beforeContent String? @db.Text
   afterContent  String? @db.Text
@@ -2048,13 +2047,13 @@ model Outline {
   maxDepth        Int @default(3)
 
   llmModel             String?
-  totalTokensUsed      Int @default(0)
+  totalTokensUsed      Int     @default(0)
   generationDurationMs Int?
 
   version Int @default(1)
 
-  nodes   OutlineNode[]
-  chapters Chapter[]
+  nodes           OutlineNode[]
+  chapters        Chapter[]
   writingSessions WritingSession[] @relation("WritingOutlineSnapshot")
 
   createdAt DateTime @default(now())
@@ -2107,10 +2106,10 @@ model WritingSession {
 
   status WritingSessionStatus @default(PENDING)
 
-  totalSections   Int
-  completedCount  Int @default(0)
-  failedCount     Int @default(0)
-  totalTokens     Int @default(0)
+  totalSections    Int
+  completedCount   Int     @default(0)
+  failedCount      Int     @default(0)
+  totalTokens      Int     @default(0)
   currentSectionId String?
   errorMessage     String? @db.Text
 
@@ -2142,7 +2141,7 @@ model WritingSection {
   title   String
   summary String? @db.Text
 
-  expectedWords Int @default(0)
+  expectedWords Int                  @default(0)
   status        WritingSectionStatus @default(PENDING)
 
   rawContent    String? @db.Text
@@ -2154,9 +2153,9 @@ model WritingSection {
 
   errorMessage String? @db.Text
 
-  startedAt   DateTime?
-  finishedAt  DateTime?
-  durationMs  Int?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  durationMs Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2193,13 +2192,13 @@ model Reference {
   url        String?
   accessDate DateTime?
 
-  doi    String?
-  isbn   String?
-  source RefSource @default(AI_GENERATED)
-  verified Boolean @default(false)
+  doi      String?
+  isbn     String?
+  source   RefSource @default(AI_GENERATED)
+  verified Boolean   @default(false)
 
   citedInSections String[] @default([])
-  citedCount      Int @default(0)
+  citedCount      Int      @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2347,29 +2346,29 @@ model GenerationLog {
 model PromptTemplate {
   id String @id @default(cuid())
 
-  code String @unique @db.VarChar(80)
-  name String @db.VarChar(120)
-  scene PromptScene
-  description String? @db.Text
-  tags String[] @default([])
+  code        String      @unique @db.VarChar(80)
+  name        String      @db.VarChar(120)
+  scene       PromptScene
+  description String?     @db.Text
+  tags        String[]    @default([])
 
-  content String @db.Text
+  content   String @db.Text
   variables Json
 
-  model String? @db.VarChar(50)
+  model       String? @db.VarChar(50)
   temperature Float?
-  maxTokens Int?
+  maxTokens   Int?
 
-  draftContent String? @db.Text
-  draftVariables Json?
-  draftModel String? @db.VarChar(50)
+  draftContent     String?   @db.Text
+  draftVariables   Json?
+  draftModel       String?   @db.VarChar(50)
   draftModelParams Json?
   draftModelConfig Json?
-  draftMetadata Json?
-  draftUpdatedAt DateTime?
+  draftMetadata    Json?
+  draftUpdatedAt   DateTime?
 
-  status PromptStatus @default(DRAFT)
-  currentVersion Int @default(1)
+  status         PromptStatus @default(DRAFT)
+  currentVersion Int          @default(1)
 
   createdBy String
   updatedBy String
@@ -2386,20 +2385,20 @@ model PromptVersion {
   id String @id @default(cuid())
 
   templateId String
-  template PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  version Int
+  template   PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version    Int
 
-  content String @db.Text
+  content   String @db.Text
   variables Json
 
-  model String? @db.VarChar(50)
+  model       String?  @db.VarChar(50)
   temperature Float?
-  maxTokens Int?
+  maxTokens   Int?
   modelConfig Json?
-  metadata Json?
-  changelog String? @db.VarChar(500)
-  operatorId String
-  createdAt DateTime @default(now())
+  metadata    Json?
+  changelog   String?  @db.VarChar(500)
+  operatorId  String
+  createdAt   DateTime @default(now())
 
   @@unique([templateId, version])
   @@index([templateId, createdAt])
