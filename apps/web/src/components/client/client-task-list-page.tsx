@@ -331,11 +331,11 @@ export function ClientTaskListPage() {
                   <p className="text-xs text-slate-500">状态：{task.status}</p>
                 </div>
                 <div className="flex gap-2">
-                  <Link href={`/student/tasks/${encodeURIComponent(task.id)}/generate`} className="rounded bg-slate-900 px-3 py-2 text-xs text-white hover:bg-slate-800">
-                    进入论文任务
+                  <Link href={`/student/tasks/${encodeURIComponent(task.id)}/workbench`} className="rounded bg-slate-900 px-3 py-2 text-xs text-white hover:bg-slate-800">
+                    文档工作台
                   </Link>
-                  <Link href={`/student/tasks/${encodeURIComponent(task.id)}/generate`} className="rounded border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
-                    继续生成
+                  <Link href={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="rounded border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
+                    阶段生成
                   </Link>
                 </div>
               </div>

@@ -232,17 +232,9 @@
 - 模板匹配规则：专业模板 > 学院模板 > 学校模板 > 学历/论文类型/阶段通用模板 > 全局默认模板；同级按 `isDefault=true`、`sortOrder` 小、`version` 新排序；只匹配 `ENABLED` 模板。
 - migration：`20260611150000_add_thesis_export_engine`。旧 `ExportTask` 保留用于历史导出记录和旧下载链接兼容。
 
-## Workbench-Format-01 论文格式模板与文档格式配置
-
-### ThesisFormatTemplate
-- 保存预设论文格式模板，字段包括 `name`、`code`、`description`、`schoolId`、`collegeId`、`majorId`、`educationLevel`、`thesisType`、`stage`、`templateType`、`isDefault`、`status`、`version`、`sortOrder`。
-- `schoolId`、`collegeId`、`majorId` 均可为空；为空表示更通用的模板范围。示例高校模板必须标注“示例/非官方”，不得描述为官方模板。
-
-### ThesisFormatRule
-- 保存模板下的具体格式规则，字段包括 `templateId`、`ruleType`、`ruleKey`、`ruleValue`、`description`、`sortOrder`。
-- `ruleValue` 使用 JSON，用于表达页面、封面、标题、摘要、关键词、正文、标题层级、目录、参考文献、页眉页脚等格式配置。
-
-### ThesisDocumentFormatSetting
-- 保存某篇 `ThesisDocument` 当前应用的格式配置，字段包括 `documentId`、`templateId`、`overrideRules`、`customRequirement`、`previewMode`。
-- `documentId` 唯一，首期一篇论文只保留一条当前格式配置；`templateId` 可为空，以支持暂无模板时先保存自定义格式要求。
-- `overrideRules` 与 `customRequirement` 只影响后续导出排版配置，不直接修改 `ThesisDocumentSection` 正文内容。
+### 补充（Export-DOCX-01）：Word 初稿文件与版本模型
+- 新增 `ThesisDocumentFormatSetting`：文档当前格式配置，关联 `ThesisDocument` 与可选 `ThesisFormatTemplate`，保存 `overrideRules` 与 `customRequirement`。若 Workbench-Format-01 尚未完整提供该模型，本阶段以兼容方式补齐最小结构。
+- 新增 `ThesisWordFile`：某个任务/文档当前 Word 文件对象，关联 `Task` 与 `ThesisDocument`，保存当前 `fileName`、下载 `fileUrl`、`currentVersion` 与状态 `DRAFT/GENERATED/EDITING/FINALIZED/FAILED`。
+- 新增 `ThesisWordFileVersion`：Word 文件历史版本，记录版本号、文件路径、大小、来源类型、生成时 `ThesisDocument.currentVersion`、使用的 `formatTemplateId`、`formatSettingSnapshot` 与操作人。
+- 关系：`Task 1-N ThesisWordFile`，`ThesisDocument 1-1 ThesisWordFile`，`ThesisWordFile 1-N ThesisWordFileVersion`；每次重新生成 DOCX 都递增版本并保留旧文件版本。
+- migration：`20260612100000_add_thesis_word_file`。

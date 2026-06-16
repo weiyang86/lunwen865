@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,20 +7,17 @@ import {
   Prisma,
   ThesisFormatTemplateStatus,
   ThesisFormatTemplateType,
-  UserRole,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type {
   CreateThesisFormatRuleDto,
   CreateThesisFormatTemplateDto,
   ListThesisFormatTemplatesDto,
-  UpdateThesisDocumentFormatSettingDto,
   UpdateThesisFormatRuleDto,
   UpdateThesisFormatTemplateDto,
 } from './dto/thesis-format-template.dto';
 
 const GENERAL_TEMPLATE_CODE = 'global-undergraduate-full-paper';
-type Actor = { id: string; role?: string | null; admin?: boolean };
 
 @Injectable()
 export class ThesisExportTemplateService {
@@ -44,7 +40,6 @@ export class ThesisExportTemplateService {
     if (dto.thesisType) where.thesisType = dto.thesisType;
     if (dto.stage) where.stage = dto.stage;
     if (dto.status) where.status = dto.status;
-    if (dto.templateType) where.templateType = dto.templateType;
     const [items, total] = await this.prisma.$transaction([
       this.prisma.thesisFormatTemplate.findMany({
         where,
@@ -189,8 +184,6 @@ export class ThesisExportTemplateService {
     void options?.exportFormat;
     const task = await this.prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundException('任务不存在');
-    const effectiveStage =
-      options?.stage ?? task.thesisType ?? task.currentStage ?? undefined;
     const templates = await this.prisma.thesisFormatTemplate.findMany({
       where: {
         status: ThesisFormatTemplateStatus.ENABLED,
@@ -205,7 +198,7 @@ export class ThesisExportTemplateService {
             ],
           },
           { OR: [{ thesisType: null }, { thesisType: task.thesisType }] },
-          { OR: [{ stage: null }, { stage: effectiveStage ?? null }] },
+          { OR: [{ stage: null }, { stage: options?.stage ?? null }] },
         ],
       },
       include: this.includeScope(),
@@ -213,7 +206,7 @@ export class ThesisExportTemplateService {
     let ranked = templates
       .map((template) => ({
         template,
-        score: this.scoreTemplate(template, task, effectiveStage),
+        score: this.scoreTemplate(template, task, options?.stage),
       }))
       .filter((x) => x.score >= 0)
       .sort(
@@ -238,208 +231,6 @@ export class ThesisExportTemplateService {
     return ranked;
   }
 
-  async getTaskFormatTemplates(
-    taskId: string,
-    options: { stage?: string } | undefined,
-    actor: Actor,
-  ) {
-    await this.assertTaskAccess(taskId, actor);
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      include: {
-        academicSchool: { select: { id: true, name: true } },
-        college: { select: { id: true, name: true } },
-        academicMajor: { select: { id: true, name: true } },
-        thesisDocument: {
-          select: { id: true, title: true, formatSetting: true },
-        },
-      },
-    });
-    if (!task) throw new NotFoundException('任务不存在');
-    const matchedTemplates = await this.resolveExportTemplatesForTask(taskId, {
-      stage: options?.stage,
-    });
-    const currentSetting = task.thesisDocument
-      ? await this.prisma.thesisDocumentFormatSetting.findUnique({
-          where: { documentId: task.thesisDocument.id },
-          include: {
-            template: {
-              include: {
-                ...this.includeScope(),
-                rules: {
-                  orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-                },
-              },
-            },
-          },
-        })
-      : null;
-    const warnings: string[] = [];
-    if (!task.thesisDocument)
-      warnings.push('请先初始化合稿与格式中的论文文档，再保存格式配置');
-    if (!matchedTemplates.length)
-      warnings.push('暂无可用模板，请联系管理员配置全局通用模板');
-    return {
-      matchedTemplates: await this.withRuleSummaries(matchedTemplates),
-      defaultTemplate: matchedTemplates[0]
-        ? await this.withRuleSummary(matchedTemplates[0].id)
-        : null,
-      currentSetting,
-      taskContext: {
-        id: task.id,
-        title: task.title,
-        schoolId: task.academicSchoolId,
-        schoolName: task.academicSchool?.name ?? null,
-        collegeId: task.collegeId,
-        collegeName: task.college?.name ?? null,
-        majorId: task.majorId,
-        majorName: task.academicMajor?.name ?? task.major,
-        educationLevel: task.educationLevel,
-        thesisType: task.thesisType,
-        stage: options?.stage ?? null,
-      },
-      warningMessages: warnings,
-    };
-  }
-
-  async getDocumentFormatSetting(documentId: string, actor: Actor) {
-    const document = await this.assertDocumentAccess(documentId, actor);
-    const setting = await this.prisma.thesisDocumentFormatSetting.findUnique({
-      where: { documentId },
-      include: {
-        template: {
-          include: {
-            ...this.includeScope(),
-            rules: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
-          },
-        },
-      },
-    });
-    const templates = await this.resolveExportTemplatesForTask(
-      document.taskId,
-      {
-        stage: document.task.currentStage ?? undefined,
-      },
-    );
-    return {
-      currentSetting: setting,
-      defaultTemplate: templates[0]
-        ? await this.withRuleSummary(templates[0].id)
-        : null,
-      rulesSummary: setting?.templateId
-        ? await this.getRulesSummary(setting.templateId)
-        : [],
-      warningMessages: templates.length
-        ? []
-        : ['暂无可用模板，请联系管理员配置全局通用模板'],
-    };
-  }
-
-  async saveDocumentFormatSetting(
-    documentId: string,
-    dto: UpdateThesisDocumentFormatSettingDto,
-    actor: Actor,
-  ) {
-    await this.assertDocumentAccess(documentId, actor);
-    if (dto.templateId) await this.assertEnabledTemplate(dto.templateId);
-    const data: Prisma.ThesisDocumentFormatSettingUpdateInput = {
-      template:
-        dto.templateId === undefined
-          ? undefined
-          : dto.templateId
-            ? { connect: { id: dto.templateId } }
-            : { disconnect: true },
-      overrideRules:
-        dto.overrideRules === undefined
-          ? undefined
-          : this.toJson(dto.overrideRules),
-      customRequirement:
-        dto.customRequirement === undefined
-          ? undefined
-          : dto.customRequirement.trim(),
-      previewMode:
-        dto.previewMode === undefined ? undefined : dto.previewMode || 'SIMPLE',
-    };
-    const setting = await this.prisma.thesisDocumentFormatSetting.upsert({
-      where: { documentId },
-      update: data,
-      create: {
-        document: { connect: { id: documentId } },
-        template: dto.templateId
-          ? { connect: { id: dto.templateId } }
-          : undefined,
-        overrideRules:
-          dto.overrideRules === undefined
-            ? undefined
-            : this.toJson(dto.overrideRules),
-        customRequirement: dto.customRequirement?.trim(),
-        previewMode: dto.previewMode || 'SIMPLE',
-      },
-      include: {
-        template: {
-          include: {
-            ...this.includeScope(),
-            rules: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
-          },
-        },
-      },
-    });
-    return {
-      setting,
-      template: setting.template,
-      rulesSummary: setting.templateId
-        ? await this.getRulesSummary(setting.templateId)
-        : [],
-    };
-  }
-
-  async applyFormatTemplate(
-    documentId: string,
-    templateId: string,
-    keepOverrides: boolean | undefined,
-    actor: Actor,
-  ) {
-    await this.assertDocumentAccess(documentId, actor);
-    await this.assertEnabledTemplate(templateId);
-    const existing = await this.prisma.thesisDocumentFormatSetting.findUnique({
-      where: { documentId },
-    });
-    const setting = await this.prisma.thesisDocumentFormatSetting.upsert({
-      where: { documentId },
-      update: {
-        template: { connect: { id: templateId } },
-        overrideRules: keepOverrides
-          ? (existing?.overrideRules ?? undefined)
-          : Prisma.JsonNull,
-      },
-      create: {
-        document: { connect: { id: documentId } },
-        template: { connect: { id: templateId } },
-        overrideRules: keepOverrides
-          ? (existing?.overrideRules ?? undefined)
-          : undefined,
-        customRequirement: existing?.customRequirement ?? undefined,
-        previewMode: existing?.previewMode ?? 'SIMPLE',
-      },
-      include: {
-        template: {
-          include: {
-            ...this.includeScope(),
-            rules: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
-          },
-        },
-      },
-    });
-    return {
-      setting,
-      template: setting.template,
-      rulesSummary: await this.getRulesSummary(templateId),
-      message: keepOverrides
-        ? '已应用模板，并保留局部调整。'
-        : '已应用模板，并清空局部调整。',
-    };
-  }
-
   async getDefaultTemplateForTask(
     taskId: string,
     options?: { stage?: string; exportFormat?: string },
@@ -461,20 +252,7 @@ export class ThesisExportTemplateService {
   }
 
   private toJson(value: unknown): Prisma.InputJsonValue {
-    if (value === undefined || value === null || value === '') return {};
-    if (typeof value === 'string') {
-      try {
-        return JSON.parse(value) as Prisma.InputJsonValue;
-      } catch {
-        throw new BadRequestException(
-          'ruleValue / overrideRules 必须是合法 JSON',
-        );
-      }
-    }
-    if (typeof value !== 'object')
-      throw new BadRequestException(
-        'ruleValue / overrideRules 必须是 JSON 对象或数组',
-      );
+    if (value === undefined || value === null) return {};
     return value;
   }
 
@@ -510,85 +288,6 @@ export class ThesisExportTemplateService {
       if (dto.collegeId && major.collegeId !== dto.collegeId)
         throw new BadRequestException('专业不属于所选学院');
     }
-  }
-
-  private async withRuleSummaries<T extends { id: string }>(templates: T[]) {
-    return Promise.all(
-      templates.map((template) => this.withRuleSummary(template.id, template)),
-    );
-  }
-
-  private async withRuleSummary<T extends { id: string }>(
-    templateId: string,
-    template?: T,
-  ) {
-    const item =
-      template ??
-      (await this.prisma.thesisFormatTemplate.findUnique({
-        where: { id: templateId },
-        include: this.includeScope(),
-      }));
-    if (!item) return null;
-    return { ...item, rulesSummary: await this.getRulesSummary(templateId) };
-  }
-
-  private async getRulesSummary(templateId: string) {
-    const rules = await this.prisma.thesisFormatRule.findMany({
-      where: { templateId },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-    });
-    return rules.map((rule) => ({
-      id: rule.id,
-      ruleType: rule.ruleType,
-      ruleKey: rule.ruleKey,
-      ruleValue: rule.ruleValue,
-      description: rule.description,
-      sortOrder: rule.sortOrder,
-    }));
-  }
-
-  private async assertEnabledTemplate(templateId: string) {
-    const template = await this.prisma.thesisFormatTemplate.findFirst({
-      where: { id: templateId, status: ThesisFormatTemplateStatus.ENABLED },
-    });
-    if (!template) throw new BadRequestException('格式模板不存在或已禁用');
-    return template;
-  }
-
-  private async assertTaskAccess(taskId: string, actor: Actor) {
-    if (
-      actor.admin ||
-      actor.role === UserRole.ADMIN ||
-      actor.role === UserRole.SUPER_ADMIN
-    )
-      return;
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      select: { userId: true },
-    });
-    if (!task) throw new NotFoundException('任务不存在');
-    if (task.userId !== actor.id)
-      throw new ForbiddenException('无权访问该论文任务');
-  }
-
-  private async assertDocumentAccess(documentId: string, actor: Actor) {
-    const document = await this.prisma.thesisDocument.findUnique({
-      where: { id: documentId },
-      include: {
-        task: { select: { id: true, userId: true, currentStage: true } },
-      },
-    });
-    if (!document) throw new NotFoundException('论文文档不存在');
-    if (
-      !(
-        actor.admin ||
-        actor.role === UserRole.ADMIN ||
-        actor.role === UserRole.SUPER_ADMIN
-      ) &&
-      document.task.userId !== actor.id
-    )
-      throw new ForbiddenException('无权访问该论文文档');
-    return document;
   }
 
   private scoreTemplate(

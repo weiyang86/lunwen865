@@ -122,13 +122,13 @@
 - [ ] Skill 停用不影响历史任务查看和历史导出。
 - [ ] 题目、开题、大纲、正文、导师意见修改、降重、格式检查、参考文献、答辩 PPT 至少在配置层可表达适用 Skill。
 
-### 9. 合稿与格式验收
-- [ ] 学生端可进入任务合稿与格式页查看题目、开题、大纲、初稿、终稿等阶段文档。
-- [ ] 管理端可进入任务合稿与格式页查看/编辑章节、生成版本、回滚版本、处理导师意见。
+### 9. 论文文档工作台验收
+- [ ] 学生端可进入任务工作台查看题目、开题、大纲、初稿、终稿等阶段文档。
+- [ ] 管理端可进入任务工作台查看/编辑章节、生成版本、回滚版本、处理导师意见。
 - [ ] 章节编辑支持 loading、empty、error、success 状态，保存失败不覆盖本地未提交内容。
 - [ ] 文档版本记录展示版本号、来源、操作者、时间、修改摘要。
 - [ ] 导师意见修改记录可查看原意见、修改前、修改后、处理状态和处理人。
-- [ ] 无权限用户、非所属机构成员不能访问或编辑任务合稿与格式页。
+- [ ] 无权限用户、非所属机构成员不能访问或编辑任务工作台。
 - [ ] 刷新页面后可恢复当前任务、当前阶段和当前文档状态。
 - [ ] 移动端可完成基本查看、提交导师意见和下载操作。
 
@@ -198,10 +198,10 @@
 - [ ] `TaskService.buildGenerationContext` 可从任务构建 AI/Skill 所需上下文，旧任务缺失 Academic 字段时使用旧 `major`、`educationLevel`、`requirements` 兜底。
 - [ ] 本模块不改变订单、支付、任务状态流转、AI 生成主流程和导出接口行为。
 
-## Workbench-01 合稿与格式验收项
+## Workbench-01 论文文档工作台验收项
 - [ ] Prisma migration `20260611130000_add_thesis_document_workbench` 可执行，新增文档、章节、版本记录、导师意见表。
 - [ ] 老任务列表、任务详情、订单、支付、AI 生成、下载页面不受 Workbench-01 影响。
-- [ ] 新任务可从 `/tasks` 进入 `/student/tasks/[taskId]/compose-format`，旧 `/workbench` 链接保持 redirect 兼容。
+- [ ] 新任务可从 `/tasks` 进入 `/student/tasks/[taskId]/workbench`。
 - [ ] 无文档任务展示初始化空状态，点击初始化后生成一份主文档和默认章节结构。
 - [ ] 已有文档任务重复初始化不会创建第二份文档。
 - [ ] 工作台可展示章节目录树、当前章节内容、文档总字数和保存状态。
@@ -219,34 +219,24 @@
 - [ ] 后台 `/admin/thesis-format-templates` 可创建、编辑、启用/禁用模板，并维护 Json 格式规则。
 - [ ] 模板匹配优先级符合：专业 > 学院 > 学校 > 通用；同级按默认、排序、版本处理；缺学校模板时回退全局通用模板。
 - [ ] 学生端 `/downloads` 可选择任务、查看任务上下文和文档状态、选择阶段、DOCX/PDF 格式、模板和自定义格式要求。
-- [ ] 没有 `ThesisDocument` 的任务不能创建新版导出任务，并提示进入合稿与格式初始化。
+- [ ] 没有 `ThesisDocument` 的任务不能创建新版导出任务，并提示进入工作台初始化。
 - [ ] 有 `ThesisDocument` 的任务可创建 DOCX 导出任务，并从 PENDING/RUNNING 进入 SUCCESS 或 FAILED。
 - [ ] DOCX 文件可下载，下载接口校验归属，学生不能下载别人的文件。
 - [ ] PDF 首期不标记成功生成，创建时明确提示后续开放。
 - [ ] 导出失败时可在学生端和后台查看 `errorMessage`；后台可重试 FAILED 任务。
 - [ ] 自定义格式要求保存到 `ThesisExportJob.customRequirement`，不污染正式论文正文。
 - [ ] 旧 `ExportTask` 下载记录和 `/api/export/:id/download` 继续可用。
-- [ ] 订单、支付、AI 生成、合稿与格式和任务状态流转不受 Export-01 影响。
+- [ ] 订单、支付、AI 生成、论文工作台和任务状态流转不受 Export-01 影响。
 
-## Task-UX-01 任务流程命名与四阶段导航验收项
-- [ ] 任务列表主按钮展示“进入论文任务”，次按钮展示“继续生成”。
-- [ ] `/student/tasks/[taskId]/generate` 可访问，顶部展示“论文内容生成”说明文案，原题目、开题、大纲、摘要、正文生成能力不丢失。
-- [ ] `/student/tasks/[taskId]/compose-format` 可访问，顶部展示“合稿与格式”说明文案，原论文文档初始化、章节编辑、合并阶段内容、导师意见和修改记录能力不丢失。
-- [ ] `/student/tasks/[taskId]/word-editor` 可访问，占位说明明确 DOCX 后开放在线 Word 精修。
-- [ ] `/student/tasks/[taskId]/delivery` 可访问，首期可引导用户打开现有下载中心。
-- [ ] 旧 `/student/tasks/[taskId]/workbench` 可 redirect 到 `/student/tasks/[taskId]/compose-format`，旧 `/tasks?taskId=...` 兼容访问论文内容生成。
-- [ ] 订单、支付、AI 生成、导出功能不因 Task-UX-01 改变接口路径、数据结构或状态流转。
-
-## Workbench-Format-01 合稿与格式模板应用验收项
-- [ ] Prisma migration `20260611170000_add_thesis_document_format_setting` 可执行，历史任务、历史文档和历史导出记录不受影响。
-- [ ] seed 后存在通用本科毕业论文、通用专升本毕业论文、通用开题报告、通用论文大纲、通用课程论文、通用案例分析模板。
-- [ ] 后台 `/admin/thesis-format-templates` 可按关键词、学校、专业、学历、论文类型、阶段、状态、模板类型筛选模板。
-- [ ] 后台可以新建、编辑、启用/禁用模板，并新增/删除 JSON 格式规则；JSON 错误时有明确提示。
-- [ ] `GET /thesis-tasks/:taskId/format-templates` 仅返回 `ENABLED` 模板，并按专业、学院、学校、通用、全局默认优先级推荐。
-- [ ] `GET/PATCH /thesis-documents/:documentId/format-setting` 可读取和保存当前文档 `templateId`、`overrideRules`、`customRequirement`、`previewMode`。
-- [ ] `POST /thesis-documents/:documentId/apply-format-template` 可应用模板，且 `keepOverrides=false` 会清空局部调整。
-- [ ] 合稿与格式页面可看到“格式设置”Tab，展示当前模板、推荐模板、规则摘要、局部微调、自定义格式要求和近似预览提示。
-- [ ] 格式模板应用不修改 `ThesisDocumentSection.content`，章节正文保持干净。
-- [ ] 无可用模板时页面不崩溃，并提示联系管理员配置模板。
-- [ ] 学生不能读取或保存他人论文文档的格式配置；普通用户不能访问后台模板管理接口。
-- [ ] 原论文内容生成、合稿编辑、导师意见、版本记录、订单、支付、下载/导出基础能力不受影响。
+## Export-DOCX-01 Word 初稿生成验收项
+- [ ] Prisma migration `20260612100000_add_thesis_word_file` 可执行，新增文档格式设置、Word 文件和 Word 文件版本表。
+- [ ] 有 `ThesisDocument` 且存在有效章节内容的任务可生成 DOCX 初稿。
+- [ ] 未初始化合稿文档或无章节内容时不能生成，并返回明确提示。
+- [ ] 生成成功后创建或更新 `ThesisWordFile`，并新增 `ThesisWordFileVersion`。
+- [ ] 多次生成会递增 `currentVersion` 并保留历史版本下载。
+- [ ] DOCX 当前版本和指定版本均可下载，且下载接口校验任务归属。
+- [ ] 缺少格式模板时可使用系统默认样式生成。
+- [ ] `ThesisDocumentFormatSetting.overrideRules` 优先于 `ThesisFormatRule`；`customRequirement` 进入版本快照但不写入论文正文。
+- [ ] 合稿与格式页面可看到 Word 初稿状态、生成按钮、下载按钮和最近版本。
+- [ ] `/student/tasks/[taskId]/word-editor` 可识别是否已有 Word 初稿，并提示 OnlyOffice-01 后续开放。
+- [ ] 原论文内容生成、合稿编辑、导师意见、版本记录、订单、支付和旧导出能力不受影响。

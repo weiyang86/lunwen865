@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
+import { ThesisDocumentWorkbenchPage } from '@/components/client/thesis-workbench/thesis-document-workbench-page';
 
 export default async function Page({ params }: { params: Promise<{ taskId: string }> }) {
   const { taskId } = await params;
-  redirect(`/student/tasks/${encodeURIComponent(taskId)}/compose-format`);
+  return <ThesisDocumentWorkbenchPage taskId={taskId} />;
 }

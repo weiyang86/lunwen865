@@ -3,13 +3,13 @@
 | 模块 | 优先级 | 当前状态 | 后续动作 |
 |---|---|---|---|
 | 认证与权限 | P0 | 后端较完整，前端后台已接入 | 增加机构角色与机构数据权限边界；工作台需复用用户/机构/管理员三类授权策略 |
-| 学生端下单与工作台 | P0 | 能力存在但前端不完整 | 补全 C 端闭环页面，并将任务详情升级为合稿与格式 |
+| 学生端下单与工作台 | P0 | 能力存在但前端不完整 | 补全 C 端闭环页面，并将任务详情升级为论文文档工作台 |
 | 机构端推单/代下单 | P0 | 需求明确，产品层缺失 | 新增机构端入口、线索与代下单流程；支持代填学校、专业、论文类型与格式要求 |
 | 商品与分类 | P0 | 管理端可维护 | 同步接入 C/B 端展示和购买引导；商品可声明适用学历层次、论文类型与交付阶段 |
-| 订单与支付 | P0 | 后端有订单+支付+退款 | 增加机构下单场景与支付主体规则；合稿与格式升级不得改变已支付订单结算口径 |
+| 订单与支付 | P0 | 后端有订单+支付+退款 | 增加机构下单场景与支付主体规则；论文工作台升级不得改变已支付订单结算口径 |
 | 任务状态机 | P0 | 状态定义完整，管理端可操作 | 增强状态迁移审计、补偿机制；任务阶段需映射题目/开题/大纲/初稿/终稿等工作台文档 |
 | 学术基础数据 | P0 | 尚未形成独立模块 | 新增省份、城市、高校、学院、学科门类、一级学科、专业/二级学科数据，并接入任务创建与后台维护 |
-| 合稿与格式 | P0 | 当前以生成结果与导出下载为主 | 支持阶段文档查看、在线合稿、章节编辑、版本记录、导师意见修改记录、按阶段导出 |
+| 论文文档工作台 | P0 | 当前以生成结果与导出下载为主 | 支持阶段文档查看、在线合稿、章节编辑、版本记录、导师意见修改记录、按阶段导出 |
 | 题目/开题/大纲/写作 | P1 | 后端能力已存在 | 增加阶段交付与返工协作可视化；生成时读取学校、专业、学历层次、论文类型上下文 |
 | 论文 Skill 中心 | P1 | 当前主要依赖 Prompt 资产 | 建立 Skill/版本/适用范围/输入输出 schema/质量规则/模型配置，并逐步接入题目、开题、大纲、正文、修改等阶段 |
 | 格式模板引擎 | P1 | 导出模块具备 DOCX 能力，学校模板能力有限 | 支持通用模板、学校模板、专业模板、自定义模板；支持格式要求解析并应用到导出任务 |
@@ -23,7 +23,7 @@
 ## 说明
 - 当前“后台能力 > 前台产品能力”。
 - P0 主目标：形成“学生/机构下单 → 执行交付 → 工作台修改 → 分阶段导出 → 完成验收”的双通道闭环。
-- 下一阶段以 `docs/15-thesis-workbench-upgrade-plan.md` 为总规划，先补齐学术基础数据、论文 Skill 中心、合稿与格式和格式模板引擎的契约，再按 Issue 小步实现。
+- 下一阶段以 `docs/15-thesis-workbench-upgrade-plan.md` 为总规划，先补齐学术基础数据、论文 Skill 中心、论文文档工作台和格式模板引擎的契约，再按 Issue 小步实现。
 - 所有工作台能力必须保持合规边界：系统提供论文辅导与写作辅助，不伪造数据、不伪造引用、不承诺规避查重或替代学生原创。
 
 ## 论文交付工作台目标架构
@@ -50,7 +50,7 @@
 - 以 SkillVersion 为最小运行单元，运行时固化输入 schema、输出 schema、质量检查规则和模型配置。
 - 与现有 Prompt 模块关系：Prompt 是可复用提示词资产，Skill 是面向业务阶段的编排与约束层。
 
-### 合稿与格式
+### 论文文档工作台
 - 负责阶段文档、章节树、在线编辑、合稿、版本、导师意见和合规留痕。
 - 与现有 opening-report、outline、writing 模块保持兼容：首期通过同步/映射方式把阶段产物纳入工作台，不强制一次性重构旧模块。
 
@@ -79,12 +79,12 @@
 - TaskService 新增 `buildGenerationContext(taskId, stage?, userRequirement?)`，统一生成 `ThesisGenerationContext`，供后续 AI 生成与 Skill-01 的 `resolveBestSkill` 基于学校、专业、学科、学历、论文类型和阶段匹配 Skill。
 - 本次不改造订单、支付、任务状态流转、导出任务或完整 AI 生成主流程；仅提供统一上下文与兼容接入点。
 
-## Workbench-01 合稿与格式实现说明
-- Issue #140 已新增学生端合稿与格式，将任务从“论文内容生成/下载”扩展为“结构化文档 + 章节编辑 + 版本记录 + 导师意见”的持续交付空间。
+## Workbench-01 论文文档工作台实现说明
+- Issue #140 已新增学生端论文文档工作台，将任务从“阶段生成/下载”扩展为“结构化文档 + 章节编辑 + 版本记录 + 导师意见”的持续交付空间。
 - 工作台与论文任务一一关联：`Task 1-1 ThesisDocument`，文档继承 Task-01 的学校、专业、学历层次、论文类型、研究方向、导师要求等上下文，用于顶部摘要、后续 AI/Skill 输入和导出模板匹配。
 - 工作台与 Skill 中心关系：章节保留 `sourceStage`、`sourceGenerationRunId`，AI 操作台首期为占位提示，后续可基于 Skill-01 对当前章节执行优化、导师意见修改、格式检查等能力。
 - 工作台与 AI 生成关系：`merge-stage-content` 首期从已选题目、开题报告、大纲、正文、参考文献或指定 `AiGenerationRun` 读取内容并转为文档章节，不重构现有 AI 生成链路。
-- 工作台与下载导出关系：原下载页面保留；合稿与格式导出入口首期跳转 `/downloads`，后续 Export-01 从 `ThesisDocument` 读取结构化内容生成 Word/PDF。
+- 工作台与下载导出关系：原下载页面保留；工作台导出入口首期跳转 `/downloads`，后续 Export-01 从 `ThesisDocument` 读取结构化内容生成 Word/PDF。
 - 工作台与导师意见/版本记录关系：章节保存时产生 `ThesisDocumentRevision`，导师线下反馈可记录为 `ThesisAdvisorComment` 并标记已解决或忽略。
 - 合规边界：页面提示 AI 生成与编辑内容仅作为学习和写作辅助，学生需自行核验学校规范、导师要求、事实、数据、案例和引用。
 
@@ -92,21 +92,13 @@
 - Issue #141 新增论文格式模板与导出引擎，将原“下载与交付验收”升级为模板驱动的“论文导出中心”。
 - 与学术基础数据关系：`ThesisFormatTemplate` 可按 Academic-01 的高校、学院、专业绑定适用范围；没有学校模板时回退通用默认模板，避免导出失败。
 - 与论文任务关系：导出选项读取 Task-01 的学校、专业、学历层次、论文类型和阶段上下文，用于模板匹配与页面展示。
-- 与合稿与格式关系：新版 `ThesisExportJob` 从 `ThesisDocument` 与章节树读取结构化内容生成 DOCX；没有文档时提示先进入合稿与格式初始化。
+- 与论文文档工作台关系：新版 `ThesisExportJob` 从 `ThesisDocument` 与章节树读取结构化内容生成 DOCX；没有文档时提示先进入工作台初始化。
 - 与文件下载关系：旧 `ExportTask`、`/api/export/*` 下载链路保留；新版导出使用 `ThesisExportJob` 与 `ThesisExportFile`，文件下载通过 `/api/thesis-export-jobs/:jobId/download` 完成。
 - PDF 策略：首期仅预留枚举、接口和前端选项；创建 PDF 任务时返回明确提示，不引入 LibreOffice/Chromium/Puppeteer 等高风险依赖。
 - 合规边界：导出页面与默认模板说明强调格式整理和学习支持，学生需按学校正式模板、导师要求、真实资料和引用自行核验。
 
-## Task-UX-01 四阶段任务导航实现说明
-- 学生端任务内导航统一抽象为“论文内容生成 → 合稿与格式 → 在线 Word 精修 → 最终交付”。
-- `/student/tasks/[taskId]/generate` 复用原论文内容生成工作区，仅调整用户可见命名和入口文案，不改 AI 生成、订单、支付和任务状态机。
-- `/student/tasks/[taskId]/compose-format` 复用原论文文档能力，仅调整为合稿与格式语义，不改变 `ThesisDocument`、章节、导师意见或版本记录数据模型。
-- `/student/tasks/[taskId]/word-editor` 为 ONLYOFFICE 接入前占位页；`/student/tasks/[taskId]/delivery` 首期复用下载中心和既有导出记录。
-- 旧 `/student/tasks/[taskId]/workbench` 通过 redirect 兼容到 `/student/tasks/[taskId]/compose-format`，避免破坏历史链接。
-
-## Workbench-Format-01 合稿与格式：预设论文格式模板应用
-- 合稿与格式中的 `ThesisDocument` 是生成 Word 初稿前的结构化主版本；论文内容生成产物仍作为阶段素材，需合并进 `ThesisDocument` 后才进入最终论文文档链路。
-- 格式模板能力复用 Export-01 已建立的 `ThesisFormatTemplate` 与 `ThesisFormatRule`，模板可按 Academic-01 的高校、学院、专业，以及 Task-01 的学历层次、论文类型、阶段上下文进行匹配。
-- 新增 `ThesisDocumentFormatSetting` 保存某篇论文当前应用的模板、局部覆盖规则、预览模式和自定义格式要求；应用模板只写入排版配置，不修改 `ThesisDocumentSection.content`，避免在正文中写入 inline style。
-- 学生端通过 `/thesis-tasks/:taskId/format-templates` 获取推荐模板，通过 `/thesis-documents/:documentId/format-setting` 读取/保存当前配置，通过 `/thesis-documents/:documentId/apply-format-template` 明确应用模板。
-- 后续 Export-DOCX-01 生成 Word 初稿时应读取 `ThesisDocument`、`ThesisDocumentSection`、`ThesisFormatTemplate`、`ThesisFormatRule` 与 `ThesisDocumentFormatSetting`，按“模板规则 + overrideRules + customRequirement”的优先级形成 DOCX 样式输入。
+## Export-DOCX-01 DOCX 初稿生成模块说明
+- Export-DOCX-01 将合稿与格式页面中的 `ThesisDocument` 结构化主版本生成 Word 初稿，明确“AI 生成内容是素材、合稿文档是生成 DOCX 前的主版本”。
+- DOCX 生成读取 `ThesisDocument`、`ThesisDocumentSection`、`ThesisFormatTemplate`、`ThesisFormatRule` 与 `ThesisDocumentFormatSetting`，按“文档格式设置 overrideRules > 模板规则 > 系统默认样式”的优先级应用格式。
+- 生成结果落到 `ThesisWordFile` 当前文件对象，并为每次重新生成创建一条 `ThesisWordFileVersion`，便于追溯生成时的文档版本、模板和格式设置快照。
+- 本模块不接入 ONLYOFFICE，不做在线 Word 编辑；后续 OnlyOffice-01 基于 `ThesisWordFile` 打开在线编辑器，Final-Delivery-01 以 Word 文件版本作为交付依据。

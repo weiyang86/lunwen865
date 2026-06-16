@@ -1,8 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { TaskStageNav } from '@/components/client/task-flow/task-stage-nav';
-import { ThesisFormatSettingsPanel } from '@/components/client/thesis-workbench/thesis-format-settings-panel';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
 import { getApiErrorMessage } from '@/lib/client/api-error';
@@ -11,6 +9,9 @@ type Section = { id: string; title: string; sectionType: string; content?: strin
 type AdvisorComment = { id: string; sectionId?: string | null; commentText: string; status: string; createdAt: string; resolvedAt?: string | null };
 type Revision = { id: string; sectionId?: string | null; version: number; beforeContent?: string | null; afterContent?: string | null; changeSummary?: string | null; operatorRole?: string | null; createdAt: string; section?: { id: string; title: string } | null };
 type WorkbenchResp = { task: any; document: null | { id: string; title: string; status: string; currentVersion: number; wordCount: number; updatedAt: string; sections: Section[] }; advisorComments: AdvisorComment[]; canInit: boolean };
+type WordFileVersion = { id: string; version: number; fileName: string; fileUrl: string; fileSize?: number | null; sourceDocumentVersion?: number | null; createdAt: string; formatTemplate?: { id: string; name: string; code: string } | null };
+type WordFile = { id: string; fileName: string; fileUrl: string; currentVersion: number; status: string; updatedAt: string; versions?: WordFileVersion[] };
+type WordFilesResp = { current: WordFile | null; items: WordFile[] };
 
 const STAGES = ['TOPIC', 'OPENING', 'OUTLINE', 'WRITING', 'REFERENCE'];
 const SECTION_TYPES = ['TITLE', 'ABSTRACT', 'KEYWORDS', 'CHAPTER', 'SECTION', 'REFERENCE', 'ACKNOWLEDGEMENT', 'APPENDIX'];
@@ -46,7 +47,8 @@ export function ThesisDocumentWorkbenchPage({ taskId }: { taskId: string }) {
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeStage, setMergeStage] = useState('OUTLINE');
   const [mergeMode, setMergeMode] = useState('APPEND');
-  const [sideTab, setSideTab] = useState<'comments' | 'revisions' | 'ai' | 'format'>('comments');
+  const [wordInfo, setWordInfo] = useState<WordFilesResp | null>(null);
+  const [generatingWord, setGeneratingWord] = useState(false);
 
   const sections = useMemo(() => data?.document?.sections ?? [], [data?.document?.sections]);
   const flatSections = useMemo(() => flatten(sections), [sections]);
@@ -150,24 +152,46 @@ export function ThesisDocumentWorkbenchPage({ taskId }: { taskId: string }) {
     await load();
   }
 
-  if (loading && !data) return <div className="p-6 text-sm text-slate-600">加载合稿与格式...</div>;
+  const loadWordFiles = useCallback(async () => {
+    if (!data?.document) return;
+    const next = await clientHttp.get<WordFilesResp>(`/thesis-tasks/${taskId}/word-files`);
+    setWordInfo(next);
+  }, [data?.document, taskId]);
 
-  return <div className="min-h-screen space-y-4 bg-slate-50 p-4 text-slate-900 lg:p-6">
-    <TaskStageNav taskId={taskId} activeStage="compose-format" />
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+  useEffect(() => {
+    if (!data?.document) { setWordInfo(null); return; }
+    void loadWordFiles().catch(() => setWordInfo(null));
+  }, [data?.document, loadWordFiles]);
+
+  async function generateWordDraft() {
+    if (!data?.document) return;
+    setGeneratingWord(true);
+    setError(null);
+    try {
+      await clientHttp.post(`/thesis-documents/${data.document.id}/generate-docx`, {});
+      setMessage('Word 初稿已生成，可进入在线 Word 精修继续排版。');
+      await loadWordFiles();
+    } catch (e) { setError(getApiErrorMessage(e, '生成 Word 初稿失败')); }
+    finally { setGeneratingWord(false); }
+  }
+
+  if (loading && !data) return <div className="p-6 text-sm text-slate-600">加载论文工作台...</div>;
+
+  return <div className="min-h-screen bg-slate-50 p-4 text-slate-900 lg:p-6">
+    <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">合稿与格式</h1>
+          <h1 className="text-2xl font-semibold">论文文档工作台</h1>
           <p className="mt-1 text-sm text-slate-600">AI 生成与编辑内容仅作为学习和写作辅助，请根据学校规范、导师要求和真实资料自行核验后使用。</p>
           <p className="mt-2 text-sm text-slate-500">{data?.task?.title ?? '未命名任务'} · {data?.task?.schoolName ?? '未绑定学校'} / {data?.task?.majorName ?? '未绑定专业'} / {data?.task?.educationLevel ?? '未指定学历'} / {data?.task?.thesisType ?? '未指定类型'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60" disabled={saving || !data?.canInit} onClick={() => void initDocument()}>{data?.document ? '已初始化' : '初始化论文文档'}</button>
           <button className="rounded border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60" disabled={!data?.document} onClick={() => setMergeOpen(true)}>合并阶段内容</button>
-          <Link href={`/student/tasks/${encodeURIComponent(taskId)}/delivery`} className="rounded border border-slate-300 bg-white px-3 py-2 text-sm">最终交付</Link>
+          <button className="rounded bg-indigo-600 px-3 py-2 text-sm text-white disabled:opacity-60" disabled={!data?.document || generatingWord} onClick={() => void generateWordDraft()}>{generatingWord ? '生成中...' : '生成 Word 初稿'}</button>
+          <Link href={`/downloads?taskId=${encodeURIComponent(taskId)}`} className="rounded border border-slate-300 bg-white px-3 py-2 text-sm">导出 / 下载</Link>
         </div>
       </div>
-      <div className="mt-3 rounded border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm leading-6 text-indigo-800">合稿与格式用于整理最终论文内容、合并阶段素材、记录导师意见并配置论文格式。生成 Word 初稿前以本页面中的论文文档为准。</div>
       {message ? <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div> : null}
       {error ? <div className="mt-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
     </div>
@@ -175,19 +199,7 @@ export function ThesisDocumentWorkbenchPage({ taskId }: { taskId: string }) {
     {!data?.document ? <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center"><div className="text-lg font-medium">当前任务尚未初始化论文文档</div><p className="mt-2 text-sm text-slate-600">初始化后将生成默认目录，支持在线编辑、版本记录和导师意见管理。</p><button className="mt-4 rounded bg-slate-900 px-4 py-2 text-white" onClick={() => void initDocument()}>初始化论文文档</button></div> : <div className="grid gap-4 lg:grid-cols-[280px_1fr_320px]">
       <aside className="rounded-xl border border-slate-200 bg-white p-3"><div className="mb-3 flex items-center justify-between"><h2 className="font-medium">论文目录</h2><button className="text-sm text-indigo-600" onClick={() => void addSection()}>新增</button></div><SectionTree sections={sections} activeId={active?.id} onSelect={(s) => setActiveId(s.id)} onDelete={(s) => void deleteSection(s)} /></aside>
       <main className="rounded-xl border border-slate-200 bg-white p-4"><div className="mb-3 flex items-center justify-between"><div><h2 className="font-medium">章节编辑</h2><p className="text-xs text-slate-500">文档总字数：{data.document.wordCount} · 当前版本：v{data.document.currentVersion} · {dirty ? '有未保存修改' : '已同步'}</p></div><button className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60" disabled={!active || saving} onClick={() => void saveSection()}>{saving ? '保存中...' : '保存章节'}</button></div>{active ? <div className="space-y-3"><input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded border border-slate-300 px-3 py-2" /><select value={sectionType} onChange={(e) => setSectionType(e.target.value)} className="w-full rounded border border-slate-300 px-3 py-2">{SECTION_TYPES.map((x) => <option key={x}>{x}</option>)}</select><textarea value={content} onChange={(e) => setContent(e.target.value)} rows={22} className="w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm" placeholder="在此编辑章节正文，首期支持 Markdown / 纯文本。" /><div className="text-sm text-slate-500">当前编辑区字数：{countText(content)} · 最近保存：{new Date(active.updatedAt).toLocaleString()}</div></div> : <div className="py-20 text-center text-sm text-slate-500">请选择或新增章节</div>}</main>
-      <aside className="space-y-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {([['comments', '导师意见'], ['revisions', '修改记录'], ['ai', 'AI 操作台'], ['format', '格式设置']] as const).map(([key, label]) => (
-              <button key={key} type="button" onClick={() => setSideTab(key)} className={`rounded border px-2 py-2 ${sideTab === key ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>{label}</button>
-            ))}
-          </div>
-        </div>
-        {sideTab === 'comments' ? <div className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-medium">导师修改要求</h2><textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={3} className="mt-3 w-full rounded border border-slate-300 px-3 py-2 text-sm" placeholder="记录导师线下反馈或修改要求" /><button className="mt-2 rounded bg-slate-900 px-3 py-2 text-sm text-white" onClick={() => void addComment()}>新增意见</button><div className="mt-3 space-y-2">{data.advisorComments.map((c) => <div key={c.id} className="rounded border border-slate-200 p-2 text-sm"><div>{c.commentText}</div><div className="mt-1 text-xs text-slate-500">{c.status} · {new Date(c.createdAt).toLocaleString()}</div><div className="mt-2 flex gap-2"><button className="text-xs text-emerald-700" onClick={() => void updateComment(c.id, 'RESOLVED')}>已解决</button><button className="text-xs text-slate-600" onClick={() => void updateComment(c.id, 'IGNORED')}>忽略</button></div></div>)}</div></div> : null}
-        {sideTab === 'revisions' ? <div className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-medium">修改记录</h2><div className="mt-3 max-h-72 space-y-2 overflow-auto">{revisions.length ? revisions.map((r) => <details key={r.id} className="rounded border border-slate-200 p-2 text-sm"><summary>{r.section?.title ?? '文档'} · v{r.version} · {r.changeSummary ?? '内容修改'}</summary><pre className="mt-2 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs">修改前：\n{r.beforeContent ?? ''}\n\n修改后：\n{r.afterContent ?? ''}</pre></details>) : <div className="text-sm text-slate-500">暂无修改记录</div>}</div></div> : null}
-        {sideTab === 'ai' ? <div className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-medium">AI 操作台</h2><p className="mt-2 text-sm text-slate-500">优化本段、按导师意见修改、检查逻辑、检查格式、生成摘要、生成关键词等能力将在后续 Skill 接入中增强。</p></div> : null}
-        {sideTab === 'format' ? <ThesisFormatSettingsPanel taskId={taskId} documentId={data.document.id} onMessage={(nextMessage) => setMessage(nextMessage)} /> : null}
-      </aside>
+      <aside className="space-y-4"><div className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-medium">导师修改要求</h2><textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={3} className="mt-3 w-full rounded border border-slate-300 px-3 py-2 text-sm" placeholder="记录导师线下反馈或修改要求" /><button className="mt-2 rounded bg-slate-900 px-3 py-2 text-sm text-white" onClick={() => void addComment()}>新增意见</button><div className="mt-3 space-y-2">{data.advisorComments.map((c) => <div key={c.id} className="rounded border border-slate-200 p-2 text-sm"><div>{c.commentText}</div><div className="mt-1 text-xs text-slate-500">{c.status} · {new Date(c.createdAt).toLocaleString()}</div><div className="mt-2 flex gap-2"><button className="text-xs text-emerald-700" onClick={() => void updateComment(c.id, 'RESOLVED')}>已解决</button><button className="text-xs text-slate-600" onClick={() => void updateComment(c.id, 'IGNORED')}>忽略</button></div></div>)}</div></div><div className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-medium">修改记录</h2><div className="mt-3 max-h-72 space-y-2 overflow-auto">{revisions.length ? revisions.map((r) => <details key={r.id} className="rounded border border-slate-200 p-2 text-sm"><summary>{r.section?.title ?? '文档'} · v{r.version} · {r.changeSummary ?? '内容修改'}</summary><pre className="mt-2 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs">修改前：\n{r.beforeContent ?? ''}\n\n修改后：\n{r.afterContent ?? ''}</pre></details>) : <div className="text-sm text-slate-500">暂无修改记录</div>}</div></div><div className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-medium">Word 初稿</h2>{wordInfo?.current ? <div className="mt-3 space-y-2 text-sm"><div>状态：{wordInfo.current.status} · v{wordInfo.current.currentVersion}</div><div className="break-all text-xs text-slate-500">{wordInfo.current.fileName}</div><div className="flex flex-wrap gap-2"><a className="rounded bg-slate-900 px-3 py-2 text-xs text-white" href={`/api/thesis-word-files/${wordInfo.current.id}/download`}>下载 Word 初稿</a><Link className="rounded border border-slate-300 px-3 py-2 text-xs" href={`/student/tasks/${encodeURIComponent(taskId)}/word-editor`}>进入在线 Word 精修</Link></div><div className="mt-2 space-y-1">{wordInfo.current.versions?.slice(0, 3).map((v) => <div key={v.id} className="rounded bg-slate-50 p-2 text-xs"><div>v{v.version} · {new Date(v.createdAt).toLocaleString()} · {v.formatTemplate?.name ?? '默认样式'}</div><a className="text-indigo-600 hover:underline" href={`/api/thesis-word-file-versions/${v.id}/download`}>下载该版本</a></div>)}</div></div> : <div className="mt-3 text-sm text-slate-500">尚未生成 Word 初稿。请在保存章节后点击生成；生成后可进入在线 Word 精修占位页。</div>}<button className="mt-3 rounded bg-indigo-600 px-3 py-2 text-sm text-white disabled:opacity-60" disabled={generatingWord} onClick={() => void generateWordDraft()}>{generatingWord ? '生成中...' : '根据当前格式生成 Word'}</button></div><div className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-medium">AI 操作台</h2><p className="mt-2 text-sm text-slate-500">优化本段、按导师意见修改、检查逻辑、检查格式、生成摘要、生成关键词等能力将在后续 Skill 接入中增强。</p></div></aside>
     </div>}
 
     {mergeOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl"><h2 className="text-lg font-semibold">合并阶段内容</h2><label className="mt-4 block text-sm">阶段<select value={mergeStage} onChange={(e) => setMergeStage(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2">{STAGES.map((x) => <option key={x}>{x}</option>)}</select></label><label className="mt-3 block text-sm">方式<select value={mergeMode} onChange={(e) => setMergeMode(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2"><option value="APPEND">追加到文档</option><option value="REPLACE_SECTION">替换当前章节</option><option value="SMART_MERGE">简单智能合并（首期按追加处理）</option></select></label><div className="mt-5 flex justify-end gap-2"><button className="rounded border border-slate-300 px-3 py-2" onClick={() => setMergeOpen(false)}>取消</button><button className="rounded bg-slate-900 px-3 py-2 text-white" onClick={() => void doMergeStage()}>确认合并</button></div></div></div> : null}

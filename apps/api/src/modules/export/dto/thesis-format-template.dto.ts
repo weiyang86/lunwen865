@@ -28,9 +28,6 @@ export class ListThesisFormatTemplatesDto {
   @IsOptional()
   @IsEnum(ThesisFormatTemplateStatus)
   status?: ThesisFormatTemplateStatus;
-  @IsOptional()
-  @IsEnum(ThesisFormatTemplateType)
-  templateType?: ThesisFormatTemplateType;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
 }
@@ -66,36 +63,7 @@ export class CreateThesisFormatTemplateDto {
   sortOrder?: number;
 }
 
-export class UpdateThesisFormatTemplateDto {
-  @IsOptional() @IsString() @MaxLength(120) name?: string;
-  @IsOptional() @IsString() @MaxLength(80) code?: string;
-  @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() schoolId?: string;
-  @IsOptional() @IsString() collegeId?: string;
-  @IsOptional() @IsString() majorId?: string;
-  @IsOptional() @IsString() @MaxLength(40) educationLevel?: string;
-  @IsOptional() @IsString() @MaxLength(60) thesisType?: string;
-  @IsOptional() @IsString() @MaxLength(40) stage?: string;
-  @IsOptional()
-  @IsEnum(ThesisFormatTemplateType)
-  templateType?: ThesisFormatTemplateType;
-  @IsOptional() @IsBoolean() isDefault?: boolean;
-  @IsOptional()
-  @IsEnum(ThesisFormatTemplateStatus)
-  status?: ThesisFormatTemplateStatus;
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(9999)
-  version?: number;
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  @Max(100000)
-  sortOrder?: number;
-}
+export class UpdateThesisFormatTemplateDto extends CreateThesisFormatTemplateDto {}
 
 export class CreateThesisFormatRuleDto {
   @IsEnum(ThesisFormatRuleType) ruleType!: ThesisFormatRuleType;
@@ -121,22 +89,6 @@ export class UpdateThesisFormatRuleDto {
   @Min(0)
   @Max(100000)
   sortOrder?: number;
-}
-
-export class GetTaskFormatTemplatesDto {
-  @IsOptional() @IsString() @MaxLength(40) stage?: string;
-}
-
-export class UpdateThesisDocumentFormatSettingDto {
-  @IsOptional() @IsString() templateId?: string;
-  @IsOptional() overrideRules?: unknown;
-  @IsOptional() @IsString() @MaxLength(2000) customRequirement?: string;
-  @IsOptional() @IsString() @MaxLength(40) previewMode?: string;
-}
-
-export class ApplyFormatTemplateDto {
-  @IsString() templateId!: string;
-  @IsOptional() @IsBoolean() keepOverrides?: boolean;
 }
 
 export class ExportOptionsQueryDto {

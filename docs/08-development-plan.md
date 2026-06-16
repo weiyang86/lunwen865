@@ -15,7 +15,7 @@
 ### Issue 1：docs(thesis-workbench): finalize upgrade contracts
 - 目标：沉淀论文交付工作台的产品、功能、数据、接口、验收契约。
 - 开发范围：仅文档，包含 `docs/15-thesis-workbench-upgrade-plan.md`、功能架构、数据模型、API、开发计划、验收清单。
-- 验收标准：文档覆盖学术基础数据、Skill 中心、合稿与格式、格式模板引擎、合规边界和后续 Issue 拆分。
+- 验收标准：文档覆盖学术基础数据、Skill 中心、文档工作台、格式模板引擎、合规边界和后续 Issue 拆分。
 - 风险点：规划过大导致后续 PR 边界不清；需保持本 Issue 不改业务代码。
 
 ### Issue 2：feat(academic-data): add academic catalog schema and admin seed workflow
@@ -55,13 +55,13 @@
 - 风险点：现有生成链路和扣费链路不能被破坏；需补充回归测试。
 
 ### Issue 8：feat(thesis-workbench): add document/chapter/version schema and APIs
-- 目标：新增合稿与格式核心数据结构和后端接口。
+- 目标：新增论文文档工作台核心数据结构和后端接口。
 - 开发范围：ThesisDocument、ThesisChapter、ThesisDocumentVersion、AdvisorRevision、ComplianceNoticeLog；文档/章节/版本 API。
 - 验收标准：可创建阶段文档、编辑章节、生成版本、回滚版本、记录导师意见；权限边界通过测试。
 - 风险点：章节编辑并发覆盖；首期使用乐观锁或 updatedAt 校验。
 
 ### Issue 9：ui(thesis-workbench): build student/admin document workbench MVP
-- 目标：提供学生端和管理端合稿与格式 MVP。
+- 目标：提供学生端和管理端文档工作台 MVP。
 - 开发范围：`/tasks/[id]/workbench`、`/admin/tasks/[id]/workbench`、阶段导航、章节编辑、版本列表、导师意见、合规提示。
 - 验收标准：loading/empty/error/success 状态齐全；移动端可用；刷新后保留当前文档；无权限任务不可访问。
 - 风险点：页面可能过大，需拆分组件和 hooks，避免巨型页面组件。
@@ -146,7 +146,7 @@
 - 已新增 `ThesisDocument`、`ThesisDocumentSection`、`ThesisDocumentRevision`、`ThesisAdvisorComment` 数据模型和 migration `20260611130000_add_thesis_document_workbench`。
 - 已新增 `thesis-document` NestJS 模块，支持文档查询/初始化、章节新增/编辑/删除、阶段内容合并、版本记录、导师意见创建与状态更新。
 - 已新增学生端页面 `/student/tasks/[taskId]/workbench`，提供任务摘要、目录树、章节编辑、保存状态、修改记录、导师意见、合稿弹窗和 AI 操作台占位。
-- 已在任务列表提供“合稿与格式”入口，并在后台任务详情返回 `thesisDocument` 摘要。
+- 已在任务列表提供“文档工作台”入口，并在后台任务详情返回 `thesisDocument` 摘要。
 - 后续 Export-01 应从 `ThesisDocument` 与章节树读取结构化内容，按学校/专业模板生成 Word/PDF；后续 Skill 接入应基于当前章节和导师意见创建 SkillRun。
 
 ## Export-01（Issue #141）实现记录
@@ -157,16 +157,10 @@
 - 已新增后台 `/admin/thesis-format-templates`、`/admin/thesis-format-templates/[id]`、`/admin/thesis-export-jobs` 页面。
 - 后续增强：PDF 真实导出、模板上传 DOCX、高校官方模板解析、自定义格式要求自动解析、Word 自动目录、页眉页脚、图表目录、异步队列化新版导出任务。
 
-## Task-UX-01（Issue #147）任务流程命名与四阶段导航
-- 范围：仅调整学生端任务内入口、可见命名、路由兼容和文案说明，不接入 ONLYOFFICE，不开发 DOCX 生成，不重构 AI 生成，不改支付订单。
-- 前端路由：新增 `/student/tasks/[taskId]/generate`、`/student/tasks/[taskId]/compose-format`、`/student/tasks/[taskId]/word-editor`、`/student/tasks/[taskId]/delivery`。
-- 兼容策略：旧 `/student/tasks/[taskId]/workbench` redirect 到 `/student/tasks/[taskId]/compose-format`；旧 `/tasks?taskId=...` 仍保留为论文内容生成的兼容入口。
-- 文案策略：原“阶段生成”统一展示为“论文内容生成”，原“文档工作台”统一展示为“合稿与格式”。
-- 验证重点：四阶段导航可访问；原生成能力、原论文文档能力、下载与导出入口可继续使用；订单、支付、AI 生成、导出功能不受影响。
-
-## Workbench-Format-01（Issue #148）实现记录
-- 已复用 `ThesisFormatTemplate` 与 `ThesisFormatRule`，新增 `ThesisDocumentFormatSetting` 记录当前论文应用模板、局部覆盖规则、自定义格式要求和预览模式。
-- 已补充默认 seed：通用本科毕业论文、通用专升本毕业论文、通用开题报告、通用论文大纲、通用课程论文、通用案例分析模板；示例高校模板继续标注“示例/非官方”。
-- 已新增学生端格式配置 API：任务模板推荐、文档格式配置读取/保存、应用模板到当前论文。格式配置不写入章节正文。
-- 已在合稿与格式右侧面板增加“格式设置”Tab，支持当前模板、模板切换、规则摘要、局部微调、自定义格式要求和近似预览提示。
-- 后续 Export-DOCX-01 将基于当前格式配置生成 Word 初稿；OnlyOffice-01 将基于生成的 Word 文件进行在线精修；Final-Delivery-01 将以 Word 文件版本作为最终交付依据。
+## Export-DOCX-01 实现记录
+- 已新增 `ThesisDocumentFormatSetting`、`ThesisWordFile`、`ThesisWordFileVersion` 模型和 migration `20260612100000_add_thesis_word_file`。
+- 已新增 `thesis-word-file` 后端模块，提供 DOCX 生成、Word 文件详情、版本列表、当前版本下载和指定版本下载 API。
+- 已复用 Export-01 的 `ThesisDocxExportService`，并扩展支持 `overrideRules` 覆盖模板规则；`customRequirement` 只写入版本快照，不写入论文正文。
+- 已在学生端合稿与格式页面增加“生成 Word 初稿”、Word 初稿状态卡、下载按钮、版本记录和“进入在线 Word 精修”入口。
+- 已新增 `/student/tasks/[taskId]/word-editor` 占位页，用于展示当前 Word 初稿状态；OnlyOffice-01 将在该页面接入真实在线编辑器。
+- 后续：OnlyOffice-01 基于 `ThesisWordFile` 打开在线编辑器；Final-Delivery-01 以 `ThesisWordFileVersion` 作为最终交付依据。

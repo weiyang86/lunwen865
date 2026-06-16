@@ -271,6 +271,7 @@ enum AcademicStatus {
   INACTIVE
 }
 
+
 // ============ 论文 Skill 中心 ============
 enum ThesisSkillStage {
   TOPIC
@@ -335,6 +336,7 @@ enum ThesisDocumentMergeMode {
   SMART_MERGE
 }
 
+
 // ============ 论文格式模板与导出引擎 ============
 enum ThesisFormatTemplateStatus {
   ENABLED
@@ -375,6 +377,21 @@ enum ThesisExportJobStatus {
   SUCCESS
   FAILED
   CANCELLED
+}
+
+// ============ Word 初稿文件 ============
+enum ThesisWordFileStatus {
+  DRAFT
+  GENERATED
+  EDITING
+  FINALIZED
+  FAILED
+}
+
+enum ThesisWordFileVersionSourceType {
+  GENERATED_FROM_DOCUMENT
+  ONLYOFFICE_EDITED
+  MANUAL_UPLOAD
 }
 
 // ============ 配额 ============
@@ -512,23 +529,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tasks                   Task[]
-  assignedTasks           Task[]                   @relation("TaskAssignee")
-  refreshTokens           RefreshToken[]
-  loginLogs               LoginLog[]
-  polishTasks             PolishTask[]
-  exportTasks             ExportTask[]
-  quotas                  UserQuota[]
-  quotaLogs               QuotaLog[]
-  aiGenerationRuns        AiGenerationRun[]
-  orders                  Order[]
-  primaryTutorOrders      Order[]                  @relation("OrderPrimaryTutor")
-  taskAdminLogs           TaskAdminLog[]           @relation("TaskAdminLogOperator")
+  tasks         Task[]
+  assignedTasks Task[] @relation("TaskAssignee")
+  refreshTokens RefreshToken[]
+  loginLogs     LoginLog[]
+  polishTasks   PolishTask[]
+  exportTasks   ExportTask[]
+  quotas        UserQuota[]
+  quotaLogs     QuotaLog[]
+  aiGenerationRuns AiGenerationRun[]
+  orders        Order[]
+  primaryTutorOrders Order[] @relation("OrderPrimaryTutor")
+  taskAdminLogs TaskAdminLog[] @relation("TaskAdminLogOperator")
   thesisDocumentRevisions ThesisDocumentRevision[] @relation("ThesisDocumentRevisionOperator")
-  thesisExportJobs        ThesisExportJob[]
-  // 新增这一行
-  paymentRecords          PaymentRecord[]
-
+  thesisExportJobs ThesisExportJob[]
+  thesisWordFileVersions ThesisWordFileVersion[] @relation("ThesisWordFileVersionOperator")
+// 新增这一行
+  paymentRecords PaymentRecord[]
   @@index([phone])
   @@index([email])
   @@index([role, status])
@@ -587,10 +604,10 @@ model AcademicSchool {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  province            AcademicProvince       @relation(fields: [provinceId], references: [id], onDelete: Restrict)
-  city                AcademicCity           @relation(fields: [cityId], references: [id], onDelete: Restrict)
-  colleges            AcademicCollege[]
-  majors              AcademicMajor[]
+  province AcademicProvince  @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  city     AcademicCity      @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  colleges AcademicCollege[]
+  majors   AcademicMajor[]
   thesisSkillBindings ThesisSkillBinding[]
   formatTemplates     ThesisFormatTemplate[]
   tasks               Task[]
@@ -611,10 +628,10 @@ model AcademicCollege {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  school          AcademicSchool         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  majors          AcademicMajor[]
+  school AcademicSchool  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  majors AcademicMajor[]
   formatTemplates ThesisFormatTemplate[]
-  tasks           Task[]
+  tasks  Task[]
 
   @@unique([schoolId, name])
   @@unique([schoolId, code])
@@ -637,11 +654,11 @@ model AcademicMajor {
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
-  school              AcademicSchool         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  college             AcademicCollege?       @relation(fields: [collegeId], references: [id], onDelete: SetNull)
-  disciplineCategory  DisciplineCategory?    @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
-  disciplineLevelOne  DisciplineLevelOne?    @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
-  disciplineLevelTwo  DisciplineLevelTwo?    @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
+  school             AcademicSchool      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  college            AcademicCollege?    @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  disciplineCategory DisciplineCategory? @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
+  disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
+  disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
   thesisSkillBindings ThesisSkillBinding[]
   formatTemplates     ThesisFormatTemplate[]
   tasks               Task[]
@@ -663,8 +680,8 @@ model DisciplineCategory {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  levelOnes           DisciplineLevelOne[]
-  majors              AcademicMajor[]
+  levelOnes DisciplineLevelOne[]
+  majors    AcademicMajor[]
   thesisSkillBindings ThesisSkillBinding[]
   tasks               Task[]
 
@@ -681,9 +698,9 @@ model DisciplineLevelOne {
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 
-  category            DisciplineCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  levelTwos           DisciplineLevelTwo[]
-  majors              AcademicMajor[]
+  category  DisciplineCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  levelTwos DisciplineLevelTwo[]
+  majors    AcademicMajor[]
   thesisSkillBindings ThesisSkillBinding[]
   tasks               Task[]
 
@@ -701,14 +718,15 @@ model DisciplineLevelTwo {
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 
-  levelOne            DisciplineLevelOne   @relation(fields: [levelOneId], references: [id], onDelete: Restrict)
-  majors              AcademicMajor[]
+  levelOne DisciplineLevelOne @relation(fields: [levelOneId], references: [id], onDelete: Restrict)
+  majors   AcademicMajor[]
   thesisSkillBindings ThesisSkillBinding[]
   tasks               Task[]
 
   @@unique([levelOneId, code])
   @@index([levelOneId, status, sortOrder])
 }
+
 
 //////////////////////////////////////////////////////
 // ThesisSkill（论文 Skill 中心）
@@ -774,13 +792,13 @@ model ThesisSkillBinding {
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
-  skill              ThesisSkill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  skillVersion       ThesisSkillVersion? @relation(fields: [skillVersionId], references: [id], onDelete: SetNull)
-  disciplineCategory DisciplineCategory? @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
-  disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
-  disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
-  school             AcademicSchool?     @relation(fields: [schoolId], references: [id], onDelete: SetNull)
-  major              AcademicMajor?      @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  skill              ThesisSkill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillVersion       ThesisSkillVersion?  @relation(fields: [skillVersionId], references: [id], onDelete: SetNull)
+  disciplineCategory DisciplineCategory?  @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
+  disciplineLevelOne DisciplineLevelOne?  @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
+  disciplineLevelTwo DisciplineLevelTwo?  @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
+  school             AcademicSchool?      @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  major              AcademicMajor?       @relation(fields: [majorId], references: [id], onDelete: SetNull)
   runs               ThesisSkillRun[]
 
   @@index([skillId, status, priority])
@@ -793,7 +811,7 @@ model ThesisSkillBinding {
 }
 
 model ThesisSkillRun {
-  id             String               @id @default(cuid())
+  id             String                @id @default(cuid())
   skillId        String
   skillVersionId String
   bindingId      String?
@@ -802,14 +820,14 @@ model ThesisSkillRun {
   inputPayload   Json
   outputPayload  Json?
   qualityResult  Json?
-  modelName      String?              @db.VarChar(100)
+  modelName      String?               @db.VarChar(100)
   tokenUsage     Json?
-  status         ThesisSkillRunStatus @default(PENDING)
-  errorMessage   String?              @db.Text
+  status         ThesisSkillRunStatus  @default(PENDING)
+  errorMessage   String?               @db.Text
   startedAt      DateTime?
   finishedAt     DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
   skill        ThesisSkill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
   skillVersion ThesisSkillVersion  @relation(fields: [skillVersionId], references: [id], onDelete: Restrict)
@@ -889,18 +907,18 @@ model Task {
   educationLevel String
   title          String?
 
-  provinceId           String?
-  cityId               String?
-  academicSchoolId     String?
-  collegeId            String?
-  majorId              String?
-  disciplineCategoryId String?
-  disciplineLevelOneId String?
-  disciplineLevelTwoId String?
-  thesisType           String? @db.VarChar(60)
-  researchDirection    String? @db.Text
-  advisorRequirement   String? @db.Text
-  formatTemplateId     String?
+  provinceId            String?
+  cityId                String?
+  academicSchoolId      String?
+  collegeId             String?
+  majorId               String?
+  disciplineCategoryId  String?
+  disciplineLevelOneId  String?
+  disciplineLevelTwoId  String?
+  thesisType            String? @db.VarChar(60)
+  researchDirection     String? @db.Text
+  advisorRequirement    String? @db.Text
+  formatTemplateId      String?
 
   status       TaskStatus @default(INIT)
   currentStage TaskStage? @default(TOPIC)
@@ -911,36 +929,37 @@ model Task {
   deadline    DateTime?
   completedAt DateTime?
 
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assignee           User?               @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  school             School              @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  province           AcademicProvince?   @relation(fields: [provinceId], references: [id], onDelete: SetNull)
-  city               AcademicCity?       @relation(fields: [cityId], references: [id], onDelete: SetNull)
-  academicSchool     AcademicSchool?     @relation(fields: [academicSchoolId], references: [id], onDelete: SetNull)
-  college            AcademicCollege?    @relation(fields: [collegeId], references: [id], onDelete: SetNull)
-  academicMajor      AcademicMajor?      @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  province           AcademicProvince?  @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  city               AcademicCity?      @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  academicSchool     AcademicSchool?    @relation(fields: [academicSchoolId], references: [id], onDelete: SetNull)
+  college            AcademicCollege?   @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  academicMajor      AcademicMajor?     @relation(fields: [majorId], references: [id], onDelete: SetNull)
   disciplineCategory DisciplineCategory? @relation(fields: [disciplineCategoryId], references: [id], onDelete: SetNull)
   disciplineLevelOne DisciplineLevelOne? @relation(fields: [disciplineLevelOneId], references: [id], onDelete: SetNull)
   disciplineLevelTwo DisciplineLevelTwo? @relation(fields: [disciplineLevelTwoId], references: [id], onDelete: SetNull)
 
-  topicCandidates       TopicCandidate[]
-  openingReports        OpeningReport[]
-  outline               Outline?
-  abstracts             TaskAbstract[]
-  abstractRevisions     TaskAbstractRevision[]
-  writingSessions       WritingSession[]
-  references            Reference[]
-  chapters              Chapter[]
-  paperMemory           PaperMemory?
-  generationLogs        GenerationLog[]
-  aiGenerationRuns      AiGenerationRun[]
-  polishTasks           PolishTask[]
-  adminLogs             TaskAdminLog[]
-  order                 Order?
-  thesisSkillRuns       ThesisSkillRun[]
-  thesisDocument        ThesisDocument?
+  topicCandidates TopicCandidate[]
+  openingReports  OpeningReport[]
+  outline         Outline?
+  abstracts       TaskAbstract[]
+  abstractRevisions TaskAbstractRevision[]
+  writingSessions WritingSession[]
+  references      Reference[]
+  chapters        Chapter[]
+  paperMemory     PaperMemory?
+  generationLogs  GenerationLog[]
+  aiGenerationRuns AiGenerationRun[]
+  polishTasks     PolishTask[]
+  adminLogs       TaskAdminLog[]
+  order           Order?
+  thesisSkillRuns ThesisSkillRun[]
+  thesisDocument ThesisDocument?
   thesisAdvisorComments ThesisAdvisorComment[]
-  thesisExportJobs      ThesisExportJob[]
+  thesisExportJobs ThesisExportJob[]
+  thesisWordFiles ThesisWordFile[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -965,6 +984,7 @@ model Task {
   @@index([updatedAt])
 }
 
+
 //////////////////////////////////////////////////////
 // ThesisDocument（论文文档工作台）
 //////////////////////////////////////////////////////
@@ -981,12 +1001,13 @@ model ThesisDocument {
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
-  task            Task                         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task            Task                     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   sections        ThesisDocumentSection[]
   revisions       ThesisDocumentRevision[]
   advisorComments ThesisAdvisorComment[]
-  exportJobs      ThesisExportJob[]
-  formatSetting   ThesisDocumentFormatSetting?
+  exportJobs ThesisExportJob[]
+  formatSetting ThesisDocumentFormatSetting?
+  wordFile ThesisWordFile?
 
   @@index([taskId])
   @@index([status])
@@ -1010,10 +1031,10 @@ model ThesisDocumentSection {
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
 
-  document        ThesisDocument           @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  parent          ThesisDocumentSection?   @relation("ThesisDocumentSectionChildren", fields: [parentId], references: [id], onDelete: SetNull)
-  children        ThesisDocumentSection[]  @relation("ThesisDocumentSectionChildren")
-  revisions       ThesisDocumentRevision[]
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  parent   ThesisDocumentSection?  @relation("ThesisDocumentSectionChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children ThesisDocumentSection[] @relation("ThesisDocumentSectionChildren")
+  revisions ThesisDocumentRevision[]
   advisorComments ThesisAdvisorComment[]
 
   @@index([documentId, parentId, sortOrder])
@@ -1034,9 +1055,9 @@ model ThesisDocumentRevision {
   operatorRole  String?  @db.VarChar(40)
   createdAt     DateTime @default(now())
 
-  document ThesisDocument         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   section  ThesisDocumentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
-  operator User?                  @relation("ThesisDocumentRevisionOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  operator User? @relation("ThesisDocumentRevisionOperator", fields: [operatorId], references: [id], onDelete: SetNull)
 
   @@index([documentId, createdAt])
   @@index([sectionId, createdAt])
@@ -1054,8 +1075,8 @@ model ThesisAdvisorComment {
   createdAt   DateTime                   @default(now())
   updatedAt   DateTime                   @updatedAt
 
-  task     Task                   @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  document ThesisDocument         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   section  ThesisDocumentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@index([taskId, status])
@@ -1232,6 +1253,7 @@ model PolishSegment {
   @@index([polishTaskId, segmentIndex])
 }
 
+
 //////////////////////////////////////////////////////
 // ThesisExport（论文格式模板与导出引擎）
 //////////////////////////////////////////////////////
@@ -1255,12 +1277,13 @@ model ThesisFormatTemplate {
   createdAt      DateTime                   @default(now())
   updatedAt      DateTime                   @updatedAt
 
-  school                 AcademicSchool?               @relation(fields: [schoolId], references: [id], onDelete: SetNull)
-  college                AcademicCollege?              @relation(fields: [collegeId], references: [id], onDelete: SetNull)
-  major                  AcademicMajor?                @relation(fields: [majorId], references: [id], onDelete: SetNull)
-  rules                  ThesisFormatRule[]
-  exportJobs             ThesisExportJob[]
+  school AcademicSchool?  @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  college AcademicCollege? @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  major AcademicMajor? @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  rules ThesisFormatRule[]
+  exportJobs ThesisExportJob[]
   documentFormatSettings ThesisDocumentFormatSetting[]
+  wordFileVersions ThesisWordFileVersion[]
 
   @@index([status, isDefault, sortOrder])
   @@index([schoolId])
@@ -1288,23 +1311,6 @@ model ThesisFormatRule {
   @@index([templateId, ruleType, sortOrder])
 }
 
-model ThesisDocumentFormatSetting {
-  id                String   @id @default(cuid())
-  documentId        String   @unique
-  templateId        String?
-  overrideRules     Json?
-  customRequirement String?  @db.Text
-  previewMode       String?  @default("SIMPLE") @db.VarChar(40)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  document ThesisDocument        @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  template ThesisFormatTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-
-  @@index([templateId])
-  @@index([updatedAt])
-}
-
 model ThesisExportJob {
   id                String                @id @default(cuid())
   taskId            String
@@ -1325,11 +1331,11 @@ model ThesisExportJob {
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 
-  task     Task                 @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  document ThesisDocument       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   template ThesisFormatTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  files    ThesisExportFile[]
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files ThesisExportFile[]
 
   @@index([taskId, createdAt])
   @@index([documentId])
@@ -1353,6 +1359,65 @@ model ThesisExportFile {
 
   @@index([exportJobId])
   @@index([fileType])
+}
+
+
+model ThesisDocumentFormatSetting {
+  id                String   @id @default(cuid())
+  documentId        String   @unique
+  templateId        String?
+  overrideRules     Json?
+  customRequirement String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  template ThesisFormatTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([templateId])
+}
+
+model ThesisWordFile {
+  id             String               @id @default(cuid())
+  taskId         String
+  documentId     String               @unique
+  fileName       String               @db.VarChar(255)
+  fileUrl        String               @db.Text
+  currentVersion Int                  @default(1)
+  status         ThesisWordFileStatus @default(DRAFT)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  document ThesisDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  versions ThesisWordFileVersion[]
+
+  @@index([taskId])
+  @@index([status])
+}
+
+model ThesisWordFileVersion {
+  id                    String                          @id @default(cuid())
+  wordFileId            String
+  version               Int
+  fileName              String                          @db.VarChar(255)
+  fileUrl               String                          @db.Text
+  fileSize              Int?
+  sourceType            ThesisWordFileVersionSourceType @default(GENERATED_FROM_DOCUMENT)
+  sourceDocumentVersion Int?
+  formatTemplateId      String?
+  formatSettingSnapshot Json?
+  operatorId            String?
+  createdAt             DateTime                        @default(now())
+
+  wordFile ThesisWordFile @relation(fields: [wordFileId], references: [id], onDelete: Cascade)
+  formatTemplate ThesisFormatTemplate? @relation(fields: [formatTemplateId], references: [id], onDelete: SetNull)
+  operator User? @relation("ThesisWordFileVersionOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@unique([wordFileId, version])
+  @@index([formatTemplateId])
+  @@index([operatorId])
+  @@index([createdAt])
 }
 
 model ExportTask {

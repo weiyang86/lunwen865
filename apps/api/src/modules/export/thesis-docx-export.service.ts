@@ -16,6 +16,7 @@ type ExportDocumentInput = {
   keywords?: unknown;
   sections: SectionNode[];
   rules: ThesisFormatRule[];
+  overrideRules?: unknown;
 };
 
 type StyleHints = {
@@ -53,7 +54,7 @@ function normalizeText(content?: string | null) {
 @Injectable()
 export class ThesisDocxExportService {
   async build(input: ExportDocumentInput): Promise<Buffer> {
-    const style = this.styleFromRules(input.rules);
+    const style = this.styleFromRules(input.rules, input.overrideRules);
     const children: Paragraph[] = [];
     children.push(
       new Paragraph({
@@ -196,9 +197,16 @@ export class ThesisDocxExportService {
     return '';
   }
 
-  private styleFromRules(rules: ThesisFormatRule[]): StyleHints {
-    const get = (key: string) =>
-      rules.find((r) => r.ruleKey === key)?.ruleValue;
+  private styleFromRules(
+    rules: ThesisFormatRule[],
+    overrideRules?: unknown,
+  ): StyleHints {
+    const override = asRecord(overrideRules);
+    const get = (key: string) => {
+      const fromOverride = override[key];
+      if (fromOverride !== undefined) return fromOverride;
+      return rules.find((r) => r.ruleKey === key)?.ruleValue;
+    };
     const body = asRecord(get('body'));
     const heading = asRecord(get('heading'));
     return {

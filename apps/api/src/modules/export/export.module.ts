@@ -49,7 +49,12 @@ import { AdminThesisFormatTemplateController } from './admin-thesis-format-templ
     ThesisExportTemplateService,
     ThesisDocxExportService,
   ],
-  exports: [ExportService, ThesisExportService, ThesisExportTemplateService],
+  exports: [
+    ExportService,
+    ThesisExportService,
+    ThesisExportTemplateService,
+    ThesisDocxExportService,
+  ],
 })
 export class ExportModule implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}

@@ -120,7 +120,7 @@ export function ClientDownloadsWorkbench() {
   return <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-4">
     <header>
       <h1 className="text-2xl font-semibold">论文导出中心</h1>
-      <p className="mt-1 text-sm text-slate-600">基于合稿与格式和格式模板生成 Word 文件；PDF 入口已预留，真实生成将在后续版本开放。</p>
+      <p className="mt-1 text-sm text-slate-600">基于论文文档工作台和格式模板生成 Word 文件；PDF 入口已预留，真实生成将在后续版本开放。</p>
       <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">导出文件仅用于论文辅导、格式整理和学习支持，请根据学校正式模板、导师要求和真实资料自行核验；系统不提供代写、伪造数据或伪造引用服务。</p>
     </header>
 
