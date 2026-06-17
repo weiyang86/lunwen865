@@ -14,6 +14,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AcademicService } from './academic.service';
+import { RegionSyncService } from './region-sync.service';
 import {
   CreateCollegeDto,
   CreateDisciplineCategoryDto,
@@ -31,13 +32,43 @@ import {
   UpdateDisciplineLevelTwoDto,
   UpdateMajorDto,
   UpdateSchoolDto,
+  ListRegionsDto,
+  ListSyncLogsDto,
 } from './dto/academic.dto';
 
 @Controller('admin/academic')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
 export class AdminAcademicController {
-  constructor(private readonly academicService: AcademicService) {}
+  constructor(
+    private readonly academicService: AcademicService,
+    private readonly regionSyncService: RegionSyncService,
+  ) {}
+
+  @Get('regions')
+  regions(@Query() query: ListRegionsDto) {
+    return this.regionSyncService.listRegions(query);
+  }
+
+  @Get('sync/regions/amap/status')
+  regionSyncStatus() {
+    return this.regionSyncService.status();
+  }
+
+  @Post('sync/regions/amap/preview')
+  previewRegionSync() {
+    return this.regionSyncService.preview();
+  }
+
+  @Post('sync/regions/amap/confirm')
+  confirmRegionSync() {
+    return this.regionSyncService.confirm();
+  }
+
+  @Get('sync/logs')
+  syncLogs(@Query() query: ListSyncLogsDto) {
+    return this.regionSyncService.logs(query);
+  }
 
   @Get('schools')
   schools(@Query() query: QuerySchoolsDto) {
