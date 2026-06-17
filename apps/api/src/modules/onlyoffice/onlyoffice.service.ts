@@ -68,7 +68,8 @@ export class OnlyOfficeService {
     if (!currentVersion) {
       throw new BadRequestException('当前 Word 文件不存在，请重新生成。');
     }
-    const expires = Math.floor(Date.now() / 1000) + 60 * 60;
+    const expires =
+      Math.floor(Date.now() / 1000) + this.config.signedUrlTtlSeconds;
     const fileSignature = this.config.signSystemUrl({
       wordFileId,
       version: currentVersion.version,
@@ -294,9 +295,40 @@ export class OnlyOfficeService {
     });
     if (!wordFile)
       throw new NotFoundException('当前 Word 文件不存在，请重新生成。');
-    const response = await fetch(body.url!);
-    if (!response.ok) throw new BadRequestException('callback 下载文件失败');
-    const arrayBuffer = await response.arrayBuffer();
+    const urls = new Set<string>();
+    const originalUrl = body.url!;
+    urls.add(originalUrl);
+    const publicBase = this.config.documentServerPublicUrl;
+    const internalBase = this.config.documentServerInternalUrl;
+    if (publicBase && internalBase && publicBase !== internalBase) {
+      if (originalUrl.startsWith(publicBase)) {
+        urls.add(`${internalBase}${originalUrl.slice(publicBase.length)}`);
+      } else if (originalUrl.startsWith(internalBase)) {
+        urls.add(`${publicBase}${originalUrl.slice(internalBase.length)}`);
+      }
+    }
+    let lastError: unknown = undefined;
+    let arrayBuffer: ArrayBuffer | undefined = undefined;
+    for (const url of urls) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          lastError = new Error(
+            `callback 下载文件失败 status=${response.status}`,
+          );
+          continue;
+        }
+        arrayBuffer = await response.arrayBuffer();
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!arrayBuffer) {
+      throw lastError instanceof Error
+        ? lastError
+        : new BadRequestException('callback 下载文件失败');
+    }
     const buffer = Buffer.from(arrayBuffer);
     const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
     const existed = await this.prisma.thesisWordFileVersion.findFirst({
