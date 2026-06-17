@@ -103,3 +103,31 @@ export type AcademicSyncLog = {
   createdAt: string;
   job?: { name: string; type: 'REGION_AMAP'; status: string } | null;
 };
+
+export type SchoolImportError = { rowNumber: number; field: string; message: string; rawValue?: string };
+export type SchoolImportPreviewRow = {
+  rowNumber: number;
+  provinceCode: string;
+  cityCode: string;
+  name: string;
+  code: string;
+  schoolType: string;
+  educationLevels: string[];
+  status: 'ACTIVE' | 'INACTIVE';
+  source: 'MOE' | 'CHSI' | 'MANUAL';
+  confidence: number;
+  mode: 'create' | 'update';
+};
+export type SchoolImportPreview = {
+  previewId: string;
+  totalRows: number;
+  validRows: number;
+  createRows: number;
+  updateRows: number;
+  errorRows: number;
+  duplicateRows: number;
+  warnings: string[];
+  sampleRows: SchoolImportPreviewRow[];
+  errors: SchoolImportError[];
+};
+export type SchoolImportConfirmResult = { previewId: string; successRows: number; createRows: number; updateRows: number; failedRows: number };

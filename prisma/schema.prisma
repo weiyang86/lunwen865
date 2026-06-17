@@ -320,6 +320,18 @@ enum AcademicSyncLogLevel {
   ERROR
 }
 
+enum AcademicSchoolSource {
+  MOE
+  CHSI
+  MANUAL
+}
+
+enum AcademicSchoolReviewStatus {
+  APPROVED
+  PENDING
+  REJECTED
+}
+
 
 // ============ 论文 Skill 中心 ============
 enum ThesisSkillStage {
@@ -703,12 +715,23 @@ model AcademicSchool {
   id              String         @id @default(cuid())
   provinceId      String
   cityId          String
+  provinceCode    String?        @db.VarChar(20)
+  cityCode        String?        @db.VarChar(20)
   name            String         @db.VarChar(150)
   code            String?        @unique @db.VarChar(50)
   schoolType      String?        @db.VarChar(50)
   educationLevels String[]       @default([])
   status          AcademicStatus @default(ACTIVE)
   sortOrder       Int            @default(0)
+  source          AcademicSchoolSource @default(MANUAL)
+  sourceVersion   String?        @db.VarChar(80)
+  sourceUrl       String?        @db.Text
+  syncKey         String?        @db.VarChar(120)
+  confidence      Float          @default(80)
+  lastSyncedAt    DateTime?
+  reviewStatus    AcademicSchoolReviewStatus @default(APPROVED)
+  reviewedBy      String?        @db.VarChar(100)
+  reviewedAt      DateTime?
   remark          String?        @db.Text
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -723,6 +746,9 @@ model AcademicSchool {
 
   @@index([provinceId, status, sortOrder])
   @@index([cityId, status, sortOrder])
+  @@index([provinceCode, status, sortOrder])
+  @@index([cityCode, status, sortOrder])
+  @@index([schoolType])
   @@index([name])
 }
 

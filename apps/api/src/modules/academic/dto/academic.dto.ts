@@ -49,6 +49,21 @@ export class QueryCitiesDto {
 export class QuerySchoolsDto extends ListAcademicDto {
   @IsOptional()
   @IsString()
+  provinceCode?: string;
+
+  @IsOptional()
+  @IsString()
+  cityCode?: string;
+
+  @IsOptional()
+  @IsString()
+  schoolType?: string;
+
+  @IsOptional()
+  @IsString()
+  educationLevel?: string;
+  @IsOptional()
+  @IsString()
   provinceId?: string;
 
   @IsOptional()
@@ -394,4 +409,9 @@ export class ListSyncLogsDto {
   @IsInt()
   @Min(1)
   pageSize?: number = 20;
+}
+
+export class ConfirmSchoolImportDto {
+  @IsString()
+  previewId!: string;
 }

@@ -8,13 +8,19 @@ import {
   Post,
   Query,
   UseGuards,
+  UploadedFile,
+  UseInterceptors,
+  Res,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
+import type { Response } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AcademicService } from './academic.service';
 import { RegionSyncService } from './region-sync.service';
+import { SchoolImportService } from './school-import.service';
 import {
   CreateCollegeDto,
   CreateDisciplineCategoryDto,
@@ -34,15 +40,17 @@ import {
   UpdateSchoolDto,
   ListRegionsDto,
   ListSyncLogsDto,
+  ConfirmSchoolImportDto,
 } from './dto/academic.dto';
 
-@Controller('admin/academic')
+@Controller(['admin/academic', 'admin/academic-data'])
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
 export class AdminAcademicController {
   constructor(
     private readonly academicService: AcademicService,
     private readonly regionSyncService: RegionSyncService,
+    private readonly schoolImportService: SchoolImportService,
   ) {}
 
   @Get('regions')
@@ -68,6 +76,40 @@ export class AdminAcademicController {
   @Get('sync/logs')
   syncLogs(@Query() query: ListSyncLogsDto) {
     return this.regionSyncService.logs(query);
+  }
+
+  @Get('schools/import/template')
+  schoolImportTemplate(
+    @Query('version') version: 'legacy' | 'extended' = 'extended',
+    @Res() res: Response,
+  ) {
+    const safeVersion = version === 'legacy' ? 'legacy' : 'extended';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=academic-schools-${safeVersion}-template.csv`,
+    );
+    res.send(`\uFEFF${this.schoolImportService.template(safeVersion)}`);
+  }
+
+  @Post('schools/import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  previewSchoolImport(
+    @UploadedFile()
+    file:
+      | { originalname?: string; mimetype?: string; buffer?: Buffer }
+      | undefined,
+  ) {
+    return this.schoolImportService.preview(file);
+  }
+
+  @Post('schools/import/confirm')
+  confirmSchoolImport(@Body() dto: ConfirmSchoolImportDto) {
+    return this.schoolImportService.confirm(dto.previewId);
   }
 
   @Get('schools')

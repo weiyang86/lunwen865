@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { academicApi } from '@/services/admin/academic';
+import { SchoolImportDialog } from './school-import-dialog';
 import type {
   AcademicCity,
   AcademicCollege,
@@ -309,9 +310,12 @@ export function AcademicAdminPage({ mode }: { mode: Mode }) {
           <h1 className="text-2xl font-semibold">学术基础数据</h1>
           <p className="text-sm text-muted-foreground">维护地区、高校、学院、专业与学科目录，为后续论文任务、Skill 和格式模板提供统一上下文。</p>
         </div>
-        <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
-          <RefreshCw className="mr-2 size-4" /> 刷新
-        </Button>
+        <div className="flex gap-2">
+          {mode === 'schools' ? <SchoolImportDialog onImported={() => void refresh()} /> : null}
+          <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
+            <RefreshCw className="mr-2 size-4" /> 刷新
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">

@@ -1,4 +1,4 @@
-import { adminHttp } from '@/lib/admin/api-client';
+import { adminApi, adminHttp } from '@/lib/admin/api-client';
 import type {
   AcademicCity,
   AcademicCollege,
@@ -14,6 +14,8 @@ import type {
   RegionSyncPreview,
   RegionSyncStatus,
   AcademicRegion,
+  SchoolImportPreview,
+  SchoolImportConfirmResult,
 } from '@/types/admin/academic';
 
 export type ListParams = Record<string, string | number | undefined>;
@@ -59,4 +61,11 @@ export const academicApi = {
   confirmRegionSync: () => adminHttp.post<{ total: number; jobId: string }>('/admin/academic/sync/regions/amap/confirm', {}),
   syncLogs: (params?: ListParams) => adminHttp.get<PageResp<AcademicSyncLog>>('/admin/academic/sync/logs', params),
   regions: (params?: ListParams) => adminHttp.get<PageResp<AcademicRegion>>('/admin/academic/regions', params),
+  previewSchoolImport: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return adminApi.post<SchoolImportPreview, { data: SchoolImportPreview }>('/admin/academic-data/schools/import/preview', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }).then((r) => r.data);
+  },
+  confirmSchoolImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/schools/import/confirm', { previewId }),
+  schoolImportTemplateUrl: (version: 'legacy' | 'extended') => `/api/admin/academic-data/schools/import/template?version=${version}`,
 };

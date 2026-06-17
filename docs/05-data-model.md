@@ -250,3 +250,9 @@
 - `AcademicSyncJob` 映射表 `academic_sync_jobs`，记录地区同步任务类型 `REGION_AMAP`、范围 `NATIONAL`、运行状态和最近成功时间。
 - `AcademicSyncLog` 映射表 `academic_sync_logs`，记录同步任务 INFO/WARN/ERROR 日志和结构化 detail，便于后台查看和故障追踪。
 - 本次新增 Prisma migration：`prisma/migrations/20260617090000_add_academic_region_sync/migration.sql`。
+
+### AcademicData-02 高校导入字段扩展
+- 复用现有 `AcademicSchool` 表，新增 `provinceCode`、`cityCode` 保存 AcademicData-01 地区 adcode，兼容旧 `provinceId/cityId` 关系。
+- `AcademicSchool.code` 作为导入 upsert 唯一键，推荐使用教育部学校标识码。
+- 新增来源与审核字段：`source`（MOE/CHSI/MANUAL）、`sourceVersion`、`sourceUrl`、`syncKey`、`confidence`、`lastSyncedAt`、`reviewStatus`、`reviewedBy`、`reviewedAt`。
+- 本次新增 Prisma migration：`prisma/migrations/20260617100000_extend_academic_school_import/migration.sql`。
