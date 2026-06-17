@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { BookOpen, Building2, GraduationCap, Layers3, Plus, RefreshCw } from 'lucide-react';
+import { BookOpen, Building2, DatabaseZap, GraduationCap, Layers3, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -72,6 +72,7 @@ const NAV = [
   { href: '/admin/academic/colleges', label: '学院管理', mode: 'colleges', icon: Layers3 },
   { href: '/admin/academic/majors', label: '专业管理', mode: 'majors', icon: GraduationCap },
   { href: '/admin/academic/disciplines', label: '学科目录', mode: 'disciplines', icon: BookOpen },
+  { href: '/admin/academic/sync', label: '数据同步', mode: 'sync', icon: DatabaseZap },
 ] as const;
 
 const EMPTY_SCHOOL: SchoolDraft = {

@@ -244,3 +244,9 @@
 - `ThesisWordFileVersion` 补充 `editorUserId`、`callbackPayload`、`checksum`；ONLYOFFICE 保存回调生成的版本使用 `sourceType=ONLYOFFICE_EDITED`，`callbackPayload` 只记录排查所需字段，不保存敏感 token。
 - callback 保存会更新 `ThesisWordFile.currentVersion/fileUrl/fileName`，并保留历史版本；Word 精修版本不强制同步回 `ThesisDocumentSection`。
 - migration：`20260616100000_add_onlyoffice_word_editing`。
+
+### AcademicData-01 地区同步数据模型
+- `AcademicRegion` 映射表 `academic_regions`，以高德 `adcode` 作为唯一 `code`，记录省、市、区县层级、上级 `parentCode`、同步来源、置信度、审核状态和最近同步时间。
+- `AcademicSyncJob` 映射表 `academic_sync_jobs`，记录地区同步任务类型 `REGION_AMAP`、范围 `NATIONAL`、运行状态和最近成功时间。
+- `AcademicSyncLog` 映射表 `academic_sync_logs`，记录同步任务 INFO/WARN/ERROR 日志和结构化 detail，便于后台查看和故障追踪。
+- 本次新增 Prisma migration：`prisma/migrations/20260617090000_add_academic_region_sync/migration.sql`。

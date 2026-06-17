@@ -60,3 +60,46 @@ export type DisciplineTree = {
   levelOnes: DisciplineLevelOne[];
   levelTwos: DisciplineLevelTwo[];
 };
+
+export type AcademicRegionLevel = 'PROVINCE' | 'CITY' | 'DISTRICT';
+export type AcademicRegionStatus = 'ACTIVE' | 'DISABLED';
+
+export type AcademicRegion = {
+  id?: string;
+  code: string;
+  name: string;
+  level: AcademicRegionLevel;
+  parentCode?: string | null;
+  status?: AcademicRegionStatus;
+  sortOrder: number;
+  source?: 'AMAP' | 'MANUAL';
+  lastSyncedAt?: string | null;
+};
+
+export type RegionSyncPreview = {
+  total: number;
+  createCount: number;
+  updateCount: number;
+  warningCount: number;
+  samples: AcademicRegion[];
+  errors: { code: string; message: string }[];
+  apiKeyConfigured: boolean;
+  mock: boolean;
+};
+
+export type RegionSyncStatus = {
+  apiKeyConfigured: boolean;
+  mock: boolean;
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  status: 'IDLE' | 'RUNNING' | 'SUCCESS' | 'FAILED';
+};
+
+export type AcademicSyncLog = {
+  id: string;
+  level: 'INFO' | 'WARN' | 'ERROR';
+  message: string;
+  detail?: unknown;
+  createdAt: string;
+  job?: { name: string; type: 'REGION_AMAP'; status: string } | null;
+};

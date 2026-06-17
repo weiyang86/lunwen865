@@ -271,6 +271,55 @@ enum AcademicStatus {
   INACTIVE
 }
 
+enum AcademicRegionLevel {
+  PROVINCE
+  CITY
+  DISTRICT
+}
+
+enum AcademicRegionStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AcademicRegionSource {
+  AMAP
+  MANUAL
+}
+
+enum AcademicRegionReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AcademicSyncJobType {
+  REGION_AMAP
+}
+
+enum AcademicSyncSource {
+  AMAP
+}
+
+enum AcademicSyncScope {
+  NATIONAL
+  SOUTHWEST
+  CUSTOM
+}
+
+enum AcademicSyncJobStatus {
+  IDLE
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum AcademicSyncLogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
 
 // ============ 论文 Skill 中心 ============
 enum ThesisSkillStage {
@@ -555,6 +604,66 @@ model User {
 //////////////////////////////////////////////////////
 // Academic（学术基础数据）
 //////////////////////////////////////////////////////
+
+model AcademicRegion {
+  id           String                     @id @default(cuid())
+  code         String                     @unique @db.VarChar(20)
+  name         String                     @db.VarChar(100)
+  level        AcademicRegionLevel
+  parentCode   String?                    @db.VarChar(20)
+  status       AcademicRegionStatus       @default(ACTIVE)
+  sortOrder    Int                        @default(0)
+  source       AcademicRegionSource       @default(AMAP)
+  sourceVersion String?                   @db.VarChar(80)
+  sourceUrl    String?                    @db.Text
+  syncKey      String?                    @db.VarChar(120)
+  confidence   Float                      @default(1)
+  lastSyncedAt DateTime?
+  reviewStatus AcademicRegionReviewStatus @default(APPROVED)
+  reviewedBy   String?                    @db.VarChar(100)
+  reviewedAt   DateTime?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+
+  @@index([level, status, sortOrder])
+  @@index([parentCode])
+  @@map("academic_regions")
+}
+
+model AcademicSyncJob {
+  id            String                @id @default(cuid())
+  name          String                @db.VarChar(120)
+  type          AcademicSyncJobType
+  source        AcademicSyncSource    @default(AMAP)
+  scope         AcademicSyncScope     @default(NATIONAL)
+  status        AcademicSyncJobStatus @default(IDLE)
+  lastRunAt     DateTime?
+  lastSuccessAt DateTime?
+  config        Json?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  logs AcademicSyncLog[]
+
+  @@unique([type, scope])
+  @@index([type, status])
+  @@map("academic_sync_jobs")
+}
+
+model AcademicSyncLog {
+  id        String               @id @default(cuid())
+  jobId     String?
+  level     AcademicSyncLogLevel @default(INFO)
+  message   String               @db.VarChar(500)
+  detail    Json?
+  createdAt DateTime             @default(now())
+
+  job AcademicSyncJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([jobId, createdAt])
+  @@index([level, createdAt])
+  @@map("academic_sync_logs")
+}
 
 model AcademicProvince {
   id        String         @id @default(cuid())

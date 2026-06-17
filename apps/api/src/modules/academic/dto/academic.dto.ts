@@ -1,4 +1,9 @@
-import { AcademicStatus } from '@prisma/client';
+import {
+  AcademicRegionLevel,
+  AcademicRegionStatus,
+  AcademicStatus,
+  AcademicSyncJobType,
+} from '@prisma/client';
 import { Type, Transform } from 'class-transformer';
 import {
   IsArray,
@@ -342,4 +347,51 @@ export class UpdateDisciplineLevelTwoDto extends CreateDisciplineLevelTwoDto {
   @IsString()
   @MaxLength(50)
   declare code: string;
+}
+
+export class ListRegionsDto {
+  @IsOptional()
+  @IsString()
+  keyword?: string;
+  @IsOptional()
+  @IsEnum(AcademicRegionLevel)
+  level?: AcademicRegionLevel;
+
+  @IsOptional()
+  @IsString()
+  parentCode?: string;
+
+  @IsOptional()
+  @IsEnum(AcademicRegionStatus)
+  status?: AcademicRegionStatus;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  pageSize?: number = 20;
+}
+
+export class ListSyncLogsDto {
+  @IsOptional()
+  @IsEnum(AcademicSyncJobType)
+  jobType?: AcademicSyncJobType;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  pageSize?: number = 20;
 }

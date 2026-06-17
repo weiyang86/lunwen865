@@ -10,6 +10,10 @@ import type {
   DisciplineLevelTwo,
   DisciplineTree,
   PageResp,
+  AcademicSyncLog,
+  RegionSyncPreview,
+  RegionSyncStatus,
+  AcademicRegion,
 } from '@/types/admin/academic';
 
 export type ListParams = Record<string, string | number | undefined>;
@@ -49,4 +53,10 @@ export const academicApi = {
   createLevelTwo: (body: unknown) => adminHttp.post<DisciplineLevelTwo>('/admin/academic/disciplines/level-twos', body),
   updateLevelTwo: (id: string, body: unknown) => adminHttp.patch<DisciplineLevelTwo>(`/admin/academic/disciplines/level-twos/${id}`, body),
   disableLevelTwo: (id: string) => adminHttp.delete<DisciplineLevelTwo>(`/admin/academic/disciplines/level-twos/${id}`),
+
+  regionSyncStatus: () => adminHttp.get<RegionSyncStatus>('/admin/academic/sync/regions/amap/status'),
+  previewRegionSync: () => adminHttp.post<RegionSyncPreview>('/admin/academic/sync/regions/amap/preview', {}),
+  confirmRegionSync: () => adminHttp.post<{ total: number; jobId: string }>('/admin/academic/sync/regions/amap/confirm', {}),
+  syncLogs: (params?: ListParams) => adminHttp.get<PageResp<AcademicSyncLog>>('/admin/academic/sync/logs', params),
+  regions: (params?: ListParams) => adminHttp.get<PageResp<AcademicRegion>>('/admin/academic/regions', params),
 };
