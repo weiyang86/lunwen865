@@ -19,10 +19,31 @@ function base64Url(input: Buffer | string) {
 export class OnlyOfficeConfigService {
   constructor(private readonly config: ConfigService) {}
 
-  get documentServerUrl() {
-    return trimSlash(
-      this.config.get<string>('ONLYOFFICE_DOCUMENT_SERVER_URL') ?? '',
+  get enabled() {
+    return (
+      (
+        this.config.get<string>('ONLYOFFICE_ENABLED') ?? 'true'
+      ).toLowerCase() !== 'false'
     );
+  }
+
+  get documentServerPublicUrl() {
+    return trimSlash(
+      this.config.get<string>('ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL') ??
+        this.config.get<string>('ONLYOFFICE_DOCUMENT_SERVER_URL') ??
+        '',
+    );
+  }
+
+  get documentServerInternalUrl() {
+    return trimSlash(
+      this.config.get<string>('ONLYOFFICE_DOCUMENT_SERVER_INTERNAL_URL') ??
+        this.documentServerPublicUrl,
+    );
+  }
+
+  get documentServerUrl() {
+    return this.documentServerPublicUrl;
   }
 
   get callbackBaseUrl() {
@@ -31,10 +52,28 @@ export class OnlyOfficeConfigService {
     );
   }
 
-  get filePublicBaseUrl() {
+  get fileBaseUrl() {
     return trimSlash(
-      this.config.get<string>('ONLYOFFICE_FILE_PUBLIC_BASE_URL') ?? '',
+      this.config.get<string>('ONLYOFFICE_FILE_BASE_URL') ??
+        this.config.get<string>('ONLYOFFICE_FILE_PUBLIC_BASE_URL') ??
+        '',
     );
+  }
+
+  get filePublicBaseUrl() {
+    return this.fileBaseUrl;
+  }
+
+  get missingConfig() {
+    if (!this.enabled) return [];
+    const missing: string[] = [];
+    if (!this.documentServerPublicUrl)
+      missing.push('ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL');
+    if (!this.callbackBaseUrl) missing.push('ONLYOFFICE_CALLBACK_BASE_URL');
+    if (!this.fileBaseUrl) missing.push('ONLYOFFICE_FILE_BASE_URL');
+    if (this.jwtEnabled && !this.jwtSecret)
+      missing.push('ONLYOFFICE_JWT_SECRET');
+    return missing;
   }
 
   get editorMode() {

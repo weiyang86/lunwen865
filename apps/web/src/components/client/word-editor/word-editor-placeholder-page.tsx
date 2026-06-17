@@ -27,8 +27,10 @@ type WordFile = {
 type WordFilesResp = { current: WordFile | null; items: WordFile[] };
 
 type EditorConfigResp = {
+  enabled?: boolean;
   documentServerUrl: string;
-  editorConfig: Record<string, unknown>;
+  editorConfig: Record<string, unknown> | null;
+  missingConfig?: string[];
   warnings?: string[];
 };
 
@@ -107,6 +109,15 @@ export function WordEditorPlaceholderPage({ taskId }: { taskId: string }) {
       const config = await clientHttp.get<EditorConfigResp>(
         `/thesis-word-files/${data.current.id}/editor-config`,
       );
+      if (config.enabled === false) {
+        throw new Error('在线 Word 编辑未启用');
+      }
+      if (config.missingConfig?.length) {
+        throw new Error(`ONLYOFFICE 配置缺失：${config.missingConfig.join('、')}`);
+      }
+      if (!config.documentServerUrl || !config.editorConfig) {
+        throw new Error('在线 Word 编辑服务未配置，请联系管理员。');
+      }
       await loadOnlyOfficeScript(config.documentServerUrl);
       if (!window.DocsAPI) throw new Error('在线 Word 编辑服务暂不可用。');
       editorRef.current?.destroyEditor?.();
@@ -165,7 +176,7 @@ export function WordEditorPlaceholderPage({ taskId }: { taskId: string }) {
         {current ? <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <section className="rounded-xl border border-slate-200 bg-white p-3">
             <div id="onlyoffice-editor-container" className="min-h-[72vh] rounded-lg border border-slate-200 bg-slate-50">
-              {!editorLoaded ? <div className="flex min-h-[72vh] items-center justify-center p-6 text-center text-sm text-slate-500">点击“打开在线 Word 编辑”后将在此加载 ONLYOFFICE 编辑器。若提示服务未配置，请联系管理员检查 Document Server、callbackUrl 与 document.url。</div> : null}
+              {!editorLoaded ? <div className="flex min-h-[72vh] items-center justify-center p-6 text-center text-sm text-slate-500">点击“打开在线 Word 编辑”后将在此加载 ONLYOFFICE 编辑器。若提示配置缺失，请检查 ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL、ONLYOFFICE_CALLBACK_BASE_URL 与 ONLYOFFICE_FILE_BASE_URL。</div> : null}
             </div>
           </section>
           <aside className="space-y-4">

@@ -3,6 +3,17 @@ CREATE TYPE "ThesisWordFileStatus" AS ENUM ('DRAFT', 'GENERATED', 'EDITING', 'FI
 CREATE TYPE "ThesisWordFileVersionSourceType" AS ENUM ('GENERATED_FROM_DOCUMENT', 'ONLYOFFICE_EDITED', 'MANUAL_UPLOAD');
 
 -- CreateTable
+CREATE TABLE "ThesisDocumentFormatSetting" (
+    "id" TEXT NOT NULL,
+    "documentId" TEXT NOT NULL,
+    "templateId" TEXT,
+    "overrideRules" JSONB,
+    "customRequirement" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "ThesisDocumentFormatSetting_pkey" PRIMARY KEY ("id")
+);
+
 CREATE TABLE "ThesisWordFile" (
     "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
@@ -33,6 +44,8 @@ CREATE TABLE "ThesisWordFileVersion" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ThesisDocumentFormatSetting_documentId_key" ON "ThesisDocumentFormatSetting"("documentId");
+CREATE INDEX "ThesisDocumentFormatSetting_templateId_idx" ON "ThesisDocumentFormatSetting"("templateId");
 CREATE UNIQUE INDEX "ThesisWordFile_documentId_key" ON "ThesisWordFile"("documentId");
 CREATE INDEX "ThesisWordFile_taskId_idx" ON "ThesisWordFile"("taskId");
 CREATE INDEX "ThesisWordFile_status_idx" ON "ThesisWordFile"("status");
@@ -42,6 +55,8 @@ CREATE INDEX "ThesisWordFileVersion_operatorId_idx" ON "ThesisWordFileVersion"("
 CREATE INDEX "ThesisWordFileVersion_createdAt_idx" ON "ThesisWordFileVersion"("createdAt");
 
 -- AddForeignKey
+ALTER TABLE "ThesisDocumentFormatSetting" ADD CONSTRAINT "ThesisDocumentFormatSetting_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "ThesisDocument"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ThesisDocumentFormatSetting" ADD CONSTRAINT "ThesisDocumentFormatSetting_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "ThesisFormatTemplate"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "ThesisWordFile" ADD CONSTRAINT "ThesisWordFile_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ThesisWordFile" ADD CONSTRAINT "ThesisWordFile_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "ThesisDocument"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ThesisWordFileVersion" ADD CONSTRAINT "ThesisWordFileVersion_wordFileId_fkey" FOREIGN KEY ("wordFileId") REFERENCES "ThesisWordFile"("id") ON DELETE CASCADE ON UPDATE CASCADE;

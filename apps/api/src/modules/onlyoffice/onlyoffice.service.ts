@@ -24,6 +24,12 @@ type SignedQuery = { expires?: string; signature?: string; userId?: string };
 const SAVE_STATUSES = new Set([2, 6]);
 const ERROR_STATUSES = new Set([3, 7]);
 
+function apiUrl(baseUrl: string, path: string) {
+  const base = baseUrl.replace(/\/+$/, '');
+  const apiBase = base.endsWith('/api') ? base : `${base}/api`;
+  return `${apiBase}/${path.replace(/^\/+/, '')}`;
+}
+
 @Injectable()
 export class OnlyOfficeService {
   private readonly logger = new Logger(OnlyOfficeService.name);
@@ -34,16 +40,31 @@ export class OnlyOfficeService {
   ) {}
 
   async getEditorConfig(wordFileId: string, actor: Actor) {
-    if (!this.config.documentServerUrl) {
-      throw new BadRequestException('在线 Word 编辑服务未配置，请联系管理员。');
-    }
-    if (this.config.jwtEnabled && !this.config.jwtSecret) {
-      throw new BadRequestException(
-        'ONLYOFFICE JWT_SECRET 未配置，请联系管理员。',
-      );
-    }
     const wordFile = await this.getWordFileWithAccess(wordFileId, actor);
     const currentVersion = this.currentVersion(wordFile);
+    if (!this.config.enabled) {
+      return {
+        enabled: false,
+        documentServerUrl: '',
+        editorConfig: null,
+        wordFile,
+        currentVersion,
+        missingConfig: [],
+        warnings: ['在线 Word 编辑未启用'],
+      };
+    }
+    const missingConfig = this.config.missingConfig;
+    if (missingConfig.length > 0) {
+      return {
+        enabled: true,
+        documentServerUrl: this.config.documentServerPublicUrl,
+        editorConfig: null,
+        wordFile,
+        currentVersion,
+        missingConfig,
+        warnings: ['ONLYOFFICE 配置不完整'],
+      };
+    }
     if (!currentVersion) {
       throw new BadRequestException('当前 Word 文件不存在，请重新生成。');
     }
@@ -58,12 +79,8 @@ export class OnlyOfficeService {
       userId: actor.id,
       expires,
     });
-    const fileBase =
-      this.config.filePublicBaseUrl || this.config.callbackBaseUrl;
+    const fileBase = this.config.fileBaseUrl;
     const callbackBase = this.config.callbackBaseUrl;
-    if (!fileBase || !callbackBase) {
-      throw new BadRequestException('在线 Word 编辑服务未配置，请联系管理员。');
-    }
     const documentKey = this.buildDocumentKey(
       wordFile.id,
       currentVersion.version,
@@ -80,7 +97,10 @@ export class OnlyOfficeService {
         fileType: 'docx',
         key: documentKey,
         title: wordFile.fileName,
-        url: `${fileBase}/api/onlyoffice/files/word-files/${wordFile.id}/current?expires=${expires}&signature=${fileSignature}`,
+        url: apiUrl(
+          fileBase,
+          `onlyoffice/files/word-files/${wordFile.id}/current?expires=${expires}&signature=${fileSignature}`,
+        ),
         permissions: {
           edit: true,
           download: true,
@@ -92,7 +112,10 @@ export class OnlyOfficeService {
       editorConfig: {
         mode: this.config.editorMode,
         lang: 'zh-CN',
-        callbackUrl: `${callbackBase}/api/onlyoffice/callback/${wordFile.id}?userId=${encodeURIComponent(actor.id)}&expires=${expires}&signature=${callbackSignature}`,
+        callbackUrl: apiUrl(
+          callbackBase,
+          `onlyoffice/callback/${wordFile.id}?userId=${encodeURIComponent(actor.id)}&expires=${expires}&signature=${callbackSignature}`,
+        ),
         user: {
           id: actor.id,
           name: actor.name || actor.id || '论文通用户',
@@ -113,8 +136,10 @@ export class OnlyOfficeService {
       editorConfig.token = this.config.signJwt(editorConfig);
     }
     return {
-      documentServerUrl: this.config.documentServerUrl,
+      enabled: true,
+      documentServerUrl: this.config.documentServerPublicUrl,
       editorConfig,
+      missingConfig: [],
       wordFile,
       currentVersion,
       warnings,

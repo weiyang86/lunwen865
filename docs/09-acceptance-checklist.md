@@ -252,3 +252,11 @@
 - [ ] 版本记录展示生成初稿与在线编辑来源，当前 Word 与历史版本均可下载。
 - [ ] JWT 开启时 editor config 携带 token，callback 校验 token；JWT secret 不出现在日志中。
 - [ ] 合稿与格式、DOCX 初稿生成、旧下载、订单、支付和 AI 生成链路不受影响。
+
+## OnlyOffice 多环境配置兼容验收项
+- [ ] 本地混合开发模式下，`ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL=http://localhost:8088` 且 `ONLYOFFICE_FILE_BASE_URL/ONLYOFFICE_CALLBACK_BASE_URL=http://host.docker.internal:3101/api` 时可打开 Word 编辑器。
+- [ ] 本地全 Docker 模式下，`ONLYOFFICE_FILE_BASE_URL/ONLYOFFICE_CALLBACK_BASE_URL=http://api:3101/api` 时 Document Server 可访问 API。
+- [ ] 生产 HTTPS 域名配置下，editor-config 返回公网 Document Server URL、论文通系统 file/callback URL。
+- [ ] 配置缺失时，前端展示具体缺失项：`ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL`、`ONLYOFFICE_CALLBACK_BASE_URL`、`ONLYOFFICE_FILE_BASE_URL`。
+- [ ] `ONLYOFFICE_ENABLED=false` 时页面提示“在线 Word 编辑未启用”。
+- [ ] 旧变量 `ONLYOFFICE_DOCUMENT_SERVER_URL`、`ONLYOFFICE_FILE_PUBLIC_BASE_URL` 仍可兼容读取。

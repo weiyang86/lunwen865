@@ -1,96 +1,205 @@
-# ONLYOFFICE Docs 本地部署与联调说明
+# ONLYOFFICE Docs 多环境部署与联调说明
 
-## 1. 本地 Docker 启动
+## 1. 支持的三种部署模式
 
-本 Issue 新增 `docker-compose.onlyoffice.yml`，用于在不改动现有开发依赖的情况下启动 ONLYOFFICE Document Server。
+### 1.1 本地混合开发
+
+- Web/API 在宿主机运行。
+- ONLYOFFICE Document Server 在 Docker 中运行。
+- 浏览器访问 Document Server：`http://localhost:8088`。
+- Document Server 访问 API：`http://host.docker.internal:3101/api`。
+
+推荐配置：
+
+```env
+ONLYOFFICE_ENABLED=true
+ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL=http://localhost:8088
+ONLYOFFICE_DOCUMENT_SERVER_INTERNAL_URL=http://localhost:8088
+ONLYOFFICE_FILE_BASE_URL=http://host.docker.internal:3101/api
+ONLYOFFICE_CALLBACK_BASE_URL=http://host.docker.internal:3101/api
+ONLYOFFICE_JWT_ENABLED=true
+ONLYOFFICE_JWT_SECRET=local-onlyoffice-secret-change-me
+ONLYOFFICE_EDITOR_MODE=edit
+```
+
+启动 Document Server：
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.onlyoffice.yml up -d
+docker compose -f docker-compose.onlyoffice.local.yml up -d
 ```
 
-默认端口：
+### 1.2 本地全 Docker
 
-- Document Server：`http://localhost:8082`
-- NestJS API：通常为 `http://localhost:3001/api`
-- Next.js Web：通常为 `http://localhost:3000`
+- Web/API/ONLYOFFICE 都在 Docker Compose 网络中运行。
+- 浏览器仍可通过宿主机端口访问 Document Server。
+- Document Server 访问 API 使用服务名：`http://api:3101/api`。
 
-## 2. 环境变量
+推荐配置：
 
 ```env
-ONLYOFFICE_DOCUMENT_SERVER_URL=http://localhost:8082
-ONLYOFFICE_CALLBACK_BASE_URL=http://host.docker.internal:3001
-ONLYOFFICE_FILE_PUBLIC_BASE_URL=http://host.docker.internal:3001
-ONLYOFFICE_JWT_ENABLED=false
-ONLYOFFICE_JWT_SECRET=
+ONLYOFFICE_ENABLED=true
+ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL=http://localhost:8088
+ONLYOFFICE_DOCUMENT_SERVER_INTERNAL_URL=http://onlyoffice-document-server
+ONLYOFFICE_FILE_BASE_URL=http://api:3101/api
+ONLYOFFICE_CALLBACK_BASE_URL=http://api:3101/api
+ONLYOFFICE_JWT_ENABLED=true
+ONLYOFFICE_JWT_SECRET=local-onlyoffice-secret-change-me
 ONLYOFFICE_EDITOR_MODE=edit
-ONLYOFFICE_FORCE_SAVE_ENABLED=false
 ```
 
-说明：
+可按项目 Compose 服务名调整 `api` 与端口；关键原则是 Document Server 容器内能访问 `document.url` 和 `callbackUrl`。
 
-- `ONLYOFFICE_DOCUMENT_SERVER_URL`：浏览器加载 Document Server `api.js` 的地址。
-- `ONLYOFFICE_CALLBACK_BASE_URL`：Document Server 能访问到的后端地址，用于 `callbackUrl`。
-- `ONLYOFFICE_FILE_PUBLIC_BASE_URL`：Document Server 能访问到的文件下载地址，用于 `document.url`。
-- 本地 Docker 联调时不要把 callback/file 地址配置成容器无法访问的 `localhost`；Linux 环境可能需要改成宿主机 IP。
-- `ONLYOFFICE_EDITOR_MODE` 默认 `edit`。
-- `ONLYOFFICE_FORCE_SAVE_ENABLED` 首期默认关闭；开启后会处理 ONLYOFFICE status=6 force save 回调。
+### 1.3 云端生产
 
-## 3. JWT 配置
+- 论文通系统通过 HTTPS 域名访问，例如 `https://lunwen86.bestshizhongyu.com`。
+- ONLYOFFICE 使用独立 HTTPS 域名，例如 `https://office-lunwen.bestshizhongyu.com`。
+- 生产环境必须启用 JWT，并确保 API 与 Document Server 使用同一个 secret。
 
-本地开发可以暂时关闭：
+推荐配置：
 
 ```env
-ONLYOFFICE_JWT_ENABLED=false
+ONLYOFFICE_ENABLED=true
+ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL=https://office-lunwen.bestshizhongyu.com
+ONLYOFFICE_DOCUMENT_SERVER_INTERNAL_URL=https://office-lunwen.bestshizhongyu.com
+ONLYOFFICE_FILE_BASE_URL=https://lunwen86.bestshizhongyu.com/api
+ONLYOFFICE_CALLBACK_BASE_URL=https://lunwen86.bestshizhongyu.com/api
+ONLYOFFICE_JWT_ENABLED=true
+ONLYOFFICE_JWT_SECRET=请替换为强随机密钥
+ONLYOFFICE_EDITOR_MODE=edit
 ```
 
-生产环境建议开启：
+可参考 `docker-compose.onlyoffice.prod.example.yml` 部署 Document Server，并通过 Nginx/Ingress 暴露 HTTPS 域名。
+
+## 2. 新旧环境变量兼容
+
+推荐使用新变量：
+
+- `ONLYOFFICE_ENABLED`
+- `ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL`
+- `ONLYOFFICE_DOCUMENT_SERVER_INTERNAL_URL`
+- `ONLYOFFICE_FILE_BASE_URL`
+- `ONLYOFFICE_CALLBACK_BASE_URL`
+- `ONLYOFFICE_JWT_ENABLED`
+- `ONLYOFFICE_JWT_SECRET`
+- `ONLYOFFICE_EDITOR_MODE`
+
+兼容旧变量：
+
+- `ONLYOFFICE_DOCUMENT_SERVER_URL` 会映射为 `ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL`。
+- `ONLYOFFICE_FILE_PUBLIC_BASE_URL` 会映射为 `ONLYOFFICE_FILE_BASE_URL`。
+- `ONLYOFFICE_CALLBACK_BASE_URL` 名称保持兼容。
+
+如果配置缺失，editor-config 会返回 `missingConfig`，前端会展示具体缺失项，例如 `ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL`、`ONLYOFFICE_CALLBACK_BASE_URL`、`ONLYOFFICE_FILE_BASE_URL`。
+
+## 3. Nginx 反向代理建议
+
+论文通系统：
+
+```nginx
+server {
+  server_name lunwen86.bestshizhongyu.com;
+  location /api/ {
+    proxy_pass http://api:3101/api/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+  location / {
+    proxy_pass http://web:3000;
+  }
+}
+```
+
+ONLYOFFICE：
+
+```nginx
+server {
+  server_name office-lunwen.bestshizhongyu.com;
+  client_max_body_size 200m;
+  location / {
+    proxy_pass http://onlyoffice-document-server:80;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+}
+```
+
+## 4. JWT 配置说明
+
+本地和生产建议都开启 JWT：
 
 ```env
 ONLYOFFICE_JWT_ENABLED=true
-ONLYOFFICE_JWT_SECRET=请使用强随机密钥
+ONLYOFFICE_JWT_SECRET=local-onlyoffice-secret-change-me
 ```
 
-同时需要保证 `docker-compose.onlyoffice.yml` 中 Document Server 的 `JWT_ENABLED/JWT_SECRET` 与 API 环境变量一致。后端在生成 editor config 时会写入 `token`，callback 收到 token 后会校验；不要把 `ONLYOFFICE_JWT_SECRET` 打印到日志。
+`docker-compose.onlyoffice.local.yml` 默认使用同一个本地 secret。生产环境必须替换为强随机密钥，并保证 API 环境变量与 Document Server `JWT_SECRET` 完全一致。不要把 `ONLYOFFICE_JWT_SECRET` 打印到日志。
 
-## 4. Callback 与文件访问链路
+## 5. 验证命令
 
-1. 前端访问 `/api/thesis-word-files/:id/editor-config` 获取 editor config。
-2. 浏览器加载 `${ONLYOFFICE_DOCUMENT_SERVER_URL}/web-apps/apps/api/documents/api.js`。
-3. Document Server 按 `document.url` 下载当前 DOCX。
-4. 用户在线编辑。
-5. Document Server 调用 `/api/onlyoffice/callback/:wordFileId`。
-6. 后端按 callback 中的 `url` 下载最新 DOCX，保存为新的 `ThesisWordFileVersion`。
-7. 前端刷新版本记录后可看到 `ONLYOFFICE_EDITED` 版本。
+### 5.1 检查 Document Server 健康状态
 
-文件下载 URL 与 callback URL 都带有短期签名参数，避免直接暴露本地存储路径。
+```bash
+curl -i http://localhost:8088/healthcheck
+```
 
-## 5. 常见问题
+生产环境：
 
-### Document Server 访问不到 callbackUrl
+```bash
+curl -i https://office-lunwen.bestshizhongyu.com/healthcheck
+```
 
-- 确认 `ONLYOFFICE_CALLBACK_BASE_URL` 是 Document Server 容器可访问的地址。
-- 不要在容器内使用只对浏览器有效的 `localhost:3001`。
-- 可在 Document Server 容器内执行 curl 测试后端健康接口。
+### 5.2 容器内验证 document.url
 
-### Document Server 访问不到 document.url
+先从浏览器或 API 获取 editor-config，复制返回的 `editorConfig.document.url`，然后在 Document Server 容器内执行：
 
-- 确认 `ONLYOFFICE_FILE_PUBLIC_BASE_URL` 可由 Document Server 容器访问。
-- 确认签名未过期，默认 editor config 中 URL 有效期为 1 小时。
-- 确认 Word 初稿文件仍存在于 `storage/thesis-word-files/{taskId}/{documentId}/`。
+```bash
+docker exec -it lunwen-onlyoffice-document-server-local bash
+curl -I 'http://host.docker.internal:3101/api/onlyoffice/files/word-files/<wordFileId>/current?...'
+```
 
-### JWT token invalid
+全 Docker 模式应验证 `http://api:3101/api/...` 可达。
 
-- 确认 API 与 Document Server 的 `ONLYOFFICE_JWT_SECRET/JWT_SECRET` 完全一致。
-- 确认 `ONLYOFFICE_JWT_ENABLED` 与 Document Server `JWT_ENABLED` 同步。
-- 本地调试可先关闭 JWT，但生产环境不建议关闭。
+### 5.3 容器内验证 callbackUrl
 
-### 浏览器能访问但容器不能访问 localhost
+```bash
+docker exec -it lunwen-onlyoffice-document-server-local bash
+curl -i -X POST 'http://host.docker.internal:3101/api/onlyoffice/callback/<wordFileId>?userId=<userId>&expires=<expires>&signature=<signature>' \
+  -H 'Content-Type: application/json' \
+  -d '{"status":4}'
+```
 
-浏览器里的 `localhost` 指开发机，而 Document Server 容器内的 `localhost` 指容器自身。请改用 `host.docker.internal` 或宿主机 IP。
+签名参数由 editor-config 生成，手工构造时需使用后端签名逻辑；更推荐通过真实编辑器保存触发。
+
+## 6. 常见问题
+
+### 浏览器能访问但 Document Server 不能访问
+
+浏览器里的 `localhost` 指开发机，而 Document Server 容器里的 `localhost` 指容器自身。本地混合开发请使用 `http://host.docker.internal:3101/api`；全 Docker 模式请使用 Compose 服务名 `http://api:3101/api`。
+
+### localhost 使用错误
+
+- `ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL` 是浏览器访问的地址，可以是 `http://localhost:8088`。
+- `ONLYOFFICE_FILE_BASE_URL` 和 `ONLYOFFICE_CALLBACK_BASE_URL` 是 Document Server 访问 API 的地址，不应使用容器不可达的 `localhost`。
+
+### JWT secret 不一致
+
+现象通常是编辑器报 token invalid 或 callback 被拒绝。请确认：
+
+- API：`ONLYOFFICE_JWT_SECRET`
+- Document Server：`JWT_SECRET`
+- 两者完全一致，且 `ONLYOFFICE_JWT_ENABLED` 与 `JWT_ENABLED` 同步为 true。
+
+### callback 不触发
+
+- 确认 `ONLYOFFICE_CALLBACK_BASE_URL` 可由 Document Server 访问。
+- 确认 Nginx/防火墙允许 Document Server 访问 `/api/onlyoffice/callback/:wordFileId`。
+- ONLYOFFICE 通常在关闭文档、保存完成或 force save 时触发 callback，不等同于前端按钮立即成功。
 
 ### 保存后没有生成版本
 
-- ONLYOFFICE 通常在关闭文档或 force save 时触发保存类 callback。
-- 后端只对 status=2（ready for saving）与 status=6（force save）生成 `ONLYOFFICE_EDITED` 版本。
+- 后端只对 status=2 和 status=6 生成 `ONLYOFFICE_EDITED` 版本。
 - status=4 表示无变化关闭，不生成版本。
+- 重复 callback 会通过 checksum 幂等处理，不会重复创建大量相同版本。
 - 检查 API 日志中是否有 callback 下载失败、签名过期或 JWT 校验失败。

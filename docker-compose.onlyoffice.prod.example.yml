@@ -1,0 +1,16 @@
+services:
+  onlyoffice-document-server:
+    image: onlyoffice/documentserver:8.2
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET:?set ONLYOFFICE_JWT_SECRET}
+    volumes:
+      - onlyoffice_prod_data:/var/www/onlyoffice/Data
+      - onlyoffice_prod_logs:/var/log/onlyoffice
+    # Production should usually be published behind HTTPS reverse proxy:
+    # office-lunwen.bestshizhongyu.com -> onlyoffice-document-server:80
+
+volumes:
+  onlyoffice_prod_data:
+  onlyoffice_prod_logs:

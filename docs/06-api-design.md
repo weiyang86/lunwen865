@@ -457,3 +457,7 @@
 - `GET /api/onlyoffice/files/word-files/:wordFileId/current`：Document Server 使用的当前 DOCX 下载接口，使用短期签名参数，不暴露服务器绝对路径。
 - `GET /api/onlyoffice/files/word-file-versions/:versionId`：Document Server 使用的历史版本下载接口，使用短期签名参数。
 - 既有 `GET /api/thesis-word-files/:id/download`、`GET /api/thesis-word-files/:id/versions`、`GET /api/thesis-word-file-versions/:versionId/download` 继续用于用户下载与版本查看，仍校验任务归属。
+
+### OnlyOffice 多环境配置兼容补充
+- `GET /api/thesis-word-files/:id/editor-config` 现在返回 `enabled` 与 `missingConfig`。`documentServerUrl` 使用 `ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL`（兼容旧 `ONLYOFFICE_DOCUMENT_SERVER_URL`），`document.url` 使用 `ONLYOFFICE_FILE_BASE_URL`（兼容旧 `ONLYOFFICE_FILE_PUBLIC_BASE_URL`），`callbackUrl` 使用 `ONLYOFFICE_CALLBACK_BASE_URL`。
+- 当 `ONLYOFFICE_ENABLED=false` 时，接口返回 `enabled=false` 与“在线 Word 编辑未启用”提示；当配置缺失时，返回具体缺失项，不再只给笼统配置错误。
