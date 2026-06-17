@@ -78,6 +78,10 @@ export class AcademicService {
     if (!publicOnly && q.status) where.status = q.status;
     if (q.provinceId) where.provinceId = q.provinceId;
     if (q.cityId) where.cityId = q.cityId;
+    if (q.provinceCode) where.provinceCode = q.provinceCode;
+    if (q.cityCode) where.cityCode = q.cityCode;
+    if (q.schoolType) where.schoolType = q.schoolType;
+    if (q.educationLevel) where.educationLevels = { has: q.educationLevel };
     if (q.keyword?.trim()) {
       const keyword = q.keyword.trim();
       where.OR = [

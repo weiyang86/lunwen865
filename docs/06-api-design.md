@@ -461,3 +461,18 @@
 ### OnlyOffice 多环境配置兼容补充
 - `GET /api/thesis-word-files/:id/editor-config` 现在返回 `enabled` 与 `missingConfig`。`documentServerUrl` 使用 `ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL`（兼容旧 `ONLYOFFICE_DOCUMENT_SERVER_URL`），`document.url` 使用 `ONLYOFFICE_FILE_BASE_URL`（兼容旧 `ONLYOFFICE_FILE_PUBLIC_BASE_URL`），`callbackUrl` 使用 `ONLYOFFICE_CALLBACK_BASE_URL`。
 - 当 `ONLYOFFICE_ENABLED=false` 时，接口返回 `enabled=false` 与“在线 Word 编辑未启用”提示；当配置缺失时，返回具体缺失项，不再只给笼统配置错误。
+
+### AcademicData-01 地区同步 Admin API
+- `GET /api/admin/academic/regions`：分页查询地区，支持 `keyword`、`level`、`parentCode`、`status`、`page`、`pageSize`。
+- `GET /api/admin/academic/sync/regions/amap/status`：查询高德 Key/mock 配置状态与最近同步时间。
+- `POST /api/admin/academic/sync/regions/amap/preview`：预览全国地区同步结果，不写入正式表；返回总数、新增、更新、异常数量、样例和错误详情。
+- `POST /api/admin/academic/sync/regions/amap/confirm`：确认同步入库，以 `code` 为唯一键 upsert，并记录同步任务与日志。
+- `GET /api/admin/academic/sync/logs`：分页查询同步日志，支持 `jobType`、`page`、`pageSize`。
+- 鉴权：以上接口仅 `ADMIN` / `SUPER_ADMIN` 可访问。
+
+### AcademicData-02 高校名单导入 Admin API
+- `GET /api/admin/academic-data/schools/import/template?version=legacy|extended`：下载 CSV 模板，兼容旧模板与新模板。
+- `POST /api/admin/academic-data/schools/import/preview`：上传 Excel/CSV 文件，解析并校验高校名单，不写入正式表，返回 `previewId`、行数统计、样例、错误明细。
+- `POST /api/admin/academic-data/schools/import/confirm`：传入 `previewId` 确认入库；以 `code` 为唯一键 upsert，返回新增、更新、失败数量。
+- `GET /api/admin/academic-data/schools`：高校列表支持 `keyword`、`provinceCode`、`cityCode`、`schoolType`、`educationLevel`、`status`、`page`、`pageSize`。
+- 兼容路径：现有 `/api/admin/academic/*` 仍保留，新增 `/api/admin/academic-data/*` 作为 AcademicData-02 对外契约。
