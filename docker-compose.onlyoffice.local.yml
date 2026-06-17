@@ -1,0 +1,17 @@
+services:
+  onlyoffice-document-server:
+    image: onlyoffice/documentserver:8.2
+    container_name: lunwen-onlyoffice-document-server-local
+    restart: unless-stopped
+    ports:
+      - "8088:80"
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: local-onlyoffice-secret-change-me
+    volumes:
+      - onlyoffice_local_data:/var/www/onlyoffice/Data
+      - onlyoffice_local_logs:/var/log/onlyoffice
+
+volumes:
+  onlyoffice_local_data:
+  onlyoffice_local_logs:

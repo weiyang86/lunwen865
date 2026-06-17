@@ -24,6 +24,7 @@ import {
   getAdminTaskTimeline,
   overrideAdminTaskStatus,
   unassignAdminTask,
+  updateAdminTaskAcademicContext,
   type BackendTaskStatus,
 } from '@/services/admin/tasks';
 import { linkOrderToTask, unlinkOrderFromTask } from '@/services/admin/orders';
@@ -138,6 +139,16 @@ export function TaskDetailDrawer({
 
   const [noteContent, setNoteContent] = useState('');
   const [linkOrderId, setLinkOrderId] = useState('');
+  const [academicDraft, setAcademicDraft] = useState({
+    academicSchoolId: '',
+    collegeId: '',
+    majorId: '',
+    educationLevel: '',
+    thesisType: '',
+    researchDirection: '',
+    advisorRequirement: '',
+    formatTemplateId: '',
+  });
 
   const refetch = useCallback(async () => {
     if (!taskId) return;
@@ -193,6 +204,38 @@ export function TaskDetailDrawer({
   const title = task?.title ?? null;
   const createdAt = task?.createdAt ?? null;
   const updatedAt = task?.updatedAt ?? null;
+
+  useEffect(() => {
+    if (!task) return;
+    setAcademicDraft({
+      academicSchoolId: task.academicSchoolId ?? '',
+      collegeId: task.collegeId ?? '',
+      majorId: task.majorId ?? '',
+      educationLevel: task.educationLevel ?? '',
+      thesisType: task.thesisType ?? '',
+      researchDirection: task.researchDirection ?? '',
+      advisorRequirement: task.advisorRequirement ?? '',
+      formatTemplateId: task.formatTemplateId ?? '',
+    });
+  }, [task]);
+
+  async function doSaveAcademicContext() {
+    if (!taskId) return;
+    setSaving(true);
+    try {
+      const next = await updateAdminTaskAcademicContext(taskId, academicDraft);
+      setData(next);
+      toast.success('已更新学术上下文');
+    } catch (e: unknown) {
+      const msg =
+        (e && typeof e === 'object' && 'message' in e
+          ? String((e as any).message)
+          : null) || '更新学术上下文失败';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const loadTimeline = useCallback(async () => {
     if (!taskId) return;
@@ -524,11 +567,15 @@ export function TaskDetailDrawer({
                 <Field label="当前阶段">
                   <StageBadge stage={stage} />
                 </Field>
-                <Field label="学校ID">
+                <Field label="legacy 学校ID">
                   <span className="font-mono text-xs text-slate-500">{task.schoolId ?? '—'}</span>
                 </Field>
-                <Field label="专业">{task.major ?? '—'}</Field>
+                <Field label="高校">{task.academicSchool?.name ?? task.schoolName ?? '—'}</Field>
+                <Field label="学院">{task.college?.name ?? '—'}</Field>
+                <Field label="专业">{task.academicMajor?.name ?? task.majorName ?? task.major ?? '—'}</Field>
                 <Field label="学历">{task.educationLevel ?? '—'}</Field>
+                <Field label="论文类型">{task.thesisType ?? '—'}</Field>
+                <Field label="学科">{[task.disciplineCategory?.name ?? task.disciplineCategoryName, task.disciplineLevelOne?.name ?? task.disciplineLevelOneName, task.disciplineLevelTwo?.name ?? task.disciplineLevelTwoName].filter(Boolean).join(' / ') || '—'}</Field>
                 <Field label="目标字数">
                   {task.totalWordCount != null ? String(task.totalWordCount) : '—'}
                 </Field>
@@ -537,6 +584,87 @@ export function TaskDetailDrawer({
                   {task.completedAt ? formatDateTime(task.completedAt) : '—'}
                 </Field>
               </div>
+
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+                <div className="mb-2 text-sm font-medium text-slate-900">论文文档</div>
+                {data?.thesisDocument ? (
+                  <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                    <Field label="文档标题">{data.thesisDocument.title ?? '—'}</Field>
+                    <Field label="状态">{data.thesisDocument.status ?? '—'}</Field>
+                    <Field label="当前版本">v{data.thesisDocument.currentVersion ?? 1}</Field>
+                    <Field label="总字数">{data.thesisDocument.wordCount ?? 0}</Field>
+                    <Field label="章节数">{data.thesisDocument._count?.sections ?? 0}</Field>
+                    <Field label="导师意见">{data.thesisDocument._count?.advisorComments ?? 0}</Field>
+                    <Field label="最近修改">{data.thesisDocument.updatedAt ? formatDateTime(data.thesisDocument.updatedAt) : '—'}</Field>
+                    <Field label="学生端入口"><span className="font-mono text-xs text-slate-500">/student/tasks/{taskId}/workbench</span></Field>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">尚未初始化论文文档。学生可在文档工作台初始化。</div>
+                )}
+              </div>
+
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+                <div className="mb-2 text-sm font-medium text-slate-900">Word 精修 / Word 文件</div>
+                {data?.thesisWordFile ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Field label="当前文件">{data.thesisWordFile.fileName ?? '—'}</Field>
+                      <Field label="当前版本">v{data.thesisWordFile.currentVersion ?? 1}</Field>
+                      <Field label="状态">{data.thesisWordFile.status ?? '—'} / {data.thesisWordFile.lockStatus ?? '—'}</Field>
+                      <Field label="最近编辑">{data.thesisWordFile.lastEditedAt ? formatDateTime(data.thesisWordFile.lastEditedAt) : data.thesisWordFile.updatedAt ? formatDateTime(data.thesisWordFile.updatedAt) : '—'}</Field>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <a className="rounded border border-slate-300 px-3 py-2 text-xs text-indigo-600 hover:bg-slate-50" href={`/api/thesis-word-files/${data.thesisWordFile.id}/download`}>下载当前版本</a>
+                      <span className="rounded border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500">学生端：/student/tasks/{taskId}/word-editor</span>
+                    </div>
+                    <div className="space-y-1">
+                      {(data.thesisWordFile.versions ?? []).map((version: any) => (
+                        <div key={version.id} className="flex items-center justify-between gap-2 rounded bg-slate-50 px-3 py-2 text-xs">
+                          <span>v{version.version} · {version.sourceType === 'ONLYOFFICE_EDITED' ? '在线编辑' : '生成初稿'} · {version.createdAt ? formatDateTime(version.createdAt) : '—'}</span>
+                          <a className="text-indigo-600 hover:underline" href={`/api/thesis-word-file-versions/${version.id}/download`}>下载</a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">尚未生成 Word 初稿。学生需先在合稿与格式页面生成 DOCX。</div>
+                )}
+              </div>
+
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium text-slate-900">学术上下文维护</div>
+                  <Button size="sm" onClick={() => void doSaveAcademicContext()} disabled={saving}>保存上下文</Button>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="text-xs text-slate-500">高校ID
+                    <Input value={academicDraft.academicSchoolId} onChange={(e) => setAcademicDraft((d) => ({ ...d, academicSchoolId: e.target.value }))} placeholder="AcademicSchool.id" />
+                  </label>
+                  <label className="text-xs text-slate-500">学院ID
+                    <Input value={academicDraft.collegeId} onChange={(e) => setAcademicDraft((d) => ({ ...d, collegeId: e.target.value }))} placeholder="AcademicCollege.id" />
+                  </label>
+                  <label className="text-xs text-slate-500">专业ID
+                    <Input value={academicDraft.majorId} onChange={(e) => setAcademicDraft((d) => ({ ...d, majorId: e.target.value }))} placeholder="AcademicMajor.id" />
+                  </label>
+                  <label className="text-xs text-slate-500">学历层次
+                    <Input value={academicDraft.educationLevel} onChange={(e) => setAcademicDraft((d) => ({ ...d, educationLevel: e.target.value }))} placeholder="UNDERGRADUATE" />
+                  </label>
+                  <label className="text-xs text-slate-500">论文类型
+                    <Input value={academicDraft.thesisType} onChange={(e) => setAcademicDraft((d) => ({ ...d, thesisType: e.target.value }))} placeholder="FULL_PAPER" />
+                  </label>
+                  <label className="text-xs text-slate-500">格式模板ID
+                    <Input value={academicDraft.formatTemplateId} onChange={(e) => setAcademicDraft((d) => ({ ...d, formatTemplateId: e.target.value }))} placeholder="后续 Export-01 使用" />
+                  </label>
+                  <label className="text-xs text-slate-500 sm:col-span-2">研究方向
+                    <Textarea value={academicDraft.researchDirection} onChange={(e) => setAcademicDraft((d) => ({ ...d, researchDirection: e.target.value }))} rows={2} />
+                  </label>
+                  <label className="text-xs text-slate-500 sm:col-span-2">导师要求
+                    <Textarea value={academicDraft.advisorRequirement} onChange={(e) => setAcademicDraft((d) => ({ ...d, advisorRequirement: e.target.value }))} rows={2} />
+                  </label>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">首期后台兼容按 ID 维护；学生端创建表单已使用 Academic-01 联动下拉，后续可复用为后台下拉选择器。</p>
+              </div>
+
               <div className="mt-4">
                 <Field label="需求 / 描述">
                   <div className="whitespace-pre-wrap break-words text-sm text-slate-700">

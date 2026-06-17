@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import crypto from 'node:crypto';
 import {
+  AcademicStatus,
   Prisma,
   Task as PrismaTask,
   TaskStage,
@@ -36,6 +37,7 @@ import type { BootstrapTaskDto } from './dto/bootstrap-task.dto';
 import type { CreateTaskDto } from './dto/create-task.dto';
 import type { QueryTaskDto } from './dto/query-task.dto';
 import type { UpdateTaskDto } from './dto/update-task.dto';
+import type { TaskAcademicContextDto } from './dto/task-academic-context.dto';
 import type {
   TaskTimelineDto,
   TaskTimelineItemDto,
@@ -133,6 +135,59 @@ const GENERATION_STAGE_ORDER: Record<GenerationStage, number> = {
   [GenerationStage.POLISHING]: 7,
   [GenerationStage.DONE]: 8,
 };
+
+const TASK_ACADEMIC_INCLUDE = {
+  province: true,
+  city: true,
+  academicSchool: true,
+  college: true,
+  academicMajor: {
+    include: {
+      disciplineCategory: true,
+      disciplineLevelOne: true,
+      disciplineLevelTwo: true,
+    },
+  },
+  disciplineCategory: true,
+  disciplineLevelOne: true,
+  disciplineLevelTwo: true,
+} satisfies Prisma.TaskInclude;
+
+type TaskWithAcademicContext = Prisma.TaskGetPayload<{
+  include: typeof TASK_ACADEMIC_INCLUDE;
+}>;
+
+export type ThesisGenerationContext = {
+  taskId: string;
+  taskTitle?: string;
+  provinceName?: string;
+  cityName?: string;
+  schoolName?: string;
+  collegeName?: string;
+  majorName?: string;
+  disciplineCategoryName?: string;
+  disciplineLevelOneName?: string;
+  disciplineLevelTwoName?: string;
+  educationLevel?: string;
+  thesisType?: string;
+  stage?: string;
+  researchDirection?: string;
+  advisorRequirement?: string;
+  userRequirement?: string;
+};
+
+type PreparedAcademicContext = {
+  data: Record<string, string | null>;
+  schoolName?: string;
+  majorName?: string;
+  educationLevel?: string;
+};
+
+function cleanOptional(value?: string | null): string | null {
+  if (value === undefined || value === null) return null;
+  const s = value.trim();
+  return s ? s : null;
+}
 
 function maxGenerationStage(
   a: GenerationStage,
@@ -342,6 +397,240 @@ export class TaskService {
     return created.id;
   }
 
+  private async prepareAcademicContext(
+    dto: TaskAcademicContextDto,
+  ): Promise<PreparedAcademicContext> {
+    const data: PreparedAcademicContext['data'] = {};
+    let schoolName: string | undefined;
+    let majorName: string | undefined;
+    let educationLevel: string | undefined;
+
+    const provinceId = cleanOptional(dto.provinceId);
+    const cityId = cleanOptional(dto.cityId);
+    let academicSchoolId = cleanOptional(dto.academicSchoolId);
+    let collegeId = cleanOptional(dto.collegeId);
+    const majorId = cleanOptional(dto.majorId);
+    let disciplineCategoryId = cleanOptional(dto.disciplineCategoryId);
+    let disciplineLevelOneId = cleanOptional(dto.disciplineLevelOneId);
+    let disciplineLevelTwoId = cleanOptional(dto.disciplineLevelTwoId);
+
+    if (provinceId) {
+      const province = await this.prisma.academicProvince.findFirst({
+        where: { id: provinceId, status: AcademicStatus.ACTIVE },
+        select: { id: true },
+      });
+      if (!province) throw new BadRequestException('省份不存在或已禁用');
+      data.provinceId = provinceId;
+    } else if (dto.provinceId !== undefined) data.provinceId = null;
+
+    if (cityId) {
+      const city = await this.prisma.academicCity.findFirst({
+        where: {
+          id: cityId,
+          status: AcademicStatus.ACTIVE,
+          ...(provinceId ? { provinceId } : {}),
+        },
+        select: { id: true, provinceId: true },
+      });
+      if (!city)
+        throw new BadRequestException('城市不存在、已禁用或不属于所选省份');
+      data.cityId = city.id;
+      if (!provinceId) data.provinceId = city.provinceId;
+    } else if (dto.cityId !== undefined) data.cityId = null;
+
+    if (academicSchoolId) {
+      const school = await this.prisma.academicSchool.findFirst({
+        where: {
+          id: academicSchoolId,
+          status: AcademicStatus.ACTIVE,
+          ...(provinceId ? { provinceId } : {}),
+          ...(cityId ? { cityId } : {}),
+        },
+        select: { id: true, name: true, provinceId: true, cityId: true },
+      });
+      if (!school)
+        throw new BadRequestException('高校不存在、已禁用或不属于所选地区');
+      data.academicSchoolId = school.id;
+      data.provinceId = data.provinceId ?? school.provinceId;
+      data.cityId = data.cityId ?? school.cityId;
+      schoolName = school.name;
+    } else if (dto.academicSchoolId !== undefined) data.academicSchoolId = null;
+
+    if (collegeId) {
+      const college = await this.prisma.academicCollege.findFirst({
+        where: {
+          id: collegeId,
+          status: AcademicStatus.ACTIVE,
+          ...(academicSchoolId ? { schoolId: academicSchoolId } : {}),
+        },
+        select: {
+          id: true,
+          schoolId: true,
+          school: { select: { name: true, provinceId: true, cityId: true } },
+        },
+      });
+      if (!college)
+        throw new BadRequestException('学院不存在、已禁用或不属于所选高校');
+      collegeId = college.id;
+      academicSchoolId = academicSchoolId ?? college.schoolId;
+      data.collegeId = college.id;
+      data.academicSchoolId = data.academicSchoolId ?? college.schoolId;
+      data.provinceId = data.provinceId ?? college.school.provinceId;
+      data.cityId = data.cityId ?? college.school.cityId;
+      schoolName = schoolName ?? college.school.name;
+    } else if (dto.collegeId !== undefined) data.collegeId = null;
+
+    if (majorId) {
+      const major = await this.prisma.academicMajor.findFirst({
+        where: {
+          id: majorId,
+          status: AcademicStatus.ACTIVE,
+          ...(academicSchoolId ? { schoolId: academicSchoolId } : {}),
+          ...(collegeId ? { collegeId } : {}),
+        },
+        include: { school: true, college: true },
+      });
+      if (!major)
+        throw new BadRequestException(
+          '专业不存在、已禁用或不属于所选高校/学院',
+        );
+      data.majorId = major.id;
+      data.academicSchoolId = data.academicSchoolId ?? major.schoolId;
+      data.collegeId = data.collegeId ?? major.collegeId ?? null;
+      data.provinceId = data.provinceId ?? major.school.provinceId;
+      data.cityId = data.cityId ?? major.school.cityId;
+      academicSchoolId = major.schoolId;
+      collegeId = major.collegeId ?? collegeId;
+      schoolName = schoolName ?? major.school.name;
+      majorName = major.name;
+      educationLevel = major.educationLevel ?? undefined;
+      disciplineCategoryId = disciplineCategoryId ?? major.disciplineCategoryId;
+      disciplineLevelOneId = disciplineLevelOneId ?? major.disciplineLevelOneId;
+      disciplineLevelTwoId = disciplineLevelTwoId ?? major.disciplineLevelTwoId;
+    } else if (dto.majorId !== undefined) data.majorId = null;
+
+    if (disciplineCategoryId) {
+      const category = await this.prisma.disciplineCategory.findFirst({
+        where: { id: disciplineCategoryId, status: AcademicStatus.ACTIVE },
+        select: { id: true },
+      });
+      if (!category) throw new BadRequestException('学科门类不存在或已禁用');
+      data.disciplineCategoryId = disciplineCategoryId;
+    } else if (dto.disciplineCategoryId !== undefined)
+      data.disciplineCategoryId = null;
+
+    if (disciplineLevelOneId) {
+      const levelOne = await this.prisma.disciplineLevelOne.findFirst({
+        where: {
+          id: disciplineLevelOneId,
+          status: AcademicStatus.ACTIVE,
+          ...(disciplineCategoryId ? { categoryId: disciplineCategoryId } : {}),
+        },
+        select: { id: true, categoryId: true },
+      });
+      if (!levelOne)
+        throw new BadRequestException(
+          '一级学科不存在、已禁用或不属于所选学科门类',
+        );
+      data.disciplineLevelOneId = levelOne.id;
+      data.disciplineCategoryId =
+        data.disciplineCategoryId ?? levelOne.categoryId;
+      disciplineCategoryId = levelOne.categoryId;
+    } else if (dto.disciplineLevelOneId !== undefined)
+      data.disciplineLevelOneId = null;
+
+    if (disciplineLevelTwoId) {
+      const levelTwo = await this.prisma.disciplineLevelTwo.findFirst({
+        where: {
+          id: disciplineLevelTwoId,
+          status: AcademicStatus.ACTIVE,
+          ...(disciplineLevelOneId ? { levelOneId: disciplineLevelOneId } : {}),
+        },
+        include: { levelOne: true },
+      });
+      if (!levelTwo)
+        throw new BadRequestException(
+          '二级学科/专业不存在、已禁用或不属于所选一级学科',
+        );
+      data.disciplineLevelTwoId = levelTwo.id;
+      data.disciplineLevelOneId =
+        data.disciplineLevelOneId ?? levelTwo.levelOneId;
+      data.disciplineCategoryId =
+        data.disciplineCategoryId ?? levelTwo.levelOne.categoryId;
+    } else if (dto.disciplineLevelTwoId !== undefined)
+      data.disciplineLevelTwoId = null;
+
+    if (dto.thesisType !== undefined)
+      data.thesisType = cleanOptional(dto.thesisType);
+    if (dto.researchDirection !== undefined)
+      data.researchDirection = cleanOptional(dto.researchDirection);
+    if (dto.advisorRequirement !== undefined)
+      data.advisorRequirement = cleanOptional(dto.advisorRequirement);
+    if (dto.formatTemplateId !== undefined)
+      data.formatTemplateId = cleanOptional(dto.formatTemplateId);
+
+    return { data, schoolName, majorName, educationLevel };
+  }
+
+  private buildAcademicContext(
+    task: TaskWithAcademicContext,
+  ): ThesisGenerationContext {
+    return {
+      taskId: task.id,
+      taskTitle: task.title ?? undefined,
+      provinceName: task.province?.name,
+      cityName: task.city?.name,
+      schoolName: task.academicSchool?.name,
+      collegeName: task.college?.name,
+      majorName: task.academicMajor?.name ?? task.major ?? undefined,
+      disciplineCategoryName:
+        task.disciplineCategory?.name ??
+        task.academicMajor?.disciplineCategory?.name,
+      disciplineLevelOneName:
+        task.disciplineLevelOne?.name ??
+        task.academicMajor?.disciplineLevelOne?.name,
+      disciplineLevelTwoName:
+        task.disciplineLevelTwo?.name ??
+        task.academicMajor?.disciplineLevelTwo?.name,
+      educationLevel: task.educationLevel ?? undefined,
+      thesisType: task.thesisType ?? undefined,
+      stage: task.currentStage ?? undefined,
+      researchDirection: task.researchDirection ?? undefined,
+      advisorRequirement: task.advisorRequirement ?? undefined,
+      userRequirement: task.requirements ?? undefined,
+    };
+  }
+
+  private attachAcademicContext<T extends TaskWithAcademicContext>(task: T) {
+    const context = this.buildAcademicContext(task);
+    return {
+      ...task,
+      academicContext: context,
+      schoolName: context.schoolName ?? null,
+      majorName: context.majorName ?? null,
+      disciplineCategoryName: context.disciplineCategoryName ?? null,
+      disciplineLevelOneName: context.disciplineLevelOneName ?? null,
+      disciplineLevelTwoName: context.disciplineLevelTwoName ?? null,
+    };
+  }
+
+  async buildGenerationContext(
+    taskId: string,
+    stage?: string,
+    userRequirement?: string,
+  ): Promise<ThesisGenerationContext> {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      include: TASK_ACADEMIC_INCLUDE,
+    });
+    if (!task) throw new TaskNotFoundException(taskId);
+    return {
+      ...this.buildAcademicContext(task),
+      stage: stage ?? task.currentStage ?? undefined,
+      userRequirement: userRequirement ?? task.requirements ?? undefined,
+    };
+  }
+
   async assertTaskOwnership(taskId: string, userId: string): Promise<void> {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
@@ -361,13 +650,23 @@ export class TaskService {
   ): Promise<PrismaTask> {
     const now = new Date();
     const seed = now.toISOString().slice(0, 10);
-    const schoolId = await this.resolveSchoolId(dto.schoolId);
+    const academic = await this.prepareAcademicContext(dto);
+    const schoolId = await this.resolveSchoolId(
+      dto.schoolId ?? academic.schoolName,
+    );
+    const topic =
+      dto.topic?.trim() ||
+      dto.researchDirection?.trim() ||
+      '请先生成可执行的论文题目候选';
     return this.createTask(userId, {
+      ...dto,
       schoolId,
-      major: dto.major?.trim() || '未指定专业',
-      educationLevel: dto.educationLevel?.trim() || '本科',
+      major: dto.major?.trim() || academic.majorName || '未指定专业',
+      educationLevel:
+        dto.educationLevel?.trim() || academic.educationLevel || '本科',
       title: dto.title?.trim() || `论文任务 ${seed}`,
-      topic: dto.topic?.trim() || '请先生成可执行的论文题目候选',
+      topic,
+      researchDirection: dto.researchDirection ?? topic,
       language: 'zh-CN',
       wordCountTarget: dto.wordCountTarget,
     });
@@ -381,21 +680,27 @@ export class TaskService {
         1,
       );
       const requirements = serializeTopicToRequirements(dto);
+      const academic = await this.prepareAcademicContext(dto);
 
-      return await this.prisma.task.create({
+      const created = await this.prisma.task.create({
         data: {
+          ...academic.data,
           userId,
           schoolId: dto.schoolId,
-          major: dto.major,
+          major: academic.majorName ?? dto.major,
           educationLevel: dto.educationLevel,
           title: dto.title,
           requirements,
+          researchDirection:
+            cleanOptional(dto.researchDirection) ?? cleanOptional(dto.topic),
           totalWordCount: dto.wordCountTarget,
           deadline: dto.deadline ? new Date(dto.deadline) : undefined,
           status: PrismaTaskStatus.INIT,
           currentStage: TaskStage.TOPIC,
         },
+        include: TASK_ACADEMIC_INCLUDE,
       });
+      return this.attachAcademicContext(created);
     } catch (error: unknown) {
       this.logger.error('创建任务失败', error);
       if (error instanceof HttpException) throw error;
@@ -417,10 +722,21 @@ export class TaskService {
   async findById(id: string, userId?: string): Promise<PrismaTask> {
     try {
       if (userId) await this.assertTaskOwnership(id, userId);
-      const task = await this.prisma.task.findUnique({ where: { id } });
+      const task = await this.prisma.task.findUnique({
+        where: { id },
+        include: TASK_ACADEMIC_INCLUDE,
+      });
       if (!task) throw new TaskNotFoundException(id);
       const synced = await this.syncStageFromWritingArtifacts(task);
-      return synced ?? task;
+      if (synced) {
+        const reloaded = await this.prisma.task.findUnique({
+          where: { id },
+          include: TASK_ACADEMIC_INCLUDE,
+        });
+        if (!reloaded) throw new TaskNotFoundException(id);
+        return this.attachAcademicContext(reloaded);
+      }
+      return this.attachAcademicContext(task);
     } catch (error: unknown) {
       if (error instanceof TaskNotFoundException) throw error;
       if (error instanceof ForbiddenException) throw error;
@@ -438,6 +754,7 @@ export class TaskService {
       const task = await this.prisma.task.findUnique({
         where: { id },
         include: {
+          ...TASK_ACADEMIC_INCLUDE,
           chapters: {
             include: { sections: true },
             orderBy: { index: 'asc' },
@@ -457,7 +774,7 @@ export class TaskService {
       const progress = await this.buildProgress(task.id);
 
       return {
-        task: mergedTask,
+        task: this.attachAcademicContext(mergedTask),
         progress,
       };
     } catch (error: unknown) {
@@ -650,6 +967,11 @@ export class TaskService {
         where.educationLevel = query.educationLevel;
       }
 
+      if (query.academicSchoolId)
+        where.academicSchoolId = query.academicSchoolId;
+      if (query.majorId) where.majorId = query.majorId;
+      if (query.thesisType) where.thesisType = query.thesisType;
+
       if (query.keyword) {
         where.OR = [
           { title: { contains: query.keyword, mode: 'insensitive' } },
@@ -669,11 +991,12 @@ export class TaskService {
           orderBy,
           skip: (query.page - 1) * query.pageSize,
           take: query.pageSize,
+          include: TASK_ACADEMIC_INCLUDE,
         }),
       ]);
 
       return {
-        items,
+        items: items.map((item) => this.attachAcademicContext(item)),
         page: query.page,
         pageSize: query.pageSize,
         total,
@@ -706,8 +1029,12 @@ export class TaskService {
           task.currentStage === TaskStage.OPENING ||
           task.currentStage === TaskStage.OUTLINE;
 
-        const data: Prisma.TaskUpdateManyMutationInput = {};
+        const academic = await this.prepareAcademicContext(dto);
+        const data: Prisma.TaskUpdateManyMutationInput = { ...academic.data };
         if (dto.title !== undefined) data.title = dto.title;
+        if (dto.educationLevel !== undefined)
+          data.educationLevel = dto.educationLevel;
+        if (academic.majorName) data.major = academic.majorName;
         if (canEditAll) {
           if (dto.topic !== undefined) data.requirements = dto.topic;
         }
@@ -729,9 +1056,12 @@ export class TaskService {
           throw new ConflictException('任务已被更新，请重试');
         }
 
-        const updated = await tx.task.findUnique({ where: { id } });
+        const updated = await tx.task.findUnique({
+          where: { id },
+          include: TASK_ACADEMIC_INCLUDE,
+        });
         if (!updated) throw new TaskNotFoundException(id);
-        return updated;
+        return this.attachAcademicContext(updated);
       });
     } catch (error: unknown) {
       if (
@@ -832,9 +1162,12 @@ export class TaskService {
           throw new ConflictException('任务已被更新，请重试');
         }
 
-        const updated = await tx.task.findUnique({ where: { id } });
+        const updated = await tx.task.findUnique({
+          where: { id },
+          include: TASK_ACADEMIC_INCLUDE,
+        });
         if (!updated) throw new TaskNotFoundException(id);
-        return updated;
+        return this.attachAcademicContext(updated);
       });
     } catch (error: unknown) {
       if (
@@ -890,9 +1223,12 @@ export class TaskService {
           throw new ConflictException('任务已被更新，请重试');
         }
 
-        const updated = await tx.task.findUnique({ where: { id } });
+        const updated = await tx.task.findUnique({
+          where: { id },
+          include: TASK_ACADEMIC_INCLUDE,
+        });
         if (!updated) throw new TaskNotFoundException(id);
-        return updated;
+        return this.attachAcademicContext(updated);
       });
     } catch (error: unknown) {
       if (

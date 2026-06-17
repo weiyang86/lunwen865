@@ -23,6 +23,7 @@ import { BatchUnlinkOrdersDto } from './dto/batch-unlink-orders.dto';
 import { ListAdminTasksDto } from './dto/list-admin-tasks.dto';
 import { OverrideTaskStatusDto } from './dto/override-task-status.dto';
 import { AdminTasksService } from './admin-tasks.service';
+import { UpdateTaskDto } from '../../task/dto/update-task.dto';
 
 @Controller('admin/tasks')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -61,6 +62,15 @@ export class AdminTasksController {
   @Get(':id/timeline')
   timeline(@Param('id') id: string) {
     return this.service.timeline(id);
+  }
+
+  @Patch(':id/academic-context')
+  updateAcademicContext(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskDto,
+    @CurrentUser('id') operatorId: string,
+  ) {
+    return this.service.updateAcademicContext(id, dto, operatorId);
   }
 
   @Patch(':id/assign')

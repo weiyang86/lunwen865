@@ -28,6 +28,11 @@ import { ProductModule } from './modules/product/product.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { PromptModule } from './modules/prompt/prompt.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AcademicModule } from './modules/academic/academic.module';
+import { ThesisSkillModule } from './modules/thesis-skill/thesis-skill.module';
+import { ThesisDocumentModule } from './modules/thesis-document/thesis-document.module';
+import { ThesisWordFileModule } from './modules/thesis-word-file/thesis-word-file.module';
+import { OnlyOfficeModule } from './modules/onlyoffice/onlyoffice.module';
 console.log('🔍 Redis ENV:', {
   host: process.env.REDIS_HOST,
   port: process.env.REDIS_PORT,
@@ -81,6 +86,11 @@ console.log('🔍 Redis ENV:', {
     OrderModule,
     PaymentModule,
     AdminModule,
+    AcademicModule,
+    ThesisSkillModule,
+    ThesisDocumentModule,
+    ThesisWordFileModule,
+    OnlyOfficeModule,
   ],
   controllers: [AppController],
   providers: [
