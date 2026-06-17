@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Download, FileSpreadsheet, UploadCloud } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Download, FileSpreadsheet, UploadCloud, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,11 +51,44 @@ export function SchoolImportDialog({ onImported }: { onImported: () => void }) {
     a.href = url; a.download = 'academic-school-import-errors.csv'; a.click(); URL.revokeObjectURL(url);
   }
 
+  useEffect(() => {
+    if (!open) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        setPreview(null);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open]);
+
   if (!open) return <Button variant="secondary" onClick={() => setOpen(true)}><UploadCloud className="mr-2 size-4" />导入高校</Button>;
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/30 p-4">
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="全国高校名单导入"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          setOpen(false);
+          setPreview(null);
+        }
+      }}
+    >
       <Card className="mx-auto max-w-6xl">
-        <CardHeader><CardTitle className="flex items-center gap-2"><FileSpreadsheet className="size-5" />全国高校名单导入</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2"><FileSpreadsheet className="size-5" />全国高校名单导入</CardTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => { setOpen(false); setPreview(null); }}
+            aria-label="关闭"
+          >
+            <X className="size-4" />
+          </Button>
+        </CardHeader>
         <CardContent className="space-y-5">
           <div className="flex flex-wrap gap-2">
             <a href={academicApi.schoolImportTemplateUrl('legacy')}><Button variant="outline" type="button"><Download className="mr-2 size-4" />下载旧模板</Button></a>
