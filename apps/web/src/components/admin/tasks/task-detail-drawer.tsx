@@ -603,6 +603,34 @@ export function TaskDetailDrawer({
                 )}
               </div>
 
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+                <div className="mb-2 text-sm font-medium text-slate-900">Word 精修 / Word 文件</div>
+                {data?.thesisWordFile ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Field label="当前文件">{data.thesisWordFile.fileName ?? '—'}</Field>
+                      <Field label="当前版本">v{data.thesisWordFile.currentVersion ?? 1}</Field>
+                      <Field label="状态">{data.thesisWordFile.status ?? '—'} / {data.thesisWordFile.lockStatus ?? '—'}</Field>
+                      <Field label="最近编辑">{data.thesisWordFile.lastEditedAt ? formatDateTime(data.thesisWordFile.lastEditedAt) : data.thesisWordFile.updatedAt ? formatDateTime(data.thesisWordFile.updatedAt) : '—'}</Field>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <a className="rounded border border-slate-300 px-3 py-2 text-xs text-indigo-600 hover:bg-slate-50" href={`/api/thesis-word-files/${data.thesisWordFile.id}/download`}>下载当前版本</a>
+                      <span className="rounded border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500">学生端：/student/tasks/{taskId}/word-editor</span>
+                    </div>
+                    <div className="space-y-1">
+                      {(data.thesisWordFile.versions ?? []).map((version: any) => (
+                        <div key={version.id} className="flex items-center justify-between gap-2 rounded bg-slate-50 px-3 py-2 text-xs">
+                          <span>v{version.version} · {version.sourceType === 'ONLYOFFICE_EDITED' ? '在线编辑' : '生成初稿'} · {version.createdAt ? formatDateTime(version.createdAt) : '—'}</span>
+                          <a className="text-indigo-600 hover:underline" href={`/api/thesis-word-file-versions/${version.id}/download`}>下载</a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">尚未生成 Word 初稿。学生需先在合稿与格式页面生成 DOCX。</div>
+                )}
+              </div>
+
               <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="text-sm font-medium text-slate-900">学术上下文维护</div>

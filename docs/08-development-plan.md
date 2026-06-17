@@ -164,3 +164,10 @@
 - 已在学生端合稿与格式页面增加“生成 Word 初稿”、Word 初稿状态卡、下载按钮、版本记录和“进入在线 Word 精修”入口。
 - 已新增 `/student/tasks/[taskId]/word-editor` 占位页，用于展示当前 Word 初稿状态；OnlyOffice-01 将在该页面接入真实在线编辑器。
 - 后续：OnlyOffice-01 基于 `ThesisWordFile` 打开在线编辑器；Final-Delivery-01 以 `ThesisWordFileVersion` 作为最终交付依据。
+
+## OnlyOffice-01 实现记录
+- 已新增 ONLYOFFICE 后端模块，支持 editor-config 生成、callback 保存、Document Server 签名文件下载与 JWT 可选校验。
+- 已扩展 `ThesisWordFile` 与 `ThesisWordFileVersion`，记录编辑会话、document key、最近编辑人、callback payload 和文件 checksum。
+- 已将 `/student/tasks/[taskId]/word-editor` 从占位页升级为在线编辑入口，支持动态加载 ONLYOFFICE `api.js`、打开编辑器、显示版本记录和下载当前/历史版本。
+- 已新增 `docs/onlyoffice-deployment.md` 与 `docker-compose.onlyoffice.yml`，说明本地 Docker、callbackUrl、document.url、JWT 与常见问题。
+- 后续 Final-Delivery-01 将以最新或用户确认的 `ThesisWordFileVersion` 作为最终交付依据；本阶段不做 PDF、最终交付中心或 Word 反向解析。

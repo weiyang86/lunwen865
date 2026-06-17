@@ -450,3 +450,10 @@
 - `GET /api/thesis-word-files/:id/download`：下载当前 Word 文件，校验任务归属，不暴露服务器绝对路径。
 - `GET /api/thesis-word-file-versions/:versionId/download`：下载指定历史版本，校验任务归属。
 - 错误提示：未初始化合稿文档返回“请先初始化合稿文档”；无章节内容返回“当前论文文档暂无可生成内容，请先完善章节内容”；文件缺失返回“文件不存在或已被清理，请重新生成”。
+
+## OnlyOffice-01 在线 Word 精修 API
+- `GET /api/thesis-word-files/:id/editor-config`：返回 ONLYOFFICE editor config，包含 `documentServerUrl`、`editorConfig`、`wordFile`、`currentVersion`、`warnings`；校验当前用户是否有权访问 Word 文件，未配置 Document Server 时返回明确错误。
+- `POST /api/onlyoffice/callback/:wordFileId`：ONLYOFFICE Document Server 保存回调。status=2/6 时下载回调 `url` 并生成 `ThesisWordFileVersion(sourceType=ONLYOFFICE_EDITED)`；status=1/4 只更新编辑状态；status=3/7 记录错误；成功返回 `{ "error": 0 }`。
+- `GET /api/onlyoffice/files/word-files/:wordFileId/current`：Document Server 使用的当前 DOCX 下载接口，使用短期签名参数，不暴露服务器绝对路径。
+- `GET /api/onlyoffice/files/word-file-versions/:versionId`：Document Server 使用的历史版本下载接口，使用短期签名参数。
+- 既有 `GET /api/thesis-word-files/:id/download`、`GET /api/thesis-word-files/:id/versions`、`GET /api/thesis-word-file-versions/:versionId/download` 继续用于用户下载与版本查看，仍校验任务归属。

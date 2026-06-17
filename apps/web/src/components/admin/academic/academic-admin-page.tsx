@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BookOpen, Building2, GraduationCap, Layers3, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -133,7 +133,6 @@ function splitLevels(v: string) {
 
 export function AcademicAdminPage({ mode }: { mode: Mode }) {
   const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [provinces, setProvinces] = useState<AcademicProvince[]>([]);
   const [cities, setCities] = useState<AcademicCity[]>([]);
@@ -141,7 +140,6 @@ export function AcademicAdminPage({ mode }: { mode: Mode }) {
   const [colleges, setColleges] = useState<AcademicCollege[]>([]);
   const [majors, setMajors] = useState<AcademicMajor[]>([]);
   const [disciplines, setDisciplines] = useState<DisciplineTree>({ categories: [], levelOnes: [], levelTwos: [] });
-  const importFileRef = useRef<HTMLInputElement | null>(null);
 
   const [schoolDraft, setSchoolDraft] = useState<SchoolDraft>(EMPTY_SCHOOL);
   const [collegeDraft, setCollegeDraft] = useState<CollegeDraft>(EMPTY_COLLEGE);
@@ -310,37 +308,9 @@ export function AcademicAdminPage({ mode }: { mode: Mode }) {
           <h1 className="text-2xl font-semibold">学术基础数据</h1>
           <p className="text-sm text-muted-foreground">维护地区、高校、学院、专业与学科目录，为后续论文任务、Skill 和格式模板提供统一上下文。</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <input
-            ref={importFileRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = '';
-              if (!file) return;
-              void importExcel(file);
-            }}
-          />
-          <Button
-            variant="outline"
-            onClick={() => void downloadTemplate()}
-            disabled={loading || importing}
-          >
-            下载模板
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => importFileRef.current?.click()}
-            disabled={loading || importing}
-          >
-            导入
-          </Button>
-          <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
-            <RefreshCw className="mr-2 size-4" /> 刷新
-          </Button>
-        </div>
+        <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
+          <RefreshCw className="mr-2 size-4" /> 刷新
+        </Button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -368,71 +338,6 @@ export function AcademicAdminPage({ mode }: { mode: Mode }) {
       {mode === 'disciplines' ? renderDisciplines() : null}
     </div>
   );
-
-  async function downloadTemplate() {
-    try {
-      const { blob, filename } = await (async () => {
-        if (mode === 'schools') {
-          return {
-            blob: await academicApi.downloadSchoolImportTemplate(),
-            filename: 'academic-schools-import-template.xlsx',
-          };
-        }
-        if (mode === 'colleges') {
-          return {
-            blob: await academicApi.downloadCollegeImportTemplate(),
-            filename: 'academic-colleges-import-template.xlsx',
-          };
-        }
-        if (mode === 'majors') {
-          return {
-            blob: await academicApi.downloadMajorImportTemplate(),
-            filename: 'academic-majors-import-template.xlsx',
-          };
-        }
-        return {
-          blob: await academicApi.downloadDisciplineImportTemplate(),
-          filename: 'academic-disciplines-import-template.xlsx',
-        };
-      })();
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '下载失败');
-    }
-  }
-
-  async function importExcel(file: File) {
-    setImporting(true);
-    try {
-      const result = await (async () => {
-        if (mode === 'schools') return academicApi.importSchools(file);
-        if (mode === 'colleges') return academicApi.importColleges(file);
-        if (mode === 'majors') return academicApi.importMajors(file);
-        return academicApi.importDisciplines(file);
-      })();
-
-      const title = `导入完成：新增 ${result.created}，更新 ${result.updated}，跳过 ${result.skipped}，失败 ${result.failed}`;
-      if (!result.failed) toast.success(title);
-      else {
-        const detail = result.issues
-          .slice(0, 5)
-          .map((x) => `${x.sheet}#${x.row} ${x.message}`)
-          .join('\n');
-        toast.error(detail ? `${title}\n${detail}` : title);
-      }
-      await refresh();
-    } finally {
-      setImporting(false);
-    }
-  }
 
   function renderSchools() {
     return (

@@ -102,3 +102,9 @@
 - DOCX 生成读取 `ThesisDocument`、`ThesisDocumentSection`、`ThesisFormatTemplate`、`ThesisFormatRule` 与 `ThesisDocumentFormatSetting`，按“文档格式设置 overrideRules > 模板规则 > 系统默认样式”的优先级应用格式。
 - 生成结果落到 `ThesisWordFile` 当前文件对象，并为每次重新生成创建一条 `ThesisWordFileVersion`，便于追溯生成时的文档版本、模板和格式设置快照。
 - 本模块不接入 ONLYOFFICE，不做在线 Word 编辑；后续 OnlyOffice-01 基于 `ThesisWordFile` 打开在线编辑器，Final-Delivery-01 以 Word 文件版本作为交付依据。
+
+## OnlyOffice-01 在线 Word 精修模块说明
+- OnlyOffice-01 在 Export-DOCX-01 生成的 `ThesisWordFile` 基础上接入 ONLYOFFICE Document Server，将 Word 初稿打开为在线编辑器，供学生进行最终排版、复杂表格、图片、页眉页脚等精修。
+- 在线编辑保存后，后端通过 ONLYOFFICE callback 下载最新 DOCX，并创建 `ThesisWordFileVersion`，`sourceType=ONLYOFFICE_EDITED`；历史 `GENERATED_FROM_DOCUMENT` 与 `ONLYOFFICE_EDITED` 版本都保留。
+- Word 精修后的文件不反向解析回 `ThesisDocumentSection`，合稿与格式仍是结构化主版本，Word 文件版本用于后续 Final-Delivery-01 的最终交付依据。
+- 安全边界：editor config、当前文件下载、历史版本下载均校验任务归属；ONLYOFFICE 内部文件 URL 与 callback URL 使用短期签名，JWT 可按环境启用。

@@ -238,3 +238,9 @@
 - 新增 `ThesisWordFileVersion`：Word 文件历史版本，记录版本号、文件路径、大小、来源类型、生成时 `ThesisDocument.currentVersion`、使用的 `formatTemplateId`、`formatSettingSnapshot` 与操作人。
 - 关系：`Task 1-N ThesisWordFile`，`ThesisDocument 1-1 ThesisWordFile`，`ThesisWordFile 1-N ThesisWordFileVersion`；每次重新生成 DOCX 都递增版本并保留旧文件版本。
 - migration：`20260612100000_add_thesis_word_file`。
+
+### 补充（OnlyOffice-01）：在线 Word 精修字段
+- `ThesisWordFile` 补充 `editingSessionKey`、`lastEditedAt`、`lastEditedBy`、`lockStatus`、`onlyofficeDocumentKey`，用于记录 ONLYOFFICE 编辑会话、最近编辑人与当前 document key，避免 Document Server 缓存错乱。
+- `ThesisWordFileVersion` 补充 `editorUserId`、`callbackPayload`、`checksum`；ONLYOFFICE 保存回调生成的版本使用 `sourceType=ONLYOFFICE_EDITED`，`callbackPayload` 只记录排查所需字段，不保存敏感 token。
+- callback 保存会更新 `ThesisWordFile.currentVersion/fileUrl/fileName`，并保留历史版本；Word 精修版本不强制同步回 `ThesisDocumentSection`。
+- migration：`20260616100000_add_onlyoffice_word_editing`。

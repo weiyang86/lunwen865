@@ -1385,6 +1385,11 @@ model ThesisWordFile {
   fileUrl        String               @db.Text
   currentVersion Int                  @default(1)
   status         ThesisWordFileStatus @default(DRAFT)
+  editingSessionKey     String?       @db.VarChar(255)
+  lastEditedAt          DateTime?
+  lastEditedBy          String?
+  lockStatus            String?       @db.VarChar(50)
+  onlyofficeDocumentKey String?       @db.VarChar(255)
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
@@ -1394,6 +1399,8 @@ model ThesisWordFile {
 
   @@index([taskId])
   @@index([status])
+  @@index([lastEditedBy])
+  @@index([onlyofficeDocumentKey])
 }
 
 model ThesisWordFileVersion {
@@ -1408,6 +1415,9 @@ model ThesisWordFileVersion {
   formatTemplateId      String?
   formatSettingSnapshot Json?
   operatorId            String?
+  editorUserId          String?
+  callbackPayload       Json?
+  checksum              String?                         @db.VarChar(128)
   createdAt             DateTime                        @default(now())
 
   wordFile ThesisWordFile @relation(fields: [wordFileId], references: [id], onDelete: Cascade)
@@ -1417,6 +1427,8 @@ model ThesisWordFileVersion {
   @@unique([wordFileId, version])
   @@index([formatTemplateId])
   @@index([operatorId])
+  @@index([editorUserId])
+  @@index([checksum])
   @@index([createdAt])
 }
 

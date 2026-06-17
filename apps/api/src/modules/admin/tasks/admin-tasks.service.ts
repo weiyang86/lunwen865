@@ -611,10 +611,38 @@ export class AdminTasksService {
           _count: { select: { sections: true, advisorComments: true } },
         },
       });
+      const thesisWordFile = await this.prisma.thesisWordFile.findFirst({
+        where: { taskId: id },
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          fileName: true,
+          fileUrl: true,
+          currentVersion: true,
+          status: true,
+          lastEditedAt: true,
+          lastEditedBy: true,
+          lockStatus: true,
+          updatedAt: true,
+          versions: {
+            orderBy: { version: 'desc' },
+            take: 5,
+            select: {
+              id: true,
+              version: true,
+              fileName: true,
+              fileSize: true,
+              sourceType: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
 
       return {
         ...detail,
         thesisDocument,
+        thesisWordFile,
         orders: order
           ? [
               {

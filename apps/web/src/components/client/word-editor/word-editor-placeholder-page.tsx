@@ -1,9 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { clientHttp } from '@/lib/client/api-client';
 import { getApiErrorMessage } from '@/lib/client/api-error';
+
+type WordFileVersion = {
+  id: string;
+  version: number;
+  fileName: string;
+  fileSize?: number | null;
+  sourceType?: string;
+  createdAt: string;
+};
 
 type WordFile = {
   id: string;
@@ -12,21 +21,55 @@ type WordFile = {
   currentVersion: number;
   status: string;
   updatedAt: string;
-  versions?: Array<{ id: string; version: number; fileName: string; createdAt: string }>;
+  versions?: WordFileVersion[];
 };
 
 type WordFilesResp = { current: WordFile | null; items: WordFile[] };
 
+type EditorConfigResp = {
+  documentServerUrl: string;
+  editorConfig: Record<string, unknown>;
+  warnings?: string[];
+};
+
+declare global {
+  interface Window {
+    DocsAPI?: {
+      DocEditor: new (containerId: string, config: Record<string, unknown>) => {
+        destroyEditor?: () => void;
+      };
+    };
+  }
+}
+
+function sourceLabel(source?: string) {
+  if (source === 'ONLYOFFICE_EDITED') return '在线编辑';
+  if (source === 'MANUAL_UPLOAD') return '手动上传';
+  return '生成初稿';
+}
+
+function fileSizeText(size?: number | null) {
+  if (!size) return '未知大小';
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export function WordEditorPlaceholderPage({ taskId }: { taskId: string }) {
   const [data, setData] = useState<WordFilesResp | null>(null);
   const [loading, setLoading] = useState(true);
+  const [opening, setOpening] = useState(false);
+  const [editorLoaded, setEditorLoaded] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const editorRef = useRef<{ destroyEditor?: () => void } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const next = await clientHttp.get<WordFilesResp>(`/thesis-tasks/${taskId}/word-files`);
+      const next = await clientHttp.get<WordFilesResp>(
+        `/thesis-tasks/${taskId}/word-files`,
+      );
       setData(next);
     } catch (e) {
       setError(getApiErrorMessage(e, '加载 Word 初稿失败'));
@@ -35,16 +78,115 @@ export function WordEditorPlaceholderPage({ taskId }: { taskId: string }) {
     }
   }, [taskId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    return () => editorRef.current?.destroyEditor?.();
+  }, [load]);
 
-  return <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
-    <section className="mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white p-6">
-      <h1 className="text-2xl font-semibold">在线 Word 精修</h1>
-      <p className="mt-2 text-sm text-slate-600">OnlyOffice 在线编辑将在 OnlyOffice-01 中开放。本页当前用于识别并下载已生成的 Word 初稿。</p>
-      {loading ? <div className="mt-6 rounded border border-slate-200 p-4 text-sm text-slate-500">加载 Word 文件状态中...</div> : null}
-      {error ? <div className="mt-6 rounded border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div> : null}
-      {!loading && !data?.current ? <div className="mt-6 rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><div className="font-medium">尚未生成 Word 初稿</div><p className="mt-1">请返回合稿与格式页面，先点击“生成 Word 初稿”。</p><Link className="mt-3 inline-block rounded bg-slate-900 px-4 py-2 text-white" href={`/student/tasks/${encodeURIComponent(taskId)}/workbench`}>返回合稿与格式</Link></div> : null}
-      {data?.current ? <div className="mt-6 space-y-4 rounded border border-slate-200 p-4"><div><div className="text-sm text-slate-500">当前 Word 初稿</div><div className="mt-1 font-medium">{data.current.fileName}</div><div className="mt-1 text-sm text-slate-500">状态：{data.current.status} · 当前版本：v{data.current.currentVersion} · {new Date(data.current.updatedAt).toLocaleString()}</div></div><div className="flex flex-wrap gap-2"><a href={`/api/thesis-word-files/${data.current.id}/download`} className="rounded bg-slate-900 px-4 py-2 text-sm text-white">下载当前 Word</a><button disabled className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-400">在线编辑将在 OnlyOffice-01 开放</button><Link href={`/student/tasks/${encodeURIComponent(taskId)}/workbench`} className="rounded border border-slate-300 px-4 py-2 text-sm">返回合稿与格式</Link></div><div><h2 className="font-medium">最近版本</h2><div className="mt-2 space-y-2">{data.current.versions?.map((v) => <div key={v.id} className="flex items-center justify-between rounded bg-slate-50 p-2 text-sm"><span>v{v.version} · {new Date(v.createdAt).toLocaleString()}</span><a className="text-indigo-600 hover:underline" href={`/api/thesis-word-file-versions/${v.id}/download`}>下载</a></div>)}</div></div></div> : null}
-    </section>
-  </main>;
+  async function loadOnlyOfficeScript(documentServerUrl: string) {
+    if (window.DocsAPI) return;
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = `${documentServerUrl.replace(/\/+$/, '')}/web-apps/apps/api/documents/api.js`;
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('在线 Word 编辑服务暂不可用。'));
+      document.body.appendChild(script);
+    });
+  }
+
+  async function openEditor() {
+    if (!data?.current) {
+      setError('请先生成 Word 初稿。');
+      return;
+    }
+    setOpening(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const config = await clientHttp.get<EditorConfigResp>(
+        `/thesis-word-files/${data.current.id}/editor-config`,
+      );
+      await loadOnlyOfficeScript(config.documentServerUrl);
+      if (!window.DocsAPI) throw new Error('在线 Word 编辑服务暂不可用。');
+      editorRef.current?.destroyEditor?.();
+      editorRef.current = new window.DocsAPI.DocEditor(
+        'onlyoffice-editor-container',
+        config.editorConfig,
+      );
+      setEditorLoaded(true);
+      setMessage(
+        config.warnings?.length
+          ? config.warnings.join('；')
+          : 'ONLYOFFICE 编辑器已打开。保存通常通过文档关闭或保存回调完成，版本记录以回调结果为准。',
+      );
+    } catch (e) {
+      setError(getApiErrorMessage(e, '在线 Word 编辑服务暂不可用'));
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  const current = data?.current;
+
+  return (
+    <main className="min-h-screen bg-slate-50 p-4 text-slate-900 lg:p-6">
+      <section className="mx-auto max-w-7xl space-y-4">
+        <nav className="flex flex-wrap gap-2 text-sm">
+          <Link className="rounded border border-slate-300 bg-white px-3 py-2" href={`/tasks/${encodeURIComponent(taskId)}`}>论文内容生成</Link>
+          <Link className="rounded border border-slate-300 bg-white px-3 py-2" href={`/student/tasks/${encodeURIComponent(taskId)}/workbench`}>合稿与格式</Link>
+          <span className="rounded bg-slate-900 px-3 py-2 text-white">在线 Word 精修</span>
+          <span className="rounded border border-dashed border-slate-300 px-3 py-2 text-slate-400">最终交付</span>
+        </nav>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold">在线 Word 精修</h1>
+              <p className="mt-2 text-sm text-slate-600">
+                在线 Word 精修适用于最终排版、复杂表格、图片、页眉页脚和版式检查。保存后的 Word 文件将作为后续最终交付版本。
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                ONLYOFFICE 的保存通常通过文档关闭或保存回调完成。保存完成后，系统会生成新的 Word 文件版本；本页不会假装立即保存成功。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {current ? <a className="rounded border border-slate-300 px-3 py-2 text-sm" href={`/api/thesis-word-files/${current.id}/download`}>下载当前 Word</a> : null}
+              <button className="rounded bg-indigo-600 px-3 py-2 text-sm text-white disabled:opacity-60" disabled={!current || opening} onClick={() => void openEditor()}>{opening ? '打开中...' : '打开在线 Word 编辑'}</button>
+              <button className="rounded border border-slate-300 px-3 py-2 text-sm" onClick={() => void load()}>刷新版本记录</button>
+            </div>
+          </div>
+          {loading ? <div className="mt-4 rounded border border-slate-200 p-3 text-sm text-slate-500">加载 Word 文件状态中...</div> : null}
+          {message ? <div className="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div> : null}
+          {error ? <div className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div> : null}
+          {!loading && !current ? <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><div className="font-medium">当前任务尚未生成 Word 初稿</div><p className="mt-1">请先进入合稿与格式生成 Word 初稿，再返回本页进行在线精修。</p><Link className="mt-3 inline-block rounded bg-slate-900 px-4 py-2 text-white" href={`/student/tasks/${encodeURIComponent(taskId)}/workbench`}>去合稿与格式</Link></div> : null}
+        </div>
+
+        {current ? <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <section className="rounded-xl border border-slate-200 bg-white p-3">
+            <div id="onlyoffice-editor-container" className="min-h-[72vh] rounded-lg border border-slate-200 bg-slate-50">
+              {!editorLoaded ? <div className="flex min-h-[72vh] items-center justify-center p-6 text-center text-sm text-slate-500">点击“打开在线 Word 编辑”后将在此加载 ONLYOFFICE 编辑器。若提示服务未配置，请联系管理员检查 Document Server、callbackUrl 与 document.url。</div> : null}
+            </div>
+          </section>
+          <aside className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+              <h2 className="font-medium">当前 Word 文件</h2>
+              <div className="mt-3 space-y-1 text-slate-600">
+                <div>文件名：{current.fileName}</div>
+                <div>当前版本：v{current.currentVersion}</div>
+                <div>状态：{current.status}</div>
+                <div>最近更新：{new Date(current.updatedAt).toLocaleString()}</div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+              <h2 className="font-medium">版本记录</h2>
+              <div className="mt-3 space-y-2">
+                {current.versions?.length ? current.versions.map((v) => <div key={v.id} className="rounded border border-slate-200 p-3"><div className="font-medium">v{v.version} · {sourceLabel(v.sourceType)}</div><div className="mt-1 text-xs text-slate-500">{new Date(v.createdAt).toLocaleString()} · {fileSizeText(v.fileSize)}</div><a className="mt-2 inline-block text-indigo-600 hover:underline" href={`/api/thesis-word-file-versions/${v.id}/download`}>下载该版本</a></div>) : <div className="text-slate-500">暂无版本记录</div>}
+              </div>
+            </div>
+          </aside>
+        </div> : null}
+      </section>
+    </main>
+  );
 }

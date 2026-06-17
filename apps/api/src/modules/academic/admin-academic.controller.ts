@@ -1,6 +1,5 @@
 import {
   Body,
-  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -9,16 +8,12 @@ import {
   Post,
   Query,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
-import type { Response } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AcademicService } from './academic.service';
-import { Res, UploadedFile } from '@nestjs/common';
 import {
   CreateCollegeDto,
   CreateDisciplineCategoryDto,
@@ -44,52 +39,6 @@ import {
 export class AdminAcademicController {
   constructor(private readonly academicService: AcademicService) {}
 
-  @Get('schools/import-template')
-  async downloadSchoolImportTemplate(@Res() res: Response) {
-    const buffer = await this.academicService.buildSchoolImportTemplate();
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="academic-schools-import-template.xlsx"',
-    );
-    res.send(buffer);
-  }
-
-  @Post('schools/import')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: { fileSize: 10 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) => {
-        const ok =
-          file.mimetype ===
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-          file.mimetype === 'application/vnd.ms-excel';
-        if (!ok) {
-          cb(new BadRequestException('只支持 Excel 文件（.xlsx/.xls）'), false);
-          return;
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  async importSchools(
-    @UploadedFile()
-    file:
-      | {
-          originalname?: string;
-          mimetype?: string;
-          buffer?: Buffer;
-        }
-      | undefined,
-  ) {
-    if (!file?.buffer || !Buffer.isBuffer(file.buffer))
-      throw new BadRequestException('未收到文件');
-    return this.academicService.importSchoolsFromExcel(file.buffer);
-  }
-
   @Get('schools')
   schools(@Query() query: QuerySchoolsDto) {
     return this.academicService.listSchools(query, false);
@@ -108,52 +57,6 @@ export class AdminAcademicController {
   @Delete('schools/:id')
   deleteSchool(@Param('id') id: string) {
     return this.academicService.disableSchool(id);
-  }
-
-  @Get('colleges/import-template')
-  async downloadCollegeImportTemplate(@Res() res: Response) {
-    const buffer = await this.academicService.buildCollegeImportTemplate();
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="academic-colleges-import-template.xlsx"',
-    );
-    res.send(buffer);
-  }
-
-  @Post('colleges/import')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: { fileSize: 10 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) => {
-        const ok =
-          file.mimetype ===
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-          file.mimetype === 'application/vnd.ms-excel';
-        if (!ok) {
-          cb(new BadRequestException('只支持 Excel 文件（.xlsx/.xls）'), false);
-          return;
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  async importColleges(
-    @UploadedFile()
-    file:
-      | {
-          originalname?: string;
-          mimetype?: string;
-          buffer?: Buffer;
-        }
-      | undefined,
-  ) {
-    if (!file?.buffer || !Buffer.isBuffer(file.buffer))
-      throw new BadRequestException('未收到文件');
-    return this.academicService.importCollegesFromExcel(file.buffer);
   }
 
   @Get('colleges')
@@ -176,52 +79,6 @@ export class AdminAcademicController {
     return this.academicService.disableCollege(id);
   }
 
-  @Get('majors/import-template')
-  async downloadMajorImportTemplate(@Res() res: Response) {
-    const buffer = await this.academicService.buildMajorImportTemplate();
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="academic-majors-import-template.xlsx"',
-    );
-    res.send(buffer);
-  }
-
-  @Post('majors/import')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: { fileSize: 10 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) => {
-        const ok =
-          file.mimetype ===
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-          file.mimetype === 'application/vnd.ms-excel';
-        if (!ok) {
-          cb(new BadRequestException('只支持 Excel 文件（.xlsx/.xls）'), false);
-          return;
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  async importMajors(
-    @UploadedFile()
-    file:
-      | {
-          originalname?: string;
-          mimetype?: string;
-          buffer?: Buffer;
-        }
-      | undefined,
-  ) {
-    if (!file?.buffer || !Buffer.isBuffer(file.buffer))
-      throw new BadRequestException('未收到文件');
-    return this.academicService.importMajorsFromExcel(file.buffer);
-  }
-
   @Get('majors')
   majors(@Query() query: QueryMajorsDto) {
     return this.academicService.listMajors(query, false);
@@ -240,52 +97,6 @@ export class AdminAcademicController {
   @Delete('majors/:id')
   deleteMajor(@Param('id') id: string) {
     return this.academicService.disableMajor(id);
-  }
-
-  @Get('disciplines/import-template')
-  async downloadDisciplineImportTemplate(@Res() res: Response) {
-    const buffer = await this.academicService.buildDisciplineImportTemplate();
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="academic-disciplines-import-template.xlsx"',
-    );
-    res.send(buffer);
-  }
-
-  @Post('disciplines/import')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: { fileSize: 10 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) => {
-        const ok =
-          file.mimetype ===
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-          file.mimetype === 'application/vnd.ms-excel';
-        if (!ok) {
-          cb(new BadRequestException('只支持 Excel 文件（.xlsx/.xls）'), false);
-          return;
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  async importDisciplines(
-    @UploadedFile()
-    file:
-      | {
-          originalname?: string;
-          mimetype?: string;
-          buffer?: Buffer;
-        }
-      | undefined,
-  ) {
-    if (!file?.buffer || !Buffer.isBuffer(file.buffer))
-      throw new BadRequestException('未收到文件');
-    return this.academicService.importDisciplinesFromExcel(file.buffer);
   }
 
   @Get('disciplines')

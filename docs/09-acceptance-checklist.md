@@ -240,3 +240,15 @@
 - [ ] 合稿与格式页面可看到 Word 初稿状态、生成按钮、下载按钮和最近版本。
 - [ ] `/student/tasks/[taskId]/word-editor` 可识别是否已有 Word 初稿，并提示 OnlyOffice-01 后续开放。
 - [ ] 原论文内容生成、合稿编辑、导师意见、版本记录、订单、支付和旧导出能力不受影响。
+
+## OnlyOffice-01 在线 Word 精修验收项
+- [ ] `ONLYOFFICE_DOCUMENT_SERVER_URL` 未配置时，`/student/tasks/[taskId]/word-editor` 能显示“在线 Word 编辑服务未配置，请联系管理员”。
+- [ ] 有 Word 初稿的任务可获取 `GET /api/thesis-word-files/:id/editor-config`，返回 document.url、document.key、callbackUrl、permissions、user 与可选 token。
+- [ ] 无 Word 初稿的任务无法打开编辑器，并提示先进入合稿与格式生成 Word 初稿。
+- [ ] 学生不能获取或下载他人 Word 文件、历史版本或 editor config。
+- [ ] `POST /api/onlyoffice/callback/:wordFileId` 可接收 ONLYOFFICE callback；status=2/6 下载最新 DOCX 并生成 `ONLYOFFICE_EDITED` 版本。
+- [ ] status=1/4 不生成新版本；status=3/7 记录错误并按 ONLYOFFICE 协议返回。
+- [ ] 重复 callback 通过 checksum 幂等处理，不重复生成大量相同版本。
+- [ ] 版本记录展示生成初稿与在线编辑来源，当前 Word 与历史版本均可下载。
+- [ ] JWT 开启时 editor config 携带 token，callback 校验 token；JWT secret 不出现在日志中。
+- [ ] 合稿与格式、DOCX 初稿生成、旧下载、订单、支付和 AI 生成链路不受影响。
