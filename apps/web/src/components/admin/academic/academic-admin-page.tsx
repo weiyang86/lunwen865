@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { academicApi } from '@/services/admin/academic';
 import { SchoolImportDialog } from './school-import-dialog';
+import { CatalogImportDialog } from './catalog-import-dialog';
 import type {
   AcademicCity,
   AcademicCollege,
@@ -312,6 +313,8 @@ export function AcademicAdminPage({ mode }: { mode: Mode }) {
         </div>
         <div className="flex gap-2">
           {mode === 'schools' ? <SchoolImportDialog onImported={() => void refresh()} /> : null}
+          {mode === 'majors' ? <CatalogImportDialog kind="major" onImported={() => void refresh()} /> : null}
+          {mode === 'disciplines' ? <CatalogImportDialog kind="discipline" onImported={() => void refresh()} /> : null}
           <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
             <RefreshCw className="mr-2 size-4" /> 刷新
           </Button>

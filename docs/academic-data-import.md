@@ -87,3 +87,56 @@ provinceCode, cityCode, name, code, schoolType, educationLevels, status, sortOrd
 - `code 重复`：同一文件中保留一条；如果是数据库已存在 code，系统会在 confirm 时更新。
 - `schoolType/educationLevels/status 枚举错误`：使用模板中的英文枚举；如来源只有中文办学层次，可填写“办学层次”列由系统转换。
 - `预览结果已过期`：重新上传文件并再次 preview。
+
+## 8. 本科专业目录字段说明
+
+AcademicData-03 新增本科/高职等专业目录导入模板：
+
+```text
+code, name, categoryCode, categoryName, disciplineCode, disciplineName, educationLevel, degree, years, status, version, source, sourceVersion, sourceUrl, confidence, remark
+```
+
+- `code`：专业代码，必填且唯一；相同 code 确认导入时更新。
+- `name`：专业名称，必填。
+- `categoryCode/categoryName`：专业类代码与名称，例如 `0809 / 计算机类`。
+- `disciplineCode/disciplineName`：门类代码与名称，例如 `08 / 工学`。
+- `educationLevel`：`UNDERGRADUATE` / `VOCATIONAL` / `MASTER` / `DOCTOR`。
+- `degree`：授予学位。
+- `years`：修业年限。
+- `status`：`ACTIVE` / `DISABLED` / `INACTIVE`。
+- `version/source/sourceVersion/sourceUrl/confidence`：官方目录版本、来源和置信度。
+
+## 9. 研究生学科目录字段说明
+
+AcademicData-03 新增研究生教育学科目录导入模板：
+
+```text
+code, name, parentCode, level, type, educationLevels, status, version, source, sourceVersion, sourceUrl, confidence, remark
+```
+
+- `code`：学科代码，必填且唯一；相同 code 确认导入时更新。
+- `name`：学科名称，必填。
+- `parentCode`：上级代码；存在时必须能在本次文件或已有学科目录中找到。
+- `level`：`DISCIPLINE_CATEGORY` / `FIRST_LEVEL_DISCIPLINE` / `SECOND_LEVEL_DISCIPLINE` / `PROFESSIONAL_DEGREE`。
+- `type`：`ACADEMIC` / `PROFESSIONAL`。
+- `educationLevels`：`MASTER` / `DOCTOR` / `MASTER,DOCTOR`。
+- `source`：`MOE` / `DEGREE_COMMITTEE` / `MANUAL`。
+
+## 10. 官方目录版本管理
+
+专业目录和学科目录均保存 `version`、`sourceVersion`、`sourceUrl`、`syncKey`、`confidence`、`lastSyncedAt` 与 `reviewStatus`。建议使用官方发布年份作为 `version/sourceVersion`，使用官方公告或文件地址作为 `sourceUrl`，便于后续追溯。
+
+## 11. 专业目录与学校实际开设专业的区别
+
+专业目录是国家标准目录，回答“有哪些专业代码/专业名称”；学校实际开设专业关系回答“某高校是否开设某专业”。AcademicData-03 只导入标准目录，不建立高校与专业的开设关系。
+
+## 12. 学科目录与研究生招生专业的区别
+
+研究生学科目录是学科/专业学位类别标准，不能直接等同于某学校当年招生专业。招生专业还包含研究方向、学院、导师、年份、考试科目等信息，后续应单独建模。
+
+## 13. 专业/学科目录导入常见错误
+
+- `parentCode 必须存在`：先在同一文件中加入上级学科，或确认数据库已有该上级代码。
+- `educationLevel/educationLevels 枚举错误`：本科专业使用 `UNDERGRADUATE`，研究生学科使用 `MASTER,DOCTOR` 等研究生层次。
+- `code 重复`：文件内重复会阻止确认导入；数据库已存在则作为更新。
+- `version 为空`：可导入但不推荐，建议填写官方目录年份。

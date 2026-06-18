@@ -476,3 +476,13 @@
 - `POST /api/admin/academic-data/schools/import/confirm`：传入 `previewId` 确认入库；以 `code` 为唯一键 upsert，返回新增、更新、失败数量。
 - `GET /api/admin/academic-data/schools`：高校列表支持 `keyword`、`provinceCode`、`cityCode`、`schoolType`、`educationLevel`、`status`、`page`、`pageSize`。
 - 兼容路径：现有 `/api/admin/academic/*` 仍保留，新增 `/api/admin/academic-data/*` 作为 AcademicData-02 对外契约。
+
+### AcademicData-03 专业与学科目录导入 Admin API
+- `GET /api/admin/academic-data/majors/import/template`：下载专业目录导入模板。
+- `POST /api/admin/academic-data/majors/import/preview`：上传专业目录 Excel/CSV，返回预览、错误报告和新增/更新统计，不写入正式表。
+- `POST /api/admin/academic-data/majors/import/confirm`：基于 `previewId` 确认导入，按 `code` upsert。
+- `GET /api/admin/academic-data/majors`：查询官方专业目录，支持 `keyword`、`disciplineName`、`categoryName`、`educationLevel`、`status`、`page`、`pageSize`。
+- `GET /api/admin/academic-data/disciplines/import/template`：下载研究生学科目录导入模板。
+- `POST /api/admin/academic-data/disciplines/import/preview`：上传学科目录 Excel/CSV，校验 `parentCode`、`level`、`type`、`educationLevels`。
+- `POST /api/admin/academic-data/disciplines/import/confirm`：基于 `previewId` 确认导入，按 `code` upsert。
+- `GET /api/admin/academic-data/disciplines`：查询研究生学科目录，支持 `keyword`、`parentCode`、`level`、`type`、`educationLevel`、`status`、`page`、`pageSize`。

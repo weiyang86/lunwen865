@@ -332,6 +332,30 @@ enum AcademicSchoolReviewStatus {
   REJECTED
 }
 
+enum AcademicCatalogSource {
+  MOE
+  DEGREE_COMMITTEE
+  MANUAL
+}
+
+enum AcademicCatalogReviewStatus {
+  APPROVED
+  PENDING
+  REJECTED
+}
+
+enum AcademicDisciplineCatalogLevel {
+  DISCIPLINE_CATEGORY
+  FIRST_LEVEL_DISCIPLINE
+  SECOND_LEVEL_DISCIPLINE
+  PROFESSIONAL_DEGREE
+}
+
+enum AcademicDisciplineCatalogType {
+  ACADEMIC
+  PROFESSIONAL
+}
+
 
 // ============ 论文 Skill 中心 ============
 enum ThesisSkillStage {
@@ -675,6 +699,68 @@ model AcademicSyncLog {
   @@index([jobId, createdAt])
   @@index([level, createdAt])
   @@map("academic_sync_logs")
+}
+
+
+model AcademicCatalogMajor {
+  id             String                      @id @default(cuid())
+  code           String                      @unique @db.VarChar(50)
+  name           String                      @db.VarChar(150)
+  categoryCode   String?                     @db.VarChar(50)
+  categoryName   String?                     @db.VarChar(100)
+  disciplineCode String?                     @db.VarChar(50)
+  disciplineName String?                     @db.VarChar(100)
+  educationLevel String                      @db.VarChar(40)
+  degree         String?                     @db.VarChar(80)
+  years          String?                     @db.VarChar(40)
+  status         AcademicStatus              @default(ACTIVE)
+  version        String?                     @db.VarChar(40)
+  source         AcademicCatalogSource       @default(MOE)
+  sourceVersion  String?                     @db.VarChar(80)
+  sourceUrl      String?                     @db.Text
+  syncKey        String?                     @db.VarChar(120)
+  confidence     Float                       @default(100)
+  lastSyncedAt   DateTime?
+  reviewStatus   AcademicCatalogReviewStatus @default(APPROVED)
+  reviewedBy     String?                     @db.VarChar(100)
+  reviewedAt     DateTime?
+  remark         String?                     @db.Text
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  @@index([disciplineName])
+  @@index([categoryName])
+  @@index([educationLevel, status])
+  @@map("academic_catalog_majors")
+}
+
+model AcademicDisciplineCatalog {
+  id              String                         @id @default(cuid())
+  code            String                         @unique @db.VarChar(50)
+  name            String                         @db.VarChar(150)
+  parentCode      String?                        @db.VarChar(50)
+  level           AcademicDisciplineCatalogLevel
+  type            AcademicDisciplineCatalogType
+  educationLevels String[]                       @default([])
+  status          AcademicStatus                 @default(ACTIVE)
+  version         String?                        @db.VarChar(40)
+  source          AcademicCatalogSource          @default(MOE)
+  sourceVersion   String?                        @db.VarChar(80)
+  sourceUrl       String?                        @db.Text
+  syncKey         String?                        @db.VarChar(120)
+  confidence      Float                          @default(100)
+  lastSyncedAt    DateTime?
+  reviewStatus    AcademicCatalogReviewStatus    @default(APPROVED)
+  reviewedBy      String?                        @db.VarChar(100)
+  reviewedAt      DateTime?
+  remark          String?                        @db.Text
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+
+  @@index([parentCode])
+  @@index([level, type])
+  @@index([status])
+  @@map("academic_disciplines")
 }
 
 model AcademicProvince {

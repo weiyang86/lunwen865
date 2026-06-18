@@ -256,3 +256,8 @@
 - `AcademicSchool.code` 作为导入 upsert 唯一键，推荐使用教育部学校标识码。
 - 新增来源与审核字段：`source`（MOE/CHSI/MANUAL）、`sourceVersion`、`sourceUrl`、`syncKey`、`confidence`、`lastSyncedAt`、`reviewStatus`、`reviewedBy`、`reviewedAt`。
 - 本次新增 Prisma migration：`prisma/migrations/20260617100000_extend_academic_school_import/migration.sql`。
+
+### AcademicData-03 专业目录与研究生学科目录
+- 新增 `AcademicCatalogMajor`（表 `academic_catalog_majors`）保存官方专业目录，`code` 唯一，包含专业类、门类、学历层次、学位、修业年限、版本、来源和审核字段。
+- 新增 `AcademicDisciplineCatalog`（表 `academic_disciplines`）保存研究生教育学科目录，`code` 唯一，`parentCode` 表示层级关系，`level/type/educationLevels` 表示学科层级、学术/专业类型与适用培养层次。
+- 本次新增 Prisma migration：`prisma/migrations/20260617110000_add_academic_catalog_import/migration.sql`。

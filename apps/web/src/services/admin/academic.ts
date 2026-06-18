@@ -68,4 +68,10 @@ export const academicApi = {
   },
   confirmSchoolImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/schools/import/confirm', { previewId }),
   schoolImportTemplateUrl: (version: 'legacy' | 'extended') => `/api/admin/academic-data/schools/import/template?version=${version}`,
+  previewMajorCatalogImport: (file: File) => { const form = new FormData(); form.append('file', file); return adminApi.post<SchoolImportPreview, { data: SchoolImportPreview }>('/admin/academic-data/majors/import/preview', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }).then((r) => r.data); },
+  confirmMajorCatalogImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/majors/import/confirm', { previewId }),
+  majorCatalogTemplateUrl: () => '/api/admin/academic-data/majors/import/template',
+  previewDisciplineCatalogImport: (file: File) => { const form = new FormData(); form.append('file', file); return adminApi.post<SchoolImportPreview, { data: SchoolImportPreview }>('/admin/academic-data/disciplines/import/preview', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }).then((r) => r.data); },
+  confirmDisciplineCatalogImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/disciplines/import/confirm', { previewId }),
+  disciplineCatalogTemplateUrl: () => '/api/admin/academic-data/disciplines/import/template',
 };

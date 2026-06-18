@@ -21,6 +21,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { AcademicService } from './academic.service';
 import { RegionSyncService } from './region-sync.service';
 import { SchoolImportService } from './school-import.service';
+import { CatalogImportService } from './catalog-import.service';
 import {
   CreateCollegeDto,
   CreateDisciplineCategoryDto,
@@ -51,6 +52,7 @@ export class AdminAcademicController {
     private readonly academicService: AcademicService,
     private readonly regionSyncService: RegionSyncService,
     private readonly schoolImportService: SchoolImportService,
+    private readonly catalogImportService: CatalogImportService,
   ) {}
 
   @Get('regions')
@@ -76,6 +78,72 @@ export class AdminAcademicController {
   @Get('sync/logs')
   syncLogs(@Query() query: ListSyncLogsDto) {
     return this.regionSyncService.logs(query);
+  }
+
+  @Get('majors/import/template')
+  majorImportTemplate(@Res() res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=academic-majors-template.csv',
+    );
+    res.send(`\uFEFF${this.catalogImportService.majorTemplate()}`);
+  }
+
+  @Post('majors/import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  previewMajorImport(
+    @UploadedFile()
+    file:
+      | { originalname?: string; mimetype?: string; buffer?: Buffer }
+      | undefined,
+  ) {
+    return this.catalogImportService.previewMajors(file);
+  }
+
+  @Post('majors/import/confirm')
+  confirmMajorImport(@Body() dto: ConfirmSchoolImportDto) {
+    return this.catalogImportService.confirmMajors(dto.previewId);
+  }
+
+  @Get('catalog-majors')
+  catalogMajors(@Query() query: Record<string, string>) {
+    return this.catalogImportService.listMajors(query);
+  }
+
+  @Get('disciplines/import/template')
+  disciplineImportTemplate(@Res() res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=academic-disciplines-template.csv',
+    );
+    res.send(`\uFEFF${this.catalogImportService.disciplineTemplate()}`);
+  }
+
+  @Post('disciplines/import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  previewDisciplineImport(
+    @UploadedFile()
+    file:
+      | { originalname?: string; mimetype?: string; buffer?: Buffer }
+      | undefined,
+  ) {
+    return this.catalogImportService.previewDisciplines(file);
+  }
+
+  @Post('disciplines/import/confirm')
+  confirmDisciplineImport(@Body() dto: ConfirmSchoolImportDto) {
+    return this.catalogImportService.confirmDisciplines(dto.previewId);
+  }
+
+  @Get('catalog-disciplines')
+  catalogDisciplines(@Query() query: Record<string, string>) {
+    return this.catalogImportService.listDisciplines(query);
   }
 
   @Get('schools/import/template')
