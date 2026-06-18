@@ -8,12 +8,20 @@ import {
   Post,
   Query,
   UseGuards,
+  UploadedFile,
+  UseInterceptors,
+  Res,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
+import type { Response } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AcademicService } from './academic.service';
+import { RegionSyncService } from './region-sync.service';
+import { SchoolImportService } from './school-import.service';
+import { CatalogImportService } from './catalog-import.service';
 import {
   CreateCollegeDto,
   CreateDisciplineCategoryDto,
@@ -31,13 +39,146 @@ import {
   UpdateDisciplineLevelTwoDto,
   UpdateMajorDto,
   UpdateSchoolDto,
+  ListRegionsDto,
+  ListSyncLogsDto,
+  ConfirmSchoolImportDto,
 } from './dto/academic.dto';
 
-@Controller('admin/academic')
+@Controller(['admin/academic', 'admin/academic-data'])
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
 export class AdminAcademicController {
-  constructor(private readonly academicService: AcademicService) {}
+  constructor(
+    private readonly academicService: AcademicService,
+    private readonly regionSyncService: RegionSyncService,
+    private readonly schoolImportService: SchoolImportService,
+    private readonly catalogImportService: CatalogImportService,
+  ) {}
+
+  @Get('regions')
+  regions(@Query() query: ListRegionsDto) {
+    return this.regionSyncService.listRegions(query);
+  }
+
+  @Get('sync/regions/amap/status')
+  regionSyncStatus() {
+    return this.regionSyncService.status();
+  }
+
+  @Post('sync/regions/amap/preview')
+  previewRegionSync() {
+    return this.regionSyncService.preview();
+  }
+
+  @Post('sync/regions/amap/confirm')
+  confirmRegionSync() {
+    return this.regionSyncService.confirm();
+  }
+
+  @Get('sync/logs')
+  syncLogs(@Query() query: ListSyncLogsDto) {
+    return this.regionSyncService.logs(query);
+  }
+
+  @Get('majors/import/template')
+  majorImportTemplate(@Res() res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=academic-majors-template.csv',
+    );
+    res.send(`\uFEFF${this.catalogImportService.majorTemplate()}`);
+  }
+
+  @Post('majors/import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  previewMajorImport(
+    @UploadedFile()
+    file:
+      | { originalname?: string; mimetype?: string; buffer?: Buffer }
+      | undefined,
+  ) {
+    return this.catalogImportService.previewMajors(file);
+  }
+
+  @Post('majors/import/confirm')
+  confirmMajorImport(@Body() dto: ConfirmSchoolImportDto) {
+    return this.catalogImportService.confirmMajors(dto.previewId);
+  }
+
+  @Get('catalog-majors')
+  catalogMajors(@Query() query: Record<string, string>) {
+    return this.catalogImportService.listMajors(query);
+  }
+
+  @Get('disciplines/import/template')
+  disciplineImportTemplate(@Res() res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=academic-disciplines-template.csv',
+    );
+    res.send(`\uFEFF${this.catalogImportService.disciplineTemplate()}`);
+  }
+
+  @Post('disciplines/import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  previewDisciplineImport(
+    @UploadedFile()
+    file:
+      | { originalname?: string; mimetype?: string; buffer?: Buffer }
+      | undefined,
+  ) {
+    return this.catalogImportService.previewDisciplines(file);
+  }
+
+  @Post('disciplines/import/confirm')
+  confirmDisciplineImport(@Body() dto: ConfirmSchoolImportDto) {
+    return this.catalogImportService.confirmDisciplines(dto.previewId);
+  }
+
+  @Get('catalog-disciplines')
+  catalogDisciplines(@Query() query: Record<string, string>) {
+    return this.catalogImportService.listDisciplines(query);
+  }
+
+  @Get('schools/import/template')
+  schoolImportTemplate(
+    @Query('version') version: 'legacy' | 'extended' = 'extended',
+    @Res() res: Response,
+  ) {
+    const safeVersion = version === 'legacy' ? 'legacy' : 'extended';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=academic-schools-${safeVersion}-template.csv`,
+    );
+    res.send(`\uFEFF${this.schoolImportService.template(safeVersion)}`);
+  }
+
+  @Post('schools/import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  previewSchoolImport(
+    @UploadedFile()
+    file:
+      | { originalname?: string; mimetype?: string; buffer?: Buffer }
+      | undefined,
+  ) {
+    return this.schoolImportService.preview(file);
+  }
+
+  @Post('schools/import/confirm')
+  confirmSchoolImport(@Body() dto: ConfirmSchoolImportDto) {
+    return this.schoolImportService.confirm(dto.previewId);
+  }
 
   @Get('schools')
   schools(@Query() query: QuerySchoolsDto) {

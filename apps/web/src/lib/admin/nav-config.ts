@@ -46,6 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: '学院管理', href: '/admin/academic/colleges' },
       { label: '专业管理', href: '/admin/academic/majors' },
       { label: '学科目录', href: '/admin/academic/disciplines' },
+      { label: '数据同步', href: '/admin/academic/sync' },
     ],
   },
   {
