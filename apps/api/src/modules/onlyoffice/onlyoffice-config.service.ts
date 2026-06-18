@@ -96,6 +96,13 @@ export class OnlyOfficeConfigService {
     );
   }
 
+  get signedUrlTtlSeconds() {
+    const raw = this.config.get<string>('ONLYOFFICE_SIGNED_URL_TTL_SECONDS');
+    const parsed = raw ? Number(raw) : NaN;
+    if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
+    return 24 * 60 * 60;
+  }
+
   get jwtSecret() {
     return this.config.get<string>('ONLYOFFICE_JWT_SECRET') || '';
   }
