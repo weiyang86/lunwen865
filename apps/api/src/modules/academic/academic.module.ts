@@ -9,6 +9,7 @@ import { SchoolImportService } from './school-import.service';
 import { CatalogImportService } from './catalog-import.service';
 
 @Module({
+  imports: [PrismaModule],
   controllers: [
     AcademicController,
     AcademicDataCatalogController,
