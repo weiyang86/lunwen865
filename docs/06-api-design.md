@@ -461,3 +461,40 @@
 ### OnlyOffice 多环境配置兼容补充
 - `GET /api/thesis-word-files/:id/editor-config` 现在返回 `enabled` 与 `missingConfig`。`documentServerUrl` 使用 `ONLYOFFICE_DOCUMENT_SERVER_PUBLIC_URL`（兼容旧 `ONLYOFFICE_DOCUMENT_SERVER_URL`），`document.url` 使用 `ONLYOFFICE_FILE_BASE_URL`（兼容旧 `ONLYOFFICE_FILE_PUBLIC_BASE_URL`），`callbackUrl` 使用 `ONLYOFFICE_CALLBACK_BASE_URL`。
 - 当 `ONLYOFFICE_ENABLED=false` 时，接口返回 `enabled=false` 与“在线 Word 编辑未启用”提示；当配置缺失时，返回具体缺失项，不再只给笼统配置错误。
+
+### AcademicData-01 地区同步 Admin API
+- `GET /api/admin/academic/regions`：分页查询地区，支持 `keyword`、`level`、`parentCode`、`status`、`page`、`pageSize`。
+- `GET /api/admin/academic/sync/regions/amap/status`：查询高德 Key/mock 配置状态与最近同步时间。
+- `POST /api/admin/academic/sync/regions/amap/preview`：预览全国地区同步结果，不写入正式表；返回总数、新增、更新、异常数量、样例和错误详情。
+- `POST /api/admin/academic/sync/regions/amap/confirm`：确认同步入库，以 `code` 为唯一键 upsert，并记录同步任务与日志。
+- `GET /api/admin/academic/sync/logs`：分页查询同步日志，支持 `jobType`、`page`、`pageSize`。
+- 鉴权：以上接口仅 `ADMIN` / `SUPER_ADMIN` 可访问。
+
+### AcademicData-02 高校名单导入 Admin API
+- `GET /api/admin/academic-data/schools/import/template?version=legacy|extended`：下载 CSV 模板，兼容旧模板与新模板。
+- `POST /api/admin/academic-data/schools/import/preview`：上传 Excel/CSV 文件，解析并校验高校名单，不写入正式表，返回 `previewId`、行数统计、样例、错误明细。
+- `POST /api/admin/academic-data/schools/import/confirm`：传入 `previewId` 确认入库；以 `code` 为唯一键 upsert，返回新增、更新、失败数量。
+- `GET /api/admin/academic-data/schools`：高校列表支持 `keyword`、`provinceCode`、`cityCode`、`schoolType`、`educationLevel`、`status`、`page`、`pageSize`。
+- 兼容路径：现有 `/api/admin/academic/*` 仍保留，新增 `/api/admin/academic-data/*` 作为 AcademicData-02 对外契约。
+
+### AcademicData-03 专业与学科目录导入 Admin API
+- `GET /api/admin/academic-data/majors/import/template`：下载专业目录导入模板。
+- `POST /api/admin/academic-data/majors/import/preview`：上传专业目录 Excel/CSV，返回预览、错误报告和新增/更新统计，不写入正式表。
+- `POST /api/admin/academic-data/majors/import/confirm`：基于 `previewId` 确认导入，按 `code` upsert。
+- `GET /api/admin/academic-data/majors`：查询官方专业目录，支持 `keyword`、`disciplineName`、`categoryName`、`educationLevel`、`status`、`page`、`pageSize`。
+- `GET /api/admin/academic-data/disciplines/import/template`：下载研究生学科目录导入模板。
+- `POST /api/admin/academic-data/disciplines/import/preview`：上传学科目录 Excel/CSV，校验 `parentCode`、`level`、`type`、`educationLevels`。
+- `POST /api/admin/academic-data/disciplines/import/confirm`：基于 `previewId` 确认导入，按 `code` upsert。
+- `GET /api/admin/academic-data/disciplines`：查询研究生学科目录，支持 `keyword`、`parentCode`、`level`、`type`、`educationLevel`、`status`、`page`、`pageSize`。
+
+### AcademicData-04 学院导入、采集与审核 Admin API
+- `GET /api/admin/academic-data/colleges`：学院列表，支持 `keyword`、`schoolCode`、`provinceCode`、`cityCode`、`status`、`page`、`pageSize`。
+- `GET /api/admin/academic-data/colleges/import/template`：下载学院导入模板。
+- `POST /api/admin/academic-data/colleges/import/preview`：上传学院 Excel/CSV，校验 `schoolCode` 和 `collegeName`，不写正式表。
+- `POST /api/admin/academic-data/colleges/import/confirm`：基于 `previewId` 确认导入，按 `schoolId + collegeName` upsert 到正式表。
+- `POST /api/admin/academic-data/colleges/crawl-sources` / `GET /api/admin/academic-data/colleges/crawl-sources`：配置和查询高校学院页采集源。
+- `POST /api/admin/academic-data/colleges/crawl/run`：对指定 `schoolCode + url` 低频采集，结果写入 staging。
+- `GET /api/admin/academic-data/colleges/staging`：查询待审核候选，支持地区、学校、审核状态和置信度筛选。
+- `POST /api/admin/academic-data/colleges/staging/:id/approve`：单条通过并 upsert 正式表。
+- `POST /api/admin/academic-data/colleges/staging/:id/reject`：驳回候选，不写正式表。
+- `POST /api/admin/academic-data/colleges/staging/batch-approve`：批量通过。

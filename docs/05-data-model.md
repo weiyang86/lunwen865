@@ -244,3 +244,26 @@
 - `ThesisWordFileVersion` 补充 `editorUserId`、`callbackPayload`、`checksum`；ONLYOFFICE 保存回调生成的版本使用 `sourceType=ONLYOFFICE_EDITED`，`callbackPayload` 只记录排查所需字段，不保存敏感 token。
 - callback 保存会更新 `ThesisWordFile.currentVersion/fileUrl/fileName`，并保留历史版本；Word 精修版本不强制同步回 `ThesisDocumentSection`。
 - migration：`20260616100000_add_onlyoffice_word_editing`。
+
+### AcademicData-01 地区同步数据模型
+- `AcademicRegion` 映射表 `academic_regions`，以高德 `adcode` 作为唯一 `code`，记录省、市、区县层级、上级 `parentCode`、同步来源、置信度、审核状态和最近同步时间。
+- `AcademicSyncJob` 映射表 `academic_sync_jobs`，记录地区同步任务类型 `REGION_AMAP`、范围 `NATIONAL`、运行状态和最近成功时间。
+- `AcademicSyncLog` 映射表 `academic_sync_logs`，记录同步任务 INFO/WARN/ERROR 日志和结构化 detail，便于后台查看和故障追踪。
+- 本次新增 Prisma migration：`prisma/migrations/20260617090000_add_academic_region_sync/migration.sql`。
+
+### AcademicData-02 高校导入字段扩展
+- 复用现有 `AcademicSchool` 表，新增 `provinceCode`、`cityCode` 保存 AcademicData-01 地区 adcode，兼容旧 `provinceId/cityId` 关系。
+- `AcademicSchool.code` 作为导入 upsert 唯一键，推荐使用教育部学校标识码。
+- 新增来源与审核字段：`source`（MOE/CHSI/MANUAL）、`sourceVersion`、`sourceUrl`、`syncKey`、`confidence`、`lastSyncedAt`、`reviewStatus`、`reviewedBy`、`reviewedAt`。
+- 本次新增 Prisma migration：`prisma/migrations/20260617100000_extend_academic_school_import/migration.sql`。
+
+### AcademicData-03 专业目录与研究生学科目录
+- 新增 `AcademicCatalogMajor`（表 `academic_catalog_majors`）保存官方专业目录，`code` 唯一，包含专业类、门类、学历层次、学位、修业年限、版本、来源和审核字段。
+- 新增 `AcademicDisciplineCatalog`（表 `academic_disciplines`）保存研究生教育学科目录，`code` 唯一，`parentCode` 表示层级关系，`level/type/educationLevels` 表示学科层级、学术/专业类型与适用培养层次。
+- 本次新增 Prisma migration：`prisma/migrations/20260617110000_add_academic_catalog_import/migration.sql`。
+
+### AcademicData-04 学院 staging 与采集源
+- 复用并扩展 `AcademicCollege` 作为正式学院表，新增 `schoolCode`、来源、置信度、同步与审核字段；正式入库唯一约束仍以 `schoolId + name` 为准。
+- 新增 `AcademicCollegeStaging`（表 `academic_college_staging`）保存人工导入预审或官网采集候选，包含 `collegeName`、`collegeUrl`、`sourceUrl`、`rawData`、`confidence` 和审核状态。
+- 新增 `AcademicCrawlSource`（表 `academic_crawl_sources`）保存后台配置的高校官网学院页面 URL，首期默认 `scope=SOUTHWEST`。
+- 本次新增 Prisma migration：`prisma/migrations/20260621100000_add_college_staging/migration.sql`。
