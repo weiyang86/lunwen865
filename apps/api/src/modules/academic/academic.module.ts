@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PrismaModule } from '../../prisma/prisma.module';
 import { AcademicController } from './academic.controller';
 import { AdminAcademicController } from './admin-academic.controller';
 import { AcademicDataCatalogController } from './academic-data-catalog.controller';
