@@ -267,3 +267,9 @@
 - 新增 `AcademicCollegeStaging`（表 `academic_college_staging`）保存人工导入预审或官网采集候选，包含 `collegeName`、`collegeUrl`、`sourceUrl`、`rawData`、`confidence` 和审核状态。
 - 新增 `AcademicCrawlSource`（表 `academic_crawl_sources`）保存后台配置的高校官网学院页面 URL，首期默认 `scope=SOUTHWEST`。
 - 本次新增 Prisma migration：`prisma/migrations/20260621100000_add_college_staging/migration.sql`。
+
+### AcademicData-05 学校-学院-专业关系
+
+- `academic_school_majors`：正式关系表，记录学校实际开设专业、学院归属、学历层次、来源、置信度和审核状态；唯一键为 `schoolCode + majorCode + educationLevel`。
+- `academic_school_major_staging`：采集候选表，所有招生网/学院官网提取结果先进入 staging，经人工审核通过后才 upsert 到正式表。
+- 新增枚举 `AcademicSchoolMajorSource`（`ADMISSION_SITE` / `SCHOOL_SITE` / `MANUAL`）与 `AcademicSchoolMajorReviewStatus`（`PENDING` / `APPROVED` / `REJECTED`）。迁移文件：`prisma/migrations/20260623100000_add_school_major_relations/migration.sql`。

@@ -113,8 +113,14 @@ export type SchoolImportPreviewRow = {
   code: string;
   schoolType: string;
   educationLevels: string[];
+  schoolCode?: string;
+  schoolName?: string;
+  collegeName?: string | null;
+  majorCode?: string;
+  majorName?: string;
+  educationLevel?: string;
   status: 'ACTIVE' | 'INACTIVE';
-  source: 'MOE' | 'CHSI' | 'MANUAL';
+  source: string;
   confidence: number;
   mode: 'create' | 'update';
 };

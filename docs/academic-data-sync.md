@@ -132,3 +132,33 @@ Content-Type: application/json
   "url": "https://www.example.edu.cn/yxsz.htm"
 }
 ```
+
+## AcademicData-05：学校-学院-专业关系补充与审核
+
+学校实际开设专业是论文任务生成的重要上下文：本科/研究生官方专业目录只说明“国家允许设置的专业”，不能证明某一高校在某一学院实际开设。因此新增 `academic_school_majors` 作为正式关系表，并新增 `academic_school_major_staging` 作为采集候选审核表，避免采集结果直接覆盖生产数据。
+
+### 西南片区补充策略
+
+沿用西南片区快捷范围：重庆市 `500000`、四川省 `510000`、贵州省 `520000`、云南省 `530000`、西藏自治区 `540000`。后台列表和 staging 查询支持通过 `provinceCode` / `cityCode` 过滤学校，默认人工运营优先补齐西南高校的学校-学院-专业关系。
+
+### 定向采集边界
+
+学校专业采集只请求后台人工输入的公开招生网、学院官网或招生简章 URL，不做全网搜索、不绕过登录/验证码、不抓取非公开数据、不高频请求。`SchoolMajorDataService.runCrawl` 会先匹配高校，再从公开 HTML 中提取专业名称候选，匹配 `academic_catalog_majors` 和 `academic_colleges` 后写入 `academic_school_major_staging`，不会直接写入正式表。
+
+### staging + 人工审核流程
+
+1. 运营输入 `schoolCode`、公开 URL、`educationLevel` 运行采集。
+2. 候选数据进入 `academic_school_major_staging`，保留 `sourceUrl`、`rawData`、`confidence`。
+3. 管理员在待审核列表中逐条通过或驳回，也可以批量通过。
+4. 审核通过时按 `schoolCode + majorCode + educationLevel` upsert 至 `academic_school_majors`；驳回只更新 staging 状态，不影响正式关系。
+
+### 置信度规则
+
+- 页面同时出现专业名称和专业代码，且命中专业目录：`90+`。
+- 专业名称命中专业目录：`80`。
+- 仅从页面文字识别出疑似专业名称：`60`。
+- 人工导入默认 `MANUAL` 来源，未填写 confidence 时按 `90` 处理。
+
+### 论文任务上下文预留
+
+后端新增 `AcademicContextService.getSchoolMajorContext(params)`，可根据 `schoolCode`、`collegeName`、`majorName`、`educationLevel` 查询正式关系，返回 school、college、major、matchedRelations、source、confidence，供后续论文任务生成链路使用。

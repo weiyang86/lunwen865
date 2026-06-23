@@ -15,6 +15,7 @@ import { academicApi } from '@/services/admin/academic';
 import { SchoolImportDialog } from './school-import-dialog';
 import { CatalogImportDialog } from './catalog-import-dialog';
 import { CollegeDataPanel } from './college-data-panel';
+import { SchoolMajorDataPanel } from './school-major-data-panel';
 import type {
   AcademicCity,
   AcademicCollege,
@@ -25,7 +26,7 @@ import type {
   DisciplineTree,
 } from '@/types/admin/academic';
 
-type Mode = 'schools' | 'colleges' | 'majors' | 'disciplines';
+type Mode = 'schools' | 'colleges' | 'majors' | 'disciplines' | 'schoolMajors';
 
 type SchoolDraft = {
   provinceId: string;
@@ -75,6 +76,7 @@ const NAV = [
   { href: '/admin/academic/colleges', label: '学院管理', mode: 'colleges', icon: Layers3 },
   { href: '/admin/academic/majors', label: '专业管理', mode: 'majors', icon: GraduationCap },
   { href: '/admin/academic/disciplines', label: '学科目录', mode: 'disciplines', icon: BookOpen },
+  { href: '/admin/academic/school-majors', label: '学校专业关系', mode: 'schoolMajors', icon: DatabaseZap },
   { href: '/admin/academic/sync', label: '数据同步', mode: 'sync', icon: DatabaseZap },
 ] as const;
 
@@ -181,7 +183,7 @@ export function AcademicAdminPage({ mode }: { mode: Mode }) {
       } else if (mode === 'majors') {
         const data = await academicApi.majors({ schoolId: majorDraft.schoolId || undefined, collegeId: majorDraft.collegeId || undefined, educationLevel: majorDraft.educationLevel || undefined, keyword, pageSize: 100 });
         setMajors(data.list);
-      } else {
+      } else if (mode === 'disciplines') {
         setDisciplines(await academicApi.disciplines());
       }
     } catch (e: unknown) {
@@ -335,8 +337,9 @@ export function AcademicAdminPage({ mode }: { mode: Mode }) {
       </div>
 
       {mode === 'colleges' ? <CollegeDataPanel onImported={() => void refresh()} /> : null}
+      {mode === 'schoolMajors' ? <SchoolMajorDataPanel onImported={() => void refresh()} /> : null}
 
-      {mode !== 'disciplines' ? (
+      {mode !== 'disciplines' && mode !== 'schoolMajors' ? (
         <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 md:flex-row md:items-end">
           <Field label="关键词"><Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="名称 / 编码" /></Field>
           <Button onClick={() => void refresh()} disabled={loading}>搜索</Button>
@@ -347,6 +350,7 @@ export function AcademicAdminPage({ mode }: { mode: Mode }) {
       {mode === 'colleges' ? renderColleges() : null}
       {mode === 'majors' ? renderMajors() : null}
       {mode === 'disciplines' ? renderDisciplines() : null}
+      {mode === 'schoolMajors' ? <Card><CardHeader><CardTitle>学校专业关系列表</CardTitle><CardDescription>支持西南片区、学校、学院、专业和学历层次筛选；本页优先提供导入、采集与审核入口，列表可通过后台 API 查询。</CardDescription></CardHeader></Card> : null}
     </div>
   );
 

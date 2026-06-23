@@ -140,3 +140,41 @@ code, name, parentCode, level, type, educationLevels, status, version, source, s
 - `educationLevel/educationLevels 枚举错误`：本科专业使用 `UNDERGRADUATE`，研究生学科使用 `MASTER,DOCTOR` 等研究生层次。
 - `code 重复`：文件内重复会阻止确认导入；数据库已存在则作为更新。
 - `version 为空`：可导入但不推荐，建议填写官方目录年份。
+
+## 学校-学院-专业关系导入（AcademicData-05）
+
+学校-专业关系用于表达“某高校实际开设哪些专业、归属哪个学院、对应学历层次和来源”。它与本科专业目录、研究生学科目录不同：目录是国家级标准库，关系表是学校实际办学上下文，后续论文任务生成、专业选择和学院维护应优先参考正式关系表。
+
+### 导入模板
+
+字段：
+
+```csv
+schoolCode,schoolName,collegeName,majorCode,majorName,educationLevel,status,source,sourceUrl,confidence,remark
+4150010637,重庆师范大学,计算机与信息科学学院,080901,计算机科学与技术,UNDERGRADUATE,ACTIVE,MANUAL,,90,
+```
+
+### 字段说明
+
+- `schoolCode`：必填，必须匹配 `academic_schools.code`。
+- `collegeName`：可选；若填写则尝试匹配 `academic_colleges`，未匹配时保留文本并在 preview 给出 warning。
+- `majorCode`：推荐填写教育部专业代码；如果存在则优先匹配 `academic_catalog_majors.code`。
+- `majorName`：`majorCode` 为空时用于匹配专业目录名称；匹配不到时允许作为文本进入正式关系，但 preview 会提示后续治理。
+- `educationLevel`：必填，支持 `UNDERGRADUATE`、`VOCATIONAL`、`MASTER`、`DOCTOR`。
+- `status`：支持 `ACTIVE`、`DISABLED` / `INACTIVE`。
+- `source`：支持 `MANUAL`、`ADMISSION_SITE`、`SCHOOL_SITE`。
+- `confidence`：0-100，人工导入默认 90。
+
+### 导入流程
+
+1. 下载模板并填写学校、学院、专业关系。
+2. 上传 Excel / CSV 执行 preview；preview 不写正式库。
+3. 查看错误报告和 warning，重点处理 schoolCode、educationLevel、status、重复关系错误。
+4. 确认后按 `schoolCode + majorCode + educationLevel` upsert `academic_school_majors`，相同关系更新而不是重复新增。
+
+### 常见错误
+
+- `schoolCode 未匹配高校库`：先通过全国高校名单导入或手动补齐高校。
+- `majorCode 未匹配专业目录`：检查是否已导入本科专业目录/研究生学科目录，或保留 majorName 等后续治理。
+- `collegeName 未匹配学院库`：先通过学院导入或 staging 审核补齐学院；当前关系仍保留学院文本。
+- 文件内重复 `schoolCode + majorCode + educationLevel`：删除重复行后重新预览。

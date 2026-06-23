@@ -77,4 +77,8 @@ export const academicApi = {
   previewCollegeImport: (file: File) => { const form = new FormData(); form.append('file', file); return adminApi.post<SchoolImportPreview, { data: SchoolImportPreview }>('/admin/academic-data/colleges/import/preview', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }).then((r) => r.data); },
   confirmCollegeImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/colleges/import/confirm', { previewId }),
   collegeImportTemplateUrl: () => '/api/admin/academic-data/colleges/import/template',
+  previewSchoolMajorImport: (file: File) => { const form = new FormData(); form.append('file', file); return adminApi.post<SchoolImportPreview, { data: SchoolImportPreview }>('/admin/academic-data/school-majors/import/preview', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }).then((r) => r.data); },
+  confirmSchoolMajorImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/school-majors/import/confirm', { previewId }),
+  schoolMajorImportTemplateUrl: () => '/api/admin/academic-data/school-majors/import/template',
+  runSchoolMajorCrawl: (body: { schoolCode: string; url: string; educationLevel: string }) => adminHttp.post<{ created: number; sampleRows: unknown[] }>('/admin/academic-data/school-majors/crawl/run', body),
 };

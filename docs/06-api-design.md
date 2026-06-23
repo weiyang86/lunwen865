@@ -498,3 +498,15 @@
 - `POST /api/admin/academic-data/colleges/staging/:id/approve`：单条通过并 upsert 正式表。
 - `POST /api/admin/academic-data/colleges/staging/:id/reject`：驳回候选，不写正式表。
 - `POST /api/admin/academic-data/colleges/staging/batch-approve`：批量通过。
+
+### AcademicData-05 学校-学院-专业关系 API
+
+- `GET /api/admin/academic-data/school-majors`：查询正式关系，支持 `keyword`、`provinceCode`、`cityCode`、`schoolCode`、`collegeId`、`majorCode`、`educationLevel`、`status`、`page`、`pageSize`。
+- `GET /api/admin/academic-data/school-majors/import/template`：下载关系导入模板。
+- `POST /api/admin/academic-data/school-majors/import/preview`：上传 Excel / CSV 预校验，不写正式库，返回错误明细、warning 和前 20 条样例。
+- `POST /api/admin/academic-data/school-majors/import/confirm`：根据 `previewId` 确认导入，按 `schoolCode + majorCode + educationLevel` upsert。
+- `POST /api/admin/academic-data/school-majors/crawl/run`：输入 `schoolCode`、`url`、`educationLevel`，低频请求指定公开 URL，结果进入 staging。
+- `GET /api/admin/academic-data/school-majors/staging`：查询待审核候选，支持学校、地区、审核状态和学历层次过滤。
+- `POST /api/admin/academic-data/school-majors/staging/:id/approve`：审核通过并写入正式关系。
+- `POST /api/admin/academic-data/school-majors/staging/:id/reject`：驳回候选，不写正式关系。
+- `POST /api/admin/academic-data/school-majors/staging/batch-approve`：批量通过候选。

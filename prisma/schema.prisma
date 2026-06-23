@@ -372,6 +372,19 @@ enum AcademicCrawlSourceType {
 }
 
 
+enum AcademicSchoolMajorSource {
+  ADMISSION_SITE
+  SCHOOL_SITE
+  MANUAL
+}
+
+enum AcademicSchoolMajorReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
 // ============ 论文 Skill 中心 ============
 enum ThesisSkillStage {
   TOPIC
@@ -841,6 +854,7 @@ model AcademicSchool {
   city     AcademicCity      @relation(fields: [cityId], references: [id], onDelete: Restrict)
   colleges AcademicCollege[]
   majors   AcademicMajor[]
+  schoolMajorRelations AcademicSchoolMajor[]
   thesisSkillBindings ThesisSkillBinding[]
   formatTemplates     ThesisFormatTemplate[]
   tasks               Task[]
@@ -922,6 +936,68 @@ model AcademicCrawlSource {
 
   @@index([schoolCode, enabled])
   @@map("academic_crawl_sources")
+}
+
+
+model AcademicSchoolMajor {
+  id             String                          @id @default(cuid())
+  schoolId       String
+  schoolCode     String                          @db.VarChar(50)
+  collegeId      String?
+  collegeName    String?                         @db.VarChar(150)
+  majorId        String?
+  majorCode      String                          @db.VarChar(50)
+  majorName      String                          @db.VarChar(150)
+  educationLevel String                          @db.VarChar(40)
+  status         AcademicStatus                  @default(ACTIVE)
+  source         AcademicSchoolMajorSource       @default(MANUAL)
+  sourceVersion  String?                         @db.VarChar(80)
+  sourceUrl      String?                         @db.Text
+  syncKey        String?                         @db.VarChar(180)
+  confidence     Float                           @default(90)
+  lastSyncedAt   DateTime?
+  reviewStatus   AcademicSchoolMajorReviewStatus @default(APPROVED)
+  reviewedBy     String?                         @db.VarChar(100)
+  reviewedAt     DateTime?
+  remark         String?                         @db.Text
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+
+  school AcademicSchool @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@unique([schoolCode, majorCode, educationLevel])
+  @@index([schoolId, status])
+  @@index([schoolCode, collegeName])
+  @@index([majorCode, educationLevel])
+  @@map("academic_school_majors")
+}
+
+model AcademicSchoolMajorStaging {
+  id             String                          @id @default(cuid())
+  schoolId       String?
+  schoolCode     String?                         @db.VarChar(50)
+  schoolName     String?                         @db.VarChar(150)
+  collegeId      String?
+  collegeName    String?                         @db.VarChar(150)
+  majorId        String?
+  majorCode      String?                         @db.VarChar(50)
+  majorName      String                          @db.VarChar(150)
+  educationLevel String                          @db.VarChar(40)
+  source         AcademicSchoolMajorSource       @default(SCHOOL_SITE)
+  sourceUrl      String?                         @db.Text
+  confidence     Float                           @default(60)
+  rawData        Json?
+  reviewStatus   AcademicSchoolMajorReviewStatus @default(PENDING)
+  reviewedBy     String?                         @db.VarChar(100)
+  reviewedAt     DateTime?
+  errorMessage   String?                         @db.Text
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+
+  @@index([schoolCode, reviewStatus])
+  @@index([majorCode, educationLevel])
+  @@index([reviewStatus, confidence])
+  @@map("academic_school_major_staging")
 }
 
 model AcademicMajor {

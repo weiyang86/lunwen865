@@ -23,6 +23,7 @@ import { RegionSyncService } from './region-sync.service';
 import { SchoolImportService } from './school-import.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CollegeDataService } from './college-data.service';
+import { SchoolMajorDataService } from './school-major-data.service';
 import {
   CreateCollegeDto,
   CreateDisciplineCategoryDto,
@@ -55,6 +56,7 @@ export class AdminAcademicController {
     private readonly schoolImportService: SchoolImportService,
     private readonly catalogImportService: CatalogImportService,
     private readonly collegeDataService: CollegeDataService,
+    private readonly schoolMajorDataService: SchoolMajorDataService,
   ) {}
 
   @Get('regions')
@@ -80,6 +82,67 @@ export class AdminAcademicController {
   @Get('sync/logs')
   syncLogs(@Query() query: ListSyncLogsDto) {
     return this.regionSyncService.logs(query);
+  }
+
+  @Get('school-majors/import/template')
+  schoolMajorImportTemplate(@Res() res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=academic-school-majors-template.csv',
+    );
+    res.send(`\uFEFF${this.schoolMajorDataService.template()}`);
+  }
+
+  @Post('school-majors/import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  previewSchoolMajorImport(
+    @UploadedFile()
+    file:
+      | { originalname?: string; mimetype?: string; buffer?: Buffer }
+      | undefined,
+  ) {
+    return this.schoolMajorDataService.preview(file);
+  }
+
+  @Post('school-majors/import/confirm')
+  confirmSchoolMajorImport(@Body() dto: ConfirmSchoolImportDto) {
+    return this.schoolMajorDataService.confirm(dto.previewId);
+  }
+
+  @Get('school-majors')
+  schoolMajors(@Query() query: Record<string, string>) {
+    return this.schoolMajorDataService.list(query);
+  }
+
+  @Post('school-majors/crawl/run')
+  runSchoolMajorCrawl(@Body() dto: Record<string, unknown>) {
+    return this.schoolMajorDataService.runCrawl(dto);
+  }
+
+  @Get('school-majors/staging')
+  schoolMajorStaging(@Query() query: Record<string, string>) {
+    return this.schoolMajorDataService.staging(query);
+  }
+
+  @Post('school-majors/staging/batch-approve')
+  batchApproveSchoolMajorStaging(@Body() dto: { ids: string[] }) {
+    return this.schoolMajorDataService.batchApprove(dto.ids ?? []);
+  }
+
+  @Post('school-majors/staging/:id/approve')
+  approveSchoolMajorStaging(@Param('id') id: string) {
+    return this.schoolMajorDataService.approve(id);
+  }
+
+  @Post('school-majors/staging/:id/reject')
+  rejectSchoolMajorStaging(
+    @Param('id') id: string,
+    @Body() dto: { reason?: string },
+  ) {
+    return this.schoolMajorDataService.reject(id, dto.reason);
   }
 
   @Get('colleges/import/template')
