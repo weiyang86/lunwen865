@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { academicApi } from '@/services/admin/academic';
 import { SchoolImportDialog } from './school-import-dialog';
 import { CatalogImportDialog } from './catalog-import-dialog';
+import { CollegeDataPanel } from './college-data-panel';
 import type {
   AcademicCity,
   AcademicCollege,
@@ -332,6 +333,8 @@ export function AcademicAdminPage({ mode }: { mode: Mode }) {
           );
         })}
       </div>
+
+      {mode === 'colleges' ? <CollegeDataPanel onImported={() => void refresh()} /> : null}
 
       {mode !== 'disciplines' ? (
         <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 md:flex-row md:items-end">

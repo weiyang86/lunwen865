@@ -22,6 +22,7 @@ import { AcademicService } from './academic.service';
 import { RegionSyncService } from './region-sync.service';
 import { SchoolImportService } from './school-import.service';
 import { CatalogImportService } from './catalog-import.service';
+import { CollegeDataService } from './college-data.service';
 import {
   CreateCollegeDto,
   CreateDisciplineCategoryDto,
@@ -53,6 +54,7 @@ export class AdminAcademicController {
     private readonly regionSyncService: RegionSyncService,
     private readonly schoolImportService: SchoolImportService,
     private readonly catalogImportService: CatalogImportService,
+    private readonly collegeDataService: CollegeDataService,
   ) {}
 
   @Get('regions')
@@ -78,6 +80,72 @@ export class AdminAcademicController {
   @Get('sync/logs')
   syncLogs(@Query() query: ListSyncLogsDto) {
     return this.regionSyncService.logs(query);
+  }
+
+  @Get('colleges/import/template')
+  collegeImportTemplate(@Res() res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=academic-colleges-template.csv',
+    );
+    res.send(`\uFEFF${this.collegeDataService.template()}`);
+  }
+
+  @Post('colleges/import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  previewCollegeImport(
+    @UploadedFile()
+    file:
+      | { originalname?: string; mimetype?: string; buffer?: Buffer }
+      | undefined,
+  ) {
+    return this.collegeDataService.preview(file);
+  }
+
+  @Post('colleges/import/confirm')
+  confirmCollegeImport(@Body() dto: ConfirmSchoolImportDto) {
+    return this.collegeDataService.confirm(dto.previewId);
+  }
+
+  @Post('colleges/crawl-sources')
+  createCollegeCrawlSource(@Body() dto: Record<string, unknown>) {
+    return this.collegeDataService.createCrawlSource(dto);
+  }
+
+  @Get('colleges/crawl-sources')
+  collegeCrawlSources(@Query() query: Record<string, string>) {
+    return this.collegeDataService.crawlSources(query);
+  }
+
+  @Post('colleges/crawl/run')
+  runCollegeCrawl(@Body() dto: Record<string, unknown>) {
+    return this.collegeDataService.runCrawl(dto);
+  }
+
+  @Get('colleges/staging')
+  collegeStaging(@Query() query: Record<string, string>) {
+    return this.collegeDataService.staging(query);
+  }
+
+  @Post('colleges/staging/batch-approve')
+  batchApproveCollegeStaging(@Body() dto: { ids: string[] }) {
+    return this.collegeDataService.batchApprove(dto.ids ?? []);
+  }
+
+  @Post('colleges/staging/:id/approve')
+  approveCollegeStaging(@Param('id') id: string) {
+    return this.collegeDataService.approve(id);
+  }
+
+  @Post('colleges/staging/:id/reject')
+  rejectCollegeStaging(
+    @Param('id') id: string,
+    @Body() dto: { reason?: string },
+  ) {
+    return this.collegeDataService.reject(id, dto.reason);
   }
 
   @Get('majors/import/template')

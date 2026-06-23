@@ -261,3 +261,9 @@
 - 新增 `AcademicCatalogMajor`（表 `academic_catalog_majors`）保存官方专业目录，`code` 唯一，包含专业类、门类、学历层次、学位、修业年限、版本、来源和审核字段。
 - 新增 `AcademicDisciplineCatalog`（表 `academic_disciplines`）保存研究生教育学科目录，`code` 唯一，`parentCode` 表示层级关系，`level/type/educationLevels` 表示学科层级、学术/专业类型与适用培养层次。
 - 本次新增 Prisma migration：`prisma/migrations/20260617110000_add_academic_catalog_import/migration.sql`。
+
+### AcademicData-04 学院 staging 与采集源
+- 复用并扩展 `AcademicCollege` 作为正式学院表，新增 `schoolCode`、来源、置信度、同步与审核字段；正式入库唯一约束仍以 `schoolId + name` 为准。
+- 新增 `AcademicCollegeStaging`（表 `academic_college_staging`）保存人工导入预审或官网采集候选，包含 `collegeName`、`collegeUrl`、`sourceUrl`、`rawData`、`confidence` 和审核状态。
+- 新增 `AcademicCrawlSource`（表 `academic_crawl_sources`）保存后台配置的高校官网学院页面 URL，首期默认 `scope=SOUTHWEST`。
+- 本次新增 Prisma migration：`prisma/migrations/20260621100000_add_college_staging/migration.sql`。

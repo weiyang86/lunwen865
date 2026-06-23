@@ -74,4 +74,7 @@ export const academicApi = {
   previewDisciplineCatalogImport: (file: File) => { const form = new FormData(); form.append('file', file); return adminApi.post<SchoolImportPreview, { data: SchoolImportPreview }>('/admin/academic-data/disciplines/import/preview', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }).then((r) => r.data); },
   confirmDisciplineCatalogImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/disciplines/import/confirm', { previewId }),
   disciplineCatalogTemplateUrl: () => '/api/admin/academic-data/disciplines/import/template',
+  previewCollegeImport: (file: File) => { const form = new FormData(); form.append('file', file); return adminApi.post<SchoolImportPreview, { data: SchoolImportPreview }>('/admin/academic-data/colleges/import/preview', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }).then((r) => r.data); },
+  confirmCollegeImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/colleges/import/confirm', { previewId }),
+  collegeImportTemplateUrl: () => '/api/admin/academic-data/colleges/import/template',
 };

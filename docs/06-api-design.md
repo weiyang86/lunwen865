@@ -486,3 +486,15 @@
 - `POST /api/admin/academic-data/disciplines/import/preview`：上传学科目录 Excel/CSV，校验 `parentCode`、`level`、`type`、`educationLevels`。
 - `POST /api/admin/academic-data/disciplines/import/confirm`：基于 `previewId` 确认导入，按 `code` upsert。
 - `GET /api/admin/academic-data/disciplines`：查询研究生学科目录，支持 `keyword`、`parentCode`、`level`、`type`、`educationLevel`、`status`、`page`、`pageSize`。
+
+### AcademicData-04 学院导入、采集与审核 Admin API
+- `GET /api/admin/academic-data/colleges`：学院列表，支持 `keyword`、`schoolCode`、`provinceCode`、`cityCode`、`status`、`page`、`pageSize`。
+- `GET /api/admin/academic-data/colleges/import/template`：下载学院导入模板。
+- `POST /api/admin/academic-data/colleges/import/preview`：上传学院 Excel/CSV，校验 `schoolCode` 和 `collegeName`，不写正式表。
+- `POST /api/admin/academic-data/colleges/import/confirm`：基于 `previewId` 确认导入，按 `schoolId + collegeName` upsert 到正式表。
+- `POST /api/admin/academic-data/colleges/crawl-sources` / `GET /api/admin/academic-data/colleges/crawl-sources`：配置和查询高校学院页采集源。
+- `POST /api/admin/academic-data/colleges/crawl/run`：对指定 `schoolCode + url` 低频采集，结果写入 staging。
+- `GET /api/admin/academic-data/colleges/staging`：查询待审核候选，支持地区、学校、审核状态和置信度筛选。
+- `POST /api/admin/academic-data/colleges/staging/:id/approve`：单条通过并 upsert 正式表。
+- `POST /api/admin/academic-data/colleges/staging/:id/reject`：驳回候选，不写正式表。
+- `POST /api/admin/academic-data/colleges/staging/batch-approve`：批量通过。

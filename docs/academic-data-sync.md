@@ -65,3 +65,70 @@ pnpm --filter web dev
 ```
 
 访问 `/admin/academic/sync`，点击“预览同步”和“确认入库”。确认后可通过数据库检查 `academic_regions` 是否包含省、市、区县数据，并在页面同步日志中查看结果。
+
+## 7. AcademicData-04 学院数据采集与审核
+
+学院数据没有稳定的全国统一官方 API，同一高校的学院设置还会随学校官网调整、机构合并或院系更名变化。因此本阶段不做“全网自动同步”，而采用“人工导入 + 定向采集 + staging 审核”的流程。
+
+### 7.1 西南片区优先策略
+
+首期快捷范围为 SOUTHWEST：
+
+- `500000` 重庆市
+- `510000` 四川省
+- `520000` 贵州省
+- `530000` 云南省
+- `540000` 西藏自治区
+
+学院采集源默认 scope 为 `SOUTHWEST`，后台页面和接口可按 `provinceCode/cityCode/schoolCode` 筛选。
+
+### 7.2 学院采集边界
+
+- 只采集公开网页。
+- 不绕过登录、验证码或访问控制。
+- 不抓取非公开数据。
+- 不高频请求；采集必须由后台配置 URL 或人工传入 URL 后触发。
+- 采集结果只进入 `academic_college_staging`，不得直接覆盖正式 `AcademicCollege`。
+
+### 7.3 staging + 人工审核流程
+
+1. 管理员为高校配置学院页面 URL，或直接传入学校 code + URL 运行采集。
+2. `CollegeCrawlerService` 解析页面链接文本，提取包含“学院/学部/系/研究院/中心”的候选项，并过滤通知公告、新闻动态等非学院导航。
+3. 候选写入 `academic_college_staging`，状态为 `PENDING`。
+4. 管理员在待审核列表中逐条通过、驳回或批量通过。
+5. 审核通过后才 upsert 到正式 `AcademicCollege`，唯一依据为 `schoolId + name`。
+
+### 7.4 学院数据置信度规则
+
+- 人工模板导入默认 `MANUAL`，建议置信度 90。
+- 官网采集默认 `SCHOOL_SITE`，包含“学院/学部”的候选置信度较高，研究院/中心等候选置信度较低。
+- 置信度仅辅助审核，不替代人工确认。
+
+### 7.5 如何配置高校官网学院页面 URL
+
+通过后台接口配置：
+
+```http
+POST /api/admin/academic-data/colleges/crawl-sources
+Content-Type: application/json
+
+{
+  "schoolCode": "4150010637",
+  "url": "https://www.example.edu.cn/yxsz.htm",
+  "sourceType": "COLLEGE_PAGE",
+  "scope": "SOUTHWEST",
+  "enabled": true
+}
+```
+
+运行单次采集：
+
+```http
+POST /api/admin/academic-data/colleges/crawl/run
+Content-Type: application/json
+
+{
+  "schoolCode": "4150010637",
+  "url": "https://www.example.edu.cn/yxsz.htm"
+}
+```

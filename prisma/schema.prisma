@@ -356,6 +356,21 @@ enum AcademicDisciplineCatalogType {
   PROFESSIONAL
 }
 
+enum AcademicCollegeSource {
+  SCHOOL_SITE
+  MANUAL
+}
+
+enum AcademicCollegeReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AcademicCrawlSourceType {
+  COLLEGE_PAGE
+}
+
 
 // ============ 论文 Skill 中心 ============
 enum ThesisSkillStage {
@@ -839,15 +854,25 @@ model AcademicSchool {
 }
 
 model AcademicCollege {
-  id        String         @id @default(cuid())
-  schoolId  String
-  name      String         @db.VarChar(150)
-  code      String?        @db.VarChar(50)
-  status    AcademicStatus @default(ACTIVE)
-  sortOrder Int            @default(0)
-  remark    String?        @db.Text
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id              String                      @id @default(cuid())
+  schoolId        String
+  schoolCode      String?                     @db.VarChar(50)
+  name            String                      @db.VarChar(150)
+  code            String?                     @db.VarChar(50)
+  status          AcademicStatus              @default(ACTIVE)
+  sortOrder       Int                         @default(0)
+  source          AcademicCollegeSource       @default(MANUAL)
+  sourceVersion   String?                     @db.VarChar(80)
+  sourceUrl       String?                     @db.Text
+  syncKey         String?                     @db.VarChar(160)
+  confidence      Float                       @default(90)
+  lastSyncedAt    DateTime?
+  reviewStatus    AcademicCollegeReviewStatus @default(APPROVED)
+  reviewedBy      String?                     @db.VarChar(100)
+  reviewedAt      DateTime?
+  remark          String?                     @db.Text
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
 
   school AcademicSchool  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   majors AcademicMajor[]
@@ -857,6 +882,46 @@ model AcademicCollege {
   @@unique([schoolId, name])
   @@unique([schoolId, code])
   @@index([schoolId, status, sortOrder])
+  @@index([schoolCode, status])
+}
+
+model AcademicCollegeStaging {
+  id           String                      @id @default(cuid())
+  schoolId     String?
+  schoolCode   String?                     @db.VarChar(50)
+  schoolName   String?                     @db.VarChar(150)
+  collegeName  String                      @db.VarChar(150)
+  collegeUrl   String?                     @db.Text
+  source       AcademicCollegeSource       @default(SCHOOL_SITE)
+  sourceUrl    String?                     @db.Text
+  confidence   Float                       @default(70)
+  rawData      Json?
+  reviewStatus AcademicCollegeReviewStatus @default(PENDING)
+  reviewedBy   String?                     @db.VarChar(100)
+  reviewedAt   DateTime?
+  errorMessage String?                     @db.Text
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+
+  @@index([schoolCode, reviewStatus])
+  @@index([reviewStatus, confidence])
+  @@map("academic_college_staging")
+}
+
+model AcademicCrawlSource {
+  id         String                  @id @default(cuid())
+  schoolId   String?
+  schoolCode String?                 @db.VarChar(50)
+  sourceType AcademicCrawlSourceType @default(COLLEGE_PAGE)
+  url        String                  @db.Text
+  enabled    Boolean                 @default(true)
+  scope      AcademicSyncScope       @default(SOUTHWEST)
+  remark     String?                 @db.Text
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+
+  @@index([schoolCode, enabled])
+  @@map("academic_crawl_sources")
 }
 
 model AcademicMajor {

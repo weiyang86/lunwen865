@@ -7,9 +7,9 @@ import { AcademicService } from './academic.service';
 import { RegionSyncService } from './region-sync.service';
 import { SchoolImportService } from './school-import.service';
 import { CatalogImportService } from './catalog-import.service';
+import { CollegeDataService } from './college-data.service';
 
 @Module({
-  imports: [PrismaModule],
   controllers: [
     AcademicController,
     AcademicDataCatalogController,
@@ -20,6 +20,7 @@ import { CatalogImportService } from './catalog-import.service';
     RegionSyncService,
     SchoolImportService,
     CatalogImportService,
+    CollegeDataService,
   ],
   exports: [AcademicService],
 })
