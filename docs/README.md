@@ -1,6 +1,27 @@
 # Docs 文档入口
 
-当前 `docs/` 目录正在进行产品方向纠偏前的文档汇总与整理。本轮目标是先盘点现有文档，不删除、不移动旧文档，不修改业务源码，为后续重新判断市场 MVP 方向提供依据。
+当前 `docs/` 目录正在进行产品方向纠偏与市场 MVP 收口。上一轮已完成文档审计，本轮已在 `docs/01-product/` 冻结一期市场 MVP 产品基线；旧文档仍未移动或删除。
+
+
+## 当前有效产品基线
+
+`docs/01-product/` 是当前一期市场 MVP 的有效产品口径。若根目录旧文档与 `docs/01-product/` 的结论冲突，以 `docs/01-product/` 为准；后续开发 Issue 应优先依据该目录判断是否进入一期 MVP。
+
+当前有效产品基线入口：
+
+1. `docs/01-product/00-product-baseline.md`
+2. `docs/01-product/01-user-roles-and-flows.md`
+3. `docs/01-product/02-market-mvp-flow.md`
+4. `docs/01-product/03-mvp-feature-scope.md`
+5. `docs/01-product/04-cut-or-keep-decision.md`
+6. `docs/01-product/05-mvp-acceptance-checklist.md`
+
+说明：
+
+- `docs/01-product/`：当前市场 MVP 的有效产品基线。
+- `docs/00-product-reset/`：产品方向纠偏前的审计、分析和重组建议过程文档。
+- docs 根目录旧文档：尚未移动，后续将按产品基线分批合并或归档。
+- 后续开发 Issue：优先依据 `docs/01-product/`，避免继续被支付、OnlyOffice、机构端、写手池、学术数据等专项牵着走。
 
 ## 当前文档入口
 
