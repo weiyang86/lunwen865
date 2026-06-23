@@ -81,4 +81,8 @@ export const academicApi = {
   confirmSchoolMajorImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/school-majors/import/confirm', { previewId }),
   schoolMajorImportTemplateUrl: () => '/api/admin/academic-data/school-majors/import/template',
   runSchoolMajorCrawl: (body: { schoolCode: string; url: string; educationLevel: string }) => adminHttp.post<{ created: number; sampleRows: unknown[] }>('/admin/academic-data/school-majors/crawl/run', body),
+  previewPostgraduateProgramImport: (file: File) => { const form = new FormData(); form.append('file', file); return adminApi.post<SchoolImportPreview, { data: SchoolImportPreview }>('/admin/academic-data/postgraduate-programs/import/preview', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }).then((r) => r.data); },
+  confirmPostgraduateProgramImport: (previewId: string) => adminHttp.post<SchoolImportConfirmResult>('/admin/academic-data/postgraduate-programs/import/confirm', { previewId }),
+  postgraduateProgramTemplateUrl: () => '/api/admin/academic-data/postgraduate-programs/import/template',
+  runPostgraduateProgramCrawl: (body: { schoolCode: string; url: string; degreeLevel: string; sourceType: string }) => adminHttp.post<{ created: number; sampleRows: unknown[] }>('/admin/academic-data/postgraduate-programs/crawl/run', body),
 };

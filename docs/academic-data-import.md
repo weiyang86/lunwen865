@@ -178,3 +178,36 @@ schoolCode,schoolName,collegeName,majorCode,majorName,educationLevel,status,sour
 - `majorCode 未匹配专业目录`：检查是否已导入本科专业目录/研究生学科目录，或保留 majorName 等后续治理。
 - `collegeName 未匹配学院库`：先通过学院导入或 staging 审核补齐学院；当前关系仍保留学院文本。
 - 文件内重复 `schoolCode + majorCode + educationLevel`：删除重复行后重新预览。
+
+## 研究生招生专业导入（AcademicData-06）
+
+研究生招生专业模板用于补充硕士/博士招生目录数据，不覆盖研究生学科目录 `academic_disciplines`。建议来源为研招网导出表、学校研究生院公开招生目录、招生简章公开文件。
+
+### 导入模板
+
+```csv
+schoolCode,schoolName,collegeName,disciplineCode,disciplineName,programCode,programName,programType,degreeLevel,researchDirection,studyMode,status,source,sourceVersion,sourceUrl,confidence,remark
+4150010637,重庆师范大学,计算机与信息科学学院,0812,计算机科学与技术,081200,计算机科学与技术,ACADEMIC,MASTER,人工智能与教育技术,FULL_TIME,ACTIVE,MANUAL,2026,,90,
+```
+
+### 字段与校验规则
+
+- `schoolCode`：必填，必须匹配高校库。
+- `collegeName`：可选；尝试匹配学院库，未命中时保留文本并给出 warning。
+- `disciplineCode`：可选；填写时优先匹配 `academic_disciplines.code`，未命中不阻断但给出 warning。
+- `programCode` / `programName`：必填，可为一级学科代码、专业学位类别代码或学校招生专业代码。
+- `programType`：必填，支持 `ACADEMIC` / `PROFESSIONAL`。
+- `degreeLevel`：必填，支持 `MASTER` / `DOCTOR`。
+- `researchDirection`：可选，用于区分同一专业下不同研究方向。
+- `studyMode`：支持 `FULL_TIME` / `PART_TIME` / `UNKNOWN`。
+- `source`：默认 `MANUAL`，也可为 `YZ_CHSI`、`GRADUATE_SCHOOL`、`ADMISSION_BROCHURE`。
+- `confidence`：0-100，人工导入默认 90。
+
+### 导入流程与常见错误
+
+1. 下载模板并填写招生专业数据。
+2. 上传 Excel / CSV 执行 preview，preview 不写正式库。
+3. 修复 `schoolCode`、`programType`、`degreeLevel`、`studyMode` 等错误。
+4. confirm 后按 `schoolCode + collegeName + programCode + degreeLevel + researchDirection` 生成 `syncKey` 并 upsert 正式表。
+
+常见错误：`schoolCode 未匹配高校库` 需要先补高校；`programType` / `degreeLevel` 枚举错误需要改为系统枚举；`disciplineCode 未匹配研究生学科目录` 不阻断入库，但建议先确认学科目录版本。

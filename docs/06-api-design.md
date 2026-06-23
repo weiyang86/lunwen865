@@ -510,3 +510,15 @@
 - `POST /api/admin/academic-data/school-majors/staging/:id/approve`：审核通过并写入正式关系。
 - `POST /api/admin/academic-data/school-majors/staging/:id/reject`：驳回候选，不写正式关系。
 - `POST /api/admin/academic-data/school-majors/staging/batch-approve`：批量通过候选。
+
+### AcademicData-06 研究生招生专业 API
+
+- `GET /api/admin/academic-data/postgraduate-programs`：查询正式研究生招生专业，支持 `keyword`、`provinceCode`、`cityCode`、`schoolCode`、`collegeName`、`disciplineCode`、`programType`、`degreeLevel`、`studyMode`、`status`、`page`、`pageSize`。
+- `GET /api/admin/academic-data/postgraduate-programs/import/template`：下载研究生招生专业模板。
+- `POST /api/admin/academic-data/postgraduate-programs/import/preview`：上传 Excel / CSV 预校验，不写正式库。
+- `POST /api/admin/academic-data/postgraduate-programs/import/confirm`：基于 `previewId` 确认导入，按 `syncKey` upsert。
+- `POST /api/admin/academic-data/postgraduate-programs/crawl/run`：输入 `schoolCode`、`url`、`degreeLevel`、`sourceType`，低频请求指定公开 URL，结果进入 staging。
+- `GET /api/admin/academic-data/postgraduate-programs/staging`：查询待审核候选。
+- `POST /api/admin/academic-data/postgraduate-programs/staging/:id/approve`：审核通过并写入正式表。
+- `POST /api/admin/academic-data/postgraduate-programs/staging/:id/reject`：驳回候选，不写正式表。
+- `POST /api/admin/academic-data/postgraduate-programs/staging/batch-approve`：批量通过候选。

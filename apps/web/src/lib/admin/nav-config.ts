@@ -47,6 +47,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: '专业管理', href: '/admin/academic/majors' },
       { label: '学科目录', href: '/admin/academic/disciplines' },
       { label: '学校专业关系', href: '/admin/academic/school-majors' },
+      { label: '研究生专业', href: '/admin/academic/postgraduate-programs' },
       { label: '数据同步', href: '/admin/academic/sync' },
     ],
   },

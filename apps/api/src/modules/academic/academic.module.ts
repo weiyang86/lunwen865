@@ -10,6 +10,7 @@ import { CatalogImportService } from './catalog-import.service';
 import { CollegeDataService } from './college-data.service';
 import { SchoolMajorDataService } from './school-major-data.service';
 import { AcademicContextService } from './academic-context.service';
+import { PostgraduateProgramService } from './postgraduate-program.service';
 
 @Module({
   controllers: [
@@ -25,7 +26,13 @@ import { AcademicContextService } from './academic-context.service';
     CollegeDataService,
     SchoolMajorDataService,
     AcademicContextService,
+    PostgraduateProgramService,
   ],
-  exports: [AcademicService, SchoolMajorDataService, AcademicContextService],
+  exports: [
+    AcademicService,
+    SchoolMajorDataService,
+    AcademicContextService,
+    PostgraduateProgramService,
+  ],
 })
 export class AcademicModule {}

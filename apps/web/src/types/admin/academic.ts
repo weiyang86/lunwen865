@@ -119,6 +119,9 @@ export type SchoolImportPreviewRow = {
   majorCode?: string;
   majorName?: string;
   educationLevel?: string;
+  programCode?: string;
+  programName?: string;
+  degreeLevel?: string;
   status: 'ACTIVE' | 'INACTIVE';
   source: string;
   confidence: number;

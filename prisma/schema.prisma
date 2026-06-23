@@ -385,6 +385,36 @@ enum AcademicSchoolMajorReviewStatus {
 }
 
 
+enum AcademicPostgraduateProgramType {
+  ACADEMIC
+  PROFESSIONAL
+}
+
+enum AcademicPostgraduateDegreeLevel {
+  MASTER
+  DOCTOR
+}
+
+enum AcademicPostgraduateStudyMode {
+  FULL_TIME
+  PART_TIME
+  UNKNOWN
+}
+
+enum AcademicPostgraduateProgramSource {
+  YZ_CHSI
+  GRADUATE_SCHOOL
+  ADMISSION_BROCHURE
+  MANUAL
+}
+
+enum AcademicPostgraduateProgramReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
 // ============ 论文 Skill 中心 ============
 enum ThesisSkillStage {
   TOPIC
@@ -855,6 +885,7 @@ model AcademicSchool {
   colleges AcademicCollege[]
   majors   AcademicMajor[]
   schoolMajorRelations AcademicSchoolMajor[]
+  postgraduatePrograms AcademicPostgraduateProgram[]
   thesisSkillBindings ThesisSkillBinding[]
   formatTemplates     ThesisFormatTemplate[]
   tasks               Task[]
@@ -938,6 +969,79 @@ model AcademicCrawlSource {
   @@map("academic_crawl_sources")
 }
 
+
+
+model AcademicPostgraduateProgram {
+  id                String                                  @id @default(cuid())
+  schoolId          String
+  schoolCode        String                                  @db.VarChar(50)
+  schoolName        String?                                 @db.VarChar(150)
+  collegeId         String?
+  collegeName       String?                                 @db.VarChar(150)
+  disciplineCode    String?                                 @db.VarChar(50)
+  disciplineName    String?                                 @db.VarChar(150)
+  programCode       String                                  @db.VarChar(50)
+  programName       String                                  @db.VarChar(150)
+  programType       AcademicPostgraduateProgramType
+  degreeLevel       AcademicPostgraduateDegreeLevel
+  researchDirection String?                                 @db.VarChar(200)
+  studyMode         AcademicPostgraduateStudyMode            @default(UNKNOWN)
+  status            AcademicStatus                          @default(ACTIVE)
+  source            AcademicPostgraduateProgramSource        @default(MANUAL)
+  sourceVersion     String?                                 @db.VarChar(80)
+  sourceUrl         String?                                 @db.Text
+  syncKey           String                                  @unique @db.VarChar(260)
+  confidence        Float                                   @default(90)
+  lastSyncedAt      DateTime?
+  reviewStatus      AcademicPostgraduateProgramReviewStatus  @default(APPROVED)
+  reviewedBy        String?                                 @db.VarChar(100)
+  reviewedAt        DateTime?
+  remark            String?                                 @db.Text
+  rawData           Json?
+  createdAt         DateTime                                @default(now())
+  updatedAt         DateTime                                @updatedAt
+
+  school AcademicSchool @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@index([schoolCode, degreeLevel])
+  @@index([collegeName])
+  @@index([disciplineCode, degreeLevel])
+  @@index([programType, studyMode])
+  @@map("academic_postgraduate_programs")
+}
+
+model AcademicPostgraduateProgramStaging {
+  id                String                                  @id @default(cuid())
+  schoolId          String?
+  schoolCode        String?                                 @db.VarChar(50)
+  schoolName        String?                                 @db.VarChar(150)
+  collegeId         String?
+  collegeName       String?                                 @db.VarChar(150)
+  disciplineCode    String?                                 @db.VarChar(50)
+  disciplineName    String?                                 @db.VarChar(150)
+  programCode       String?                                 @db.VarChar(50)
+  programName       String                                  @db.VarChar(150)
+  programType       AcademicPostgraduateProgramType
+  degreeLevel       AcademicPostgraduateDegreeLevel
+  researchDirection String?                                 @db.VarChar(200)
+  studyMode         AcademicPostgraduateStudyMode            @default(UNKNOWN)
+  source            AcademicPostgraduateProgramSource        @default(GRADUATE_SCHOOL)
+  sourceUrl         String?                                 @db.Text
+  confidence        Float                                   @default(60)
+  rawData           Json?
+  reviewStatus      AcademicPostgraduateProgramReviewStatus  @default(PENDING)
+  reviewedBy        String?                                 @db.VarChar(100)
+  reviewedAt        DateTime?
+  errorMessage      String?                                 @db.Text
+  createdAt         DateTime                                @default(now())
+  updatedAt         DateTime                                @updatedAt
+
+  @@index([schoolCode, reviewStatus])
+  @@index([disciplineCode, degreeLevel])
+  @@index([programCode, degreeLevel])
+  @@index([reviewStatus, confidence])
+  @@map("academic_postgraduate_program_staging")
+}
 
 model AcademicSchoolMajor {
   id             String                          @id @default(cuid())

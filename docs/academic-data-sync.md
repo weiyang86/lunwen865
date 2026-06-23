@@ -162,3 +162,26 @@ Content-Type: application/json
 ### 论文任务上下文预留
 
 后端新增 `AcademicContextService.getSchoolMajorContext(params)`，可根据 `schoolCode`、`collegeName`、`majorName`、`educationLevel` 查询正式关系，返回 school、college、major、matchedRelations、source、confidence，供后续论文任务生成链路使用。
+
+## AcademicData-06：研究生招生专业补充与论文上下文
+
+研究生招生专业是招生维度数据，不等同于 `academic_disciplines` 研究生学科目录。学科目录描述国家标准学科/专业学位类别，研究生招生专业还包含学校、学院、专业代码、专业名称、硕博层次、研究方向、学习方式、来源年份等信息，因此新增 `academic_postgraduate_programs` 和 `academic_postgraduate_program_staging`，且不会覆盖 `academic_disciplines`。
+
+### 西南片区补充策略
+
+继续优先补齐重庆 `500000`、四川 `510000`、贵州 `520000`、云南 `530000`、西藏 `540000` 高校。列表和 staging 查询支持通过 `provinceCode` / `cityCode` 反查高校并过滤研究生招生专业，便于运营从西南高校开始补齐硕士、博士论文生成上下文。
+
+### 数据来源与采集边界
+
+允许来源包括研招网硕士专业目录导出文件、学校研究生院官网公开招生目录、招生简章公开页面。系统只请求后台人工输入的 URL，不全网搜索，不绕过登录/验证码，不抓取非公开数据，不高频请求。如果研招网页面有验证码、登录或反爬限制，应改为运营上传导出的 Excel / CSV 或学校公开文件。
+
+### staging 审核流程
+
+1. 运营上传模板或输入公开 URL、`schoolCode`、`degreeLevel`、`sourceType`。
+2. 导入 preview 不写正式库；采集结果只写 `academic_postgraduate_program_staging`。
+3. 管理员审核候选，确认来源 URL、rawData、置信度、研究方向和学习方式。
+4. 审核通过后按 `syncKey = schoolCode + collegeName + programCode + degreeLevel + researchDirection` upsert 到 `academic_postgraduate_programs`；驳回不写正式库。
+
+### 论文上下文增强
+
+`AcademicContextService` 新增 `getPostgraduateContext(params)`，根据学校、学院、学科代码、招生专业名称和硕博层次返回研究生招生专业、研究方向、来源和置信度；统一方法 `getThesisAcademicContext(params)` 会在本科/高职场景优先查询学校开设专业关系，在硕士/博士场景优先查询研究生招生专业。

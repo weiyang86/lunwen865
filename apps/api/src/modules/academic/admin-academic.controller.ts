@@ -24,6 +24,7 @@ import { SchoolImportService } from './school-import.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CollegeDataService } from './college-data.service';
 import { SchoolMajorDataService } from './school-major-data.service';
+import { PostgraduateProgramService } from './postgraduate-program.service';
 import {
   CreateCollegeDto,
   CreateDisciplineCategoryDto,
@@ -57,6 +58,7 @@ export class AdminAcademicController {
     private readonly catalogImportService: CatalogImportService,
     private readonly collegeDataService: CollegeDataService,
     private readonly schoolMajorDataService: SchoolMajorDataService,
+    private readonly postgraduateProgramService: PostgraduateProgramService,
   ) {}
 
   @Get('regions')
@@ -82,6 +84,67 @@ export class AdminAcademicController {
   @Get('sync/logs')
   syncLogs(@Query() query: ListSyncLogsDto) {
     return this.regionSyncService.logs(query);
+  }
+
+  @Get('postgraduate-programs/import/template')
+  postgraduateProgramTemplate(@Res() res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=academic-postgraduate-programs-template.csv',
+    );
+    res.send(`\uFEFF${this.postgraduateProgramService.template()}`);
+  }
+
+  @Post('postgraduate-programs/import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  previewPostgraduateProgramImport(
+    @UploadedFile()
+    file:
+      | { originalname?: string; mimetype?: string; buffer?: Buffer }
+      | undefined,
+  ) {
+    return this.postgraduateProgramService.preview(file);
+  }
+
+  @Post('postgraduate-programs/import/confirm')
+  confirmPostgraduateProgramImport(@Body() dto: ConfirmSchoolImportDto) {
+    return this.postgraduateProgramService.confirm(dto.previewId);
+  }
+
+  @Get('postgraduate-programs')
+  postgraduatePrograms(@Query() query: Record<string, string>) {
+    return this.postgraduateProgramService.list(query);
+  }
+
+  @Post('postgraduate-programs/crawl/run')
+  runPostgraduateProgramCrawl(@Body() dto: Record<string, unknown>) {
+    return this.postgraduateProgramService.runCrawl(dto);
+  }
+
+  @Get('postgraduate-programs/staging')
+  postgraduateProgramStaging(@Query() query: Record<string, string>) {
+    return this.postgraduateProgramService.staging(query);
+  }
+
+  @Post('postgraduate-programs/staging/batch-approve')
+  batchApprovePostgraduateProgramStaging(@Body() dto: { ids: string[] }) {
+    return this.postgraduateProgramService.batchApprove(dto.ids ?? []);
+  }
+
+  @Post('postgraduate-programs/staging/:id/approve')
+  approvePostgraduateProgramStaging(@Param('id') id: string) {
+    return this.postgraduateProgramService.approve(id);
+  }
+
+  @Post('postgraduate-programs/staging/:id/reject')
+  rejectPostgraduateProgramStaging(
+    @Param('id') id: string,
+    @Body() dto: { reason?: string },
+  ) {
+    return this.postgraduateProgramService.reject(id, dto.reason);
   }
 
   @Get('school-majors/import/template')

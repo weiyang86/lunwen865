@@ -273,3 +273,9 @@
 - `academic_school_majors`：正式关系表，记录学校实际开设专业、学院归属、学历层次、来源、置信度和审核状态；唯一键为 `schoolCode + majorCode + educationLevel`。
 - `academic_school_major_staging`：采集候选表，所有招生网/学院官网提取结果先进入 staging，经人工审核通过后才 upsert 到正式表。
 - 新增枚举 `AcademicSchoolMajorSource`（`ADMISSION_SITE` / `SCHOOL_SITE` / `MANUAL`）与 `AcademicSchoolMajorReviewStatus`（`PENDING` / `APPROVED` / `REJECTED`）。迁移文件：`prisma/migrations/20260623100000_add_school_major_relations/migration.sql`。
+
+### AcademicData-06 研究生招生专业
+
+- `academic_postgraduate_programs`：正式表，保存学校、学院、学科、招生专业代码/名称、专业类型、硕博层次、研究方向、学习方式、来源、置信度、审核状态与 `rawData`。`syncKey` 唯一，由 `schoolCode + collegeName + programCode + degreeLevel + researchDirection` 生成，用于避免空研究方向导致重复判断不稳定。
+- `academic_postgraduate_program_staging`：采集候选表，公开 URL 定向采集结果先进入 staging，人工审核通过后才 upsert 正式表。
+- 新增枚举：`AcademicPostgraduateProgramType`、`AcademicPostgraduateDegreeLevel`、`AcademicPostgraduateStudyMode`、`AcademicPostgraduateProgramSource`、`AcademicPostgraduateProgramReviewStatus`。迁移文件：`prisma/migrations/20260623110000_add_postgraduate_programs/migration.sql`。
