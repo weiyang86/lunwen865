@@ -1,4 +1,9 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const turbopackRoot = path.join(currentDir, "..", "..");
 
 const normalizeApiBaseUrl = (value?: string) => {
   const raw = (value || "http://localhost:3001")
@@ -10,6 +15,9 @@ const normalizeApiBaseUrl = (value?: string) => {
 };
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: turbopackRoot,
+  },
   async rewrites() {
     const destinationBase = normalizeApiBaseUrl(process.env.API_BASE_URL);
 
